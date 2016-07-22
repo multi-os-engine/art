@@ -47,6 +47,7 @@
 #include "base/dumpable.h"
 #include "base/macros.h"
 #include "base/timing_logger.h"
+#include "bisection_controller.h"
 #include "bounds_check_elimination.h"
 #include "builder.h"
 #include "code_generator.h"
@@ -263,7 +264,7 @@ class PassScope : public ValueObject {
   PassObserver* const pass_observer_;
 };
 
-class OptimizingCompiler FINAL : public Compiler {
+class OptimizingCompiler : public Compiler {
  public:
   explicit OptimizingCompiler(CompilerDriver* driver);
   ~OptimizingCompiler();
@@ -362,6 +363,27 @@ class OptimizingCompiler FINAL : public Compiler {
   std::unique_ptr<std::ostream> visualizer_output_;
 
   DISALLOW_COPY_AND_ASSIGN(OptimizingCompiler);
+};
+
+class BisectableOptimizingCompiler : public OptimizingCompiler {
+ public:
+  explicit BisectableOptimizingCompiler(CompilerDriver* driver);
+  void Init() OVERRIDE;
+
+ protected:
+  void RunOptimizations(HGraph* graph,
+                        CodeGenerator* codegen,
+                        CompilerDriver* driver,
+                        const DexCompilationUnit& dex_compilation_unit,
+                        PassObserver* pass_observer,
+                        StackHandleScopeCollection* handles) const OVERRIDE;
+  void RunOptimizations(HOptimization* optimizations[],
+                        size_t length,
+                        PassObserver* pass_observer) const OVERRIDE;
+
+ private:
+  std::unique_ptr<BisectionController> bisection_controller_;
+  DISALLOW_COPY_AND_ASSIGN(BisectableOptimizingCompiler);
 };
 
 static const int kMaximumCompilationTimeBeforeWarning = 100; /* ms */
@@ -917,7 +939,11 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
 }
 
 Compiler* CreateOptimizingCompiler(CompilerDriver* driver) {
-  return new OptimizingCompiler(driver);
+  if (driver->GetCompilerOptions().IsBisectedOptimization()) {
+    return new BisectableOptimizingCompiler(driver);
+  } else {
+    return new OptimizingCompiler(driver);
+  }
 }
 
 bool IsCompilingWithCoreImage() {
@@ -1032,6 +1058,45 @@ bool OptimizingCompiler::JitCompile(Thread* self,
   Runtime::Current()->GetJit()->AddMemoryUsage(method, arena.BytesUsed());
 
   return true;
+}
+
+BisectableOptimizingCompiler::BisectableOptimizingCompiler(CompilerDriver* driver)
+    : OptimizingCompiler(driver),
+      bisection_controller_(new BisectionController()) { }
+
+void BisectableOptimizingCompiler::Init() {
+  const CompilerOptions& compiler_options = GetCompilerDriver()->GetCompilerOptions();
+  DCHECK_EQ(GetCompilerDriver()->GetThreadCount(), 1U)
+    << "Bisection mode requires the compiler to run single-threaded. ";
+  std::string* config = compiler_options.GetBisectionConfig();
+  DCHECK_NE(config, (std::string*) nullptr) << "Bisection config not present.";
+  bisection_controller_->Init(*config);
+  OptimizingCompiler::Init();
+}
+
+void BisectableOptimizingCompiler::RunOptimizations(HGraph* graph,
+                                                    CodeGenerator* codegen,
+                                                    CompilerDriver* driver,
+                                                    const DexCompilationUnit& dex_compilation_unit,
+                                                    PassObserver* pass_observer,
+                                                    StackHandleScopeCollection* handles) const {
+  bisection_controller_->CanOptimizeMethod(pass_observer->GetMethodName());
+  OptimizingCompiler::RunOptimizations(graph,
+                                       codegen,
+                                       driver,
+                                       dex_compilation_unit,
+                                       pass_observer,
+                                       handles);
+}
+
+void BisectableOptimizingCompiler::RunOptimizations(HOptimization* optimizations[],
+                                                    size_t length,
+                                                    PassObserver* pass_observer) const {
+  for (size_t i = 0; i < length; i++) {
+    if (bisection_controller_->CanOptimizePass(optimizations[i]->GetPassName())) {
+      OptimizingCompiler::RunOptimizations(optimizations + i, 1, pass_observer);
+    }
+  }
 }
 
 }  // namespace art

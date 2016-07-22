@@ -44,7 +44,8 @@ CompilerOptions::CompilerOptions()
       init_failure_output_(nullptr),
       dump_cfg_file_name_(""),
       dump_cfg_append_(false),
-      force_determinism_(false) {
+      force_determinism_(false),
+      bisection_config_(nullptr) {
 }
 
 CompilerOptions::~CompilerOptions() {
@@ -74,7 +75,8 @@ CompilerOptions::CompilerOptions(CompilerFilter::Filter compiler_filter,
                                  bool abort_on_hard_verifier_failure,
                                  const std::string& dump_cfg_file_name,
                                  bool dump_cfg_append,
-                                 bool force_determinism
+                                 bool force_determinism,
+                                 std::string* bisection_config
                                  ) :  // NOLINT(whitespace/parens)
     compiler_filter_(compiler_filter),
     huge_method_threshold_(huge_method_threshold),
@@ -99,7 +101,8 @@ CompilerOptions::CompilerOptions(CompilerFilter::Filter compiler_filter,
     init_failure_output_(init_failure_output),
     dump_cfg_file_name_(dump_cfg_file_name),
     dump_cfg_append_(dump_cfg_append),
-    force_determinism_(force_determinism) {
+    force_determinism_(force_determinism),
+    bisection_config_(bisection_config) {
 }
 
 void CompilerOptions::ParseHugeMethodMax(const StringPiece& option, UsageFn Usage) {
@@ -142,6 +145,12 @@ void CompilerOptions::ParseDumpInitFailures(const StringPiece& option,
                << "failures.";
     init_failure_output_.reset();
   }
+}
+
+void CompilerOptions::ParseBisectionConfig(const StringPiece& option,
+                                           UsageFn Usage ATTRIBUTE_UNUSED) {
+  DCHECK(option.starts_with("--bisection-config="));
+  bisection_config_.reset(new std::string(option.substr(strlen("--bisection-config=")).data()));
 }
 
 bool CompilerOptions::ParseCompilerOption(const StringPiece& option, UsageFn Usage) {
@@ -190,6 +199,8 @@ bool CompilerOptions::ParseCompilerOption(const StringPiece& option, UsageFn Usa
     dump_cfg_file_name_ = option.substr(strlen("--dump-cfg=")).data();
   } else if (option.starts_with("--dump-cfg-append")) {
     dump_cfg_append_ = true;
+  } else if (option.starts_with("--bisection-config=")) {
+    ParseBisectionConfig(option, Usage);
   } else {
     // Option not recognized.
     return false;
