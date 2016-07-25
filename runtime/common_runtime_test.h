@@ -145,7 +145,7 @@ class CommonRuntimeTestImpl {
 
   void TearDown();
 
-  void FinalizeSetup();
+  virtual void FinalizeSetup();
 
  private:
   static std::string GetCoreFileLocation(const char* suffix);
