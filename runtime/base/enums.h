@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 The Android Open Source Project
+ * Copyright (C) 2016 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,24 @@
  * limitations under the License.
  */
 
-#ifndef ART_RUNTIME_MIRROR_REFERENCE_INL_H_
-#define ART_RUNTIME_MIRROR_REFERENCE_INL_H_
+#ifndef ART_RUNTIME_BASE_ENUMS_H_
+#define ART_RUNTIME_BASE_ENUMS_H_
 
-#include "reference.h"
+#include <cstddef>
+#include <ostream>
 
 namespace art {
-namespace mirror {
 
-inline uint32_t Reference::ClassSize(PointerSize pointer_size) {
-  uint32_t vtable_entries = Object::kVTableLength + 4;
-  return Class::ComputeClassSize(false, vtable_entries, 2, 0, 0, 0, 0, pointer_size);
-}
+enum class PointerSize : size_t {
+  k32 = 4,
+  k64 = 8
+};
+std::ostream& operator<<(std::ostream& os, const PointerSize& rhs);
 
-}  // namespace mirror
+static constexpr PointerSize kRuntimePointerSize = sizeof(void*) == 8U
+                                                       ? PointerSize::k64
+                                                       : PointerSize::k32;
+
 }  // namespace art
 
-#endif  // ART_RUNTIME_MIRROR_REFERENCE_INL_H_
+#endif  // ART_RUNTIME_BASE_ENUMS_H_

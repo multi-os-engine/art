@@ -18,6 +18,7 @@
 #define ART_PATCHOAT_PATCHOAT_H_
 
 #include "arch/instruction_set.h"
+#include "base/enums.h"
 #include "base/macros.h"
 #include "base/mutex.h"
 #include "elf_file.h"
@@ -168,7 +169,7 @@ class PatchOat {
     }
     auto ret = reinterpret_cast<uintptr_t>(obj) + delta_;
     // Trim off high bits in case negative relocation with 64 bit patchoat.
-    if (InstructionSetPointerSize(isa_) == sizeof(uint32_t)) {
+    if (InstructionSetPointerSize(isa_) == PointerSize::k32) {
       ret = static_cast<uintptr_t>(static_cast<uint32_t>(ret));
     }
     return reinterpret_cast<T*>(ret);
@@ -181,7 +182,7 @@ class PatchOat {
     }
     T ret = obj + delta_;
     // Trim off high bits in case negative relocation with 64 bit patchoat.
-    if (InstructionSetPointerSize(isa_) == 4) {
+    if (InstructionSetPointerSize(isa_) == PointerSize::k32) {
       ret = static_cast<T>(static_cast<uint32_t>(ret));
     }
     return ret;

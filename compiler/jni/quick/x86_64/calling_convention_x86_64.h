@@ -17,17 +17,23 @@
 #ifndef ART_COMPILER_JNI_QUICK_X86_64_CALLING_CONVENTION_X86_64_H_
 #define ART_COMPILER_JNI_QUICK_X86_64_CALLING_CONVENTION_X86_64_H_
 
+#include "base/enums.h"
 #include "jni/quick/calling_convention.h"
 
 namespace art {
 namespace x86_64 {
 
 constexpr size_t kFramePointerSize = 8;
+static_assert(kFramePointerSize == static_cast<size_t>(PointerSize::k64),
+              "Invalid frame pointer size");
 
 class X86_64ManagedRuntimeCallingConvention FINAL : public ManagedRuntimeCallingConvention {
  public:
   X86_64ManagedRuntimeCallingConvention(bool is_static, bool is_synchronized, const char* shorty)
-      : ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty, kFramePointerSize) {}
+      : ManagedRuntimeCallingConvention(is_static,
+                                        is_synchronized,
+                                        shorty,
+                                        PointerSize::k64) {}
   ~X86_64ManagedRuntimeCallingConvention() OVERRIDE {}
   // Calling convention
   ManagedRegister ReturnRegister() OVERRIDE;

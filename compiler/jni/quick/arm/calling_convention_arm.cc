@@ -255,7 +255,7 @@ const ManagedRegisterEntrySpills& ArmManagedRuntimeCallingConvention::EntrySpill
 
 ArmJniCallingConvention::ArmJniCallingConvention(bool is_static, bool is_synchronized,
                                                  const char* shorty)
-    : JniCallingConvention(is_static, is_synchronized, shorty, kFramePointerSize) {
+    : JniCallingConvention(is_static, is_synchronized, shorty, PointerSize::k32) {
   // Compute padding to ensure longs and doubles are not split in AAPCS. Ignore the 'this' jobject
   // or jclass for static methods and the JNIEnv. We start at the aligned register r2.
   size_t padding = 0;
@@ -287,9 +287,10 @@ ManagedRegister ArmJniCallingConvention::ReturnScratchRegister() const {
 
 size_t ArmJniCallingConvention::FrameSize() {
   // Method*, LR and callee save area size, local reference segment state
-  size_t frame_data_size = kArmPointerSize + (2 + CalleeSaveRegisters().size()) * kFramePointerSize;
+  size_t frame_data_size = static_cast<size_t>(kArmPointerSize)
+      + (2 + CalleeSaveRegisters().size()) * kFramePointerSize;
   // References plus 2 words for HandleScope header
-  size_t handle_scope_size = HandleScope::SizeOf(kFramePointerSize, ReferenceCount());
+  size_t handle_scope_size = HandleScope::SizeOf(kArmPointerSize, ReferenceCount());
   // Plus return value spill area size
   return RoundUp(frame_data_size + handle_scope_size + SizeOfReturnValue(), kStackAlignment);
 }
@@ -343,7 +344,8 @@ ManagedRegister ArmJniCallingConvention::CurrentParamRegister() {
 
 FrameOffset ArmJniCallingConvention::CurrentParamStackOffset() {
   CHECK_GE(itr_slots_, 4u);
-  size_t offset = displacement_.Int32Value() - OutArgSize() + ((itr_slots_ - 4) * kFramePointerSize);
+  size_t offset =
+      displacement_.Int32Value() - OutArgSize() + ((itr_slots_ - 4) * kFramePointerSize);
   CHECK_LT(offset, OutArgSize());
   return FrameOffset(offset);
 }
