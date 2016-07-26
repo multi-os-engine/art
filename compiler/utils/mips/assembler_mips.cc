@@ -1431,12 +1431,12 @@ void MipsAssembler::StoreConst64ToOffset(int64_t value,
     Sw(temp, base, offset);
   }
   if (high == 0) {
-    Sw(ZERO, base, offset + kMipsWordSize);
+    Sw(ZERO, base, offset + static_cast<size_t>(kMipsPointerSize));
   } else {
     if (high != low) {
       LoadConst32(temp, high);
     }
-    Sw(temp, base, offset + kMipsWordSize);
+    Sw(temp, base, offset + static_cast<size_t>(kMipsPointerSize));
   }
 }
 
@@ -2229,7 +2229,7 @@ void MipsAssembler::EmitBranch(MipsAssembler::Branch* branch) {
       Addu(AT, AT, RA);
       Lw(RA, SP, 0);
       Jr(AT);
-      DecreaseFrameSize(kMipsWordSize);
+      DecreaseFrameSize(static_cast<size_t>(kMipsPointerSize));
       break;
     case Branch::kLongCondBranch:
       // The comment on case 'Branch::kLongUncondBranch' applies here as well.
@@ -2245,7 +2245,7 @@ void MipsAssembler::EmitBranch(MipsAssembler::Branch* branch) {
       Addu(AT, AT, RA);
       Lw(RA, SP, 0);
       Jr(AT);
-      DecreaseFrameSize(kMipsWordSize);
+      DecreaseFrameSize(static_cast<size_t>(kMipsPointerSize));
       break;
     case Branch::kLongCall:
       Nal();
@@ -2450,7 +2450,7 @@ void MipsAssembler::AdjustBaseAndOffset(Register& base,
 
   // IsInt<16> must be passed a signed value, hence the static cast below.
   if (IsInt<16>(offset) &&
-      (!two_accesses || IsInt<16>(static_cast<int32_t>(offset + kMipsWordSize)))) {
+      (!two_accesses || IsInt<16>(static_cast<int32_t>(offset + static_cast<size_t>(kMipsPointerSize))))) {
     // Nothing to do: `offset` (and, if needed, `offset + 4`) fits into int16_t.
     return;
   }
@@ -2485,7 +2485,7 @@ void MipsAssembler::AdjustBaseAndOffset(Register& base,
     int16_t offset_low = Low16Bits(offset);
     offset_high += (offset_low < 0) ? 1 : 0;  // Account for offset sign extension in load/store.
     Aui(AT, base, offset_high);
-    if (two_accesses && !IsInt<16>(static_cast<int32_t>(offset_low + kMipsWordSize))) {
+    if (two_accesses && !IsInt<16>(static_cast<int32_t>(offset_low + static_cast<size_t>(kMipsPointerSize)))) {
       // Avoid overflow in the 16-bit offset of the load/store instruction when adding 4.
       Addiu(AT, AT, kMipsDoublewordSize);
       offset_low -= kMipsDoublewordSize;
@@ -2519,7 +2519,7 @@ void MipsAssembler::AdjustBaseAndOffset(Register& base,
 
   CHECK(IsInt<16>(offset));
   if (two_accesses) {
-    CHECK(IsInt<16>(static_cast<int32_t>(offset + kMipsWordSize)));
+    CHECK(IsInt<16>(static_cast<int32_t>(offset + static_cast<size_t>(kMipsPointerSize))));
   }
   CHECK_EQ(misalignment, offset & (kMipsDoublewordSize - 1));
 }
@@ -2547,11 +2547,11 @@ void MipsAssembler::LoadFromOffset(LoadOperandType type, Register reg, Register 
       if (reg == base) {
         // This will clobber the base when loading the lower register. Since we have to load the
         // higher register as well, this will fail. Solution: reverse the order.
-        Lw(static_cast<Register>(reg + 1), base, offset + kMipsWordSize);
+        Lw(static_cast<Register>(reg + 1), base, offset + static_cast<size_t>(kMipsPointerSize));
         Lw(reg, base, offset);
       } else {
         Lw(reg, base, offset);
-        Lw(static_cast<Register>(reg + 1), base, offset + kMipsWordSize);
+        Lw(static_cast<Register>(reg + 1), base, offset + static_cast<size_t>(kMipsPointerSize));
       }
       break;
     default:
@@ -2569,11 +2569,11 @@ void MipsAssembler::LoadDFromOffset(FRegister reg, Register base, int32_t offset
   if (offset & 0x7) {
     if (Is32BitFPU()) {
       Lwc1(reg, base, offset);
-      Lwc1(static_cast<FRegister>(reg + 1), base, offset + kMipsWordSize);
+      Lwc1(static_cast<FRegister>(reg + 1), base, offset + static_cast<size_t>(kMipsPointerSize));
     } else {
       // 64-bit FPU.
       Lwc1(reg, base, offset);
-      Lw(T8, base, offset + kMipsWordSize);
+      Lw(T8, base, offset + static_cast<size_t>(kMipsPointerSize));
       Mthc1(T8, reg);
     }
   } else {
@@ -2587,13 +2587,13 @@ void MipsAssembler::EmitLoad(ManagedRegister m_dst, Register src_register, int32
   if (dst.IsNoRegister()) {
     CHECK_EQ(0u, size) << dst;
   } else if (dst.IsCoreRegister()) {
-    CHECK_EQ(kMipsWordSize, size) << dst;
+    CHECK_EQ(static_cast<size_t>(kMipsPointerSize), size) << dst;
     LoadFromOffset(kLoadWord, dst.AsCoreRegister(), src_register, src_offset);
   } else if (dst.IsRegisterPair()) {
     CHECK_EQ(kMipsDoublewordSize, size) << dst;
     LoadFromOffset(kLoadDoubleword, dst.AsRegisterPairLow(), src_register, src_offset);
   } else if (dst.IsFRegister()) {
-    if (size == kMipsWordSize) {
+    if (size == static_cast<size_t>(kMipsPointerSize)) {
       LoadSFromOffset(dst.AsFRegister(), src_register, src_offset);
     } else {
       CHECK_EQ(kMipsDoublewordSize, size) << dst;
@@ -2622,7 +2622,7 @@ void MipsAssembler::StoreToOffset(StoreOperandType type, Register reg, Register 
       CHECK_NE(reg, base);
       CHECK_NE(static_cast<Register>(reg + 1), base);
       Sw(reg, base, offset);
-      Sw(static_cast<Register>(reg + 1), base, offset + kMipsWordSize);
+      Sw(static_cast<Register>(reg + 1), base, offset + static_cast<size_t>(kMipsPointerSize));
       break;
     default:
       LOG(FATAL) << "UNREACHABLE";
@@ -2639,12 +2639,12 @@ void MipsAssembler::StoreDToOffset(FRegister reg, Register base, int32_t offset)
   if (offset & 0x7) {
     if (Is32BitFPU()) {
       Swc1(reg, base, offset);
-      Swc1(static_cast<FRegister>(reg + 1), base, offset + kMipsWordSize);
+      Swc1(static_cast<FRegister>(reg + 1), base, offset + static_cast<size_t>(kMipsPointerSize));
     } else {
       // 64-bit FPU.
       Mfhc1(T8, reg);
       Swc1(reg, base, offset);
-      Sw(T8, base, offset + kMipsWordSize);
+      Sw(T8, base, offset + static_cast<size_t>(kMipsPointerSize));
     }
   } else {
     Sdc1(reg, base, offset);
@@ -2690,10 +2690,10 @@ void MipsAssembler::BuildFrame(size_t frame_size,
       offset += spill.getSize();
     } else if (reg.IsCoreRegister()) {
       StoreToOffset(kStoreWord, reg.AsCoreRegister(), SP, offset);
-      offset += kMipsWordSize;
+      offset += static_cast<size_t>(kMipsPointerSize);
     } else if (reg.IsFRegister()) {
       StoreSToOffset(reg.AsFRegister(), SP, offset);
-      offset += kMipsWordSize;
+      offset += static_cast<size_t>(kMipsPointerSize);
     } else if (reg.IsDRegister()) {
       StoreDToOffset(reg.AsOverlappingDRegisterLow(), SP, offset);
       offset += kMipsDoublewordSize;
@@ -2753,15 +2753,15 @@ void MipsAssembler::Store(FrameOffset dest, ManagedRegister msrc, size_t size) {
   if (src.IsNoRegister()) {
     CHECK_EQ(0u, size);
   } else if (src.IsCoreRegister()) {
-    CHECK_EQ(kMipsWordSize, size);
+    CHECK_EQ(static_cast<size_t>(kMipsPointerSize), size);
     StoreToOffset(kStoreWord, src.AsCoreRegister(), SP, dest.Int32Value());
   } else if (src.IsRegisterPair()) {
     CHECK_EQ(kMipsDoublewordSize, size);
     StoreToOffset(kStoreWord, src.AsRegisterPairLow(), SP, dest.Int32Value());
     StoreToOffset(kStoreWord, src.AsRegisterPairHigh(),
-                  SP, dest.Int32Value() + kMipsWordSize);
+                  SP, dest.Int32Value() + static_cast<size_t>(kMipsPointerSize));
   } else if (src.IsFRegister()) {
-    if (size == kMipsWordSize) {
+    if (size == static_cast<size_t>(kMipsPointerSize)) {
       StoreSToOffset(src.AsFRegister(), SP, dest.Int32Value());
     } else {
       CHECK_EQ(kMipsDoublewordSize, size);
@@ -2790,7 +2790,8 @@ void MipsAssembler::StoreImmediateToFrame(FrameOffset dest, uint32_t imm,
   StoreToOffset(kStoreWord, scratch.AsCoreRegister(), SP, dest.Int32Value());
 }
 
-void MipsAssembler::StoreImmediateToThread32(ThreadOffset<kMipsWordSize> dest, uint32_t imm,
+void MipsAssembler::StoreImmediateToThread32(ThreadOffset<kMipsPointerSize> dest,
+                                             uint32_t imm,
                                              ManagedRegister mscratch) {
   MipsManagedRegister scratch = mscratch.AsMips();
   CHECK(scratch.IsCoreRegister()) << scratch;
@@ -2799,7 +2800,7 @@ void MipsAssembler::StoreImmediateToThread32(ThreadOffset<kMipsWordSize> dest, u
   StoreToOffset(kStoreWord, scratch.AsCoreRegister(), S1, dest.Int32Value());
 }
 
-void MipsAssembler::StoreStackOffsetToThread32(ThreadOffset<kMipsWordSize> thr_offs,
+void MipsAssembler::StoreStackOffsetToThread32(ThreadOffset<kMipsPointerSize> thr_offs,
                                                FrameOffset fr_offs,
                                                ManagedRegister mscratch) {
   MipsManagedRegister scratch = mscratch.AsMips();
@@ -2809,7 +2810,7 @@ void MipsAssembler::StoreStackOffsetToThread32(ThreadOffset<kMipsWordSize> thr_o
                 S1, thr_offs.Int32Value());
 }
 
-void MipsAssembler::StoreStackPointerToThread32(ThreadOffset<kMipsWordSize> thr_offs) {
+void MipsAssembler::StoreStackPointerToThread32(ThreadOffset<kMipsPointerSize> thr_offs) {
   StoreToOffset(kStoreWord, SP, S1, thr_offs.Int32Value());
 }
 
@@ -2819,7 +2820,10 @@ void MipsAssembler::StoreSpanning(FrameOffset dest, ManagedRegister msrc,
   MipsManagedRegister scratch = mscratch.AsMips();
   StoreToOffset(kStoreWord, src.AsCoreRegister(), SP, dest.Int32Value());
   LoadFromOffset(kLoadWord, scratch.AsCoreRegister(), SP, in_off.Int32Value());
-  StoreToOffset(kStoreWord, scratch.AsCoreRegister(), SP, dest.Int32Value() + kMipsWordSize);
+  StoreToOffset(kStoreWord,
+                scratch.AsCoreRegister(),
+                SP,
+                dest.Int32Value() + static_cast<size_t>(kMipsPointerSize));
 }
 
 void MipsAssembler::Load(ManagedRegister mdest, FrameOffset src, size_t size) {
@@ -2827,7 +2831,7 @@ void MipsAssembler::Load(ManagedRegister mdest, FrameOffset src, size_t size) {
 }
 
 void MipsAssembler::LoadFromThread32(ManagedRegister mdest,
-                                     ThreadOffset<kMipsWordSize> src, size_t size) {
+                                     ThreadOffset<kMipsPointerSize> src, size_t size) {
   return EmitLoad(mdest, S1, src.Int32Value(), size);
 }
 
@@ -2856,7 +2860,7 @@ void MipsAssembler::LoadRawPtr(ManagedRegister mdest, ManagedRegister base, Offs
 }
 
 void MipsAssembler::LoadRawPtrFromThread32(ManagedRegister mdest,
-                                           ThreadOffset<kMipsWordSize> offs) {
+                                           ThreadOffset<kMipsPointerSize> offs) {
   MipsManagedRegister dest = mdest.AsMips();
   CHECK(dest.IsCoreRegister());
   LoadFromOffset(kLoadWord, dest.AsCoreRegister(), S1, offs.Int32Value());
@@ -2879,7 +2883,7 @@ void MipsAssembler::Move(ManagedRegister mdest, ManagedRegister msrc, size_t siz
       Move(dest.AsCoreRegister(), src.AsCoreRegister());
     } else if (dest.IsFRegister()) {
       CHECK(src.IsFRegister()) << src;
-      if (size == kMipsWordSize) {
+      if (size == static_cast<size_t>(kMipsPointerSize)) {
         MovS(dest.AsFRegister(), src.AsFRegister());
       } else {
         CHECK_EQ(kMipsDoublewordSize, size);
@@ -2911,7 +2915,7 @@ void MipsAssembler::CopyRef(FrameOffset dest, FrameOffset src, ManagedRegister m
 }
 
 void MipsAssembler::CopyRawPtrFromThread32(FrameOffset fr_offs,
-                                           ThreadOffset<kMipsWordSize> thr_offs,
+                                           ThreadOffset<kMipsPointerSize> thr_offs,
                                            ManagedRegister mscratch) {
   MipsManagedRegister scratch = mscratch.AsMips();
   CHECK(scratch.IsCoreRegister()) << scratch;
@@ -2921,7 +2925,7 @@ void MipsAssembler::CopyRawPtrFromThread32(FrameOffset fr_offs,
                 SP, fr_offs.Int32Value());
 }
 
-void MipsAssembler::CopyRawPtrToThread32(ThreadOffset<kMipsWordSize> thr_offs,
+void MipsAssembler::CopyRawPtrToThread32(ThreadOffset<kMipsPointerSize> thr_offs,
                                          FrameOffset fr_offs,
                                          ManagedRegister mscratch) {
   MipsManagedRegister scratch = mscratch.AsMips();
@@ -2935,22 +2939,28 @@ void MipsAssembler::CopyRawPtrToThread32(ThreadOffset<kMipsWordSize> thr_offs,
 void MipsAssembler::Copy(FrameOffset dest, FrameOffset src, ManagedRegister mscratch, size_t size) {
   MipsManagedRegister scratch = mscratch.AsMips();
   CHECK(scratch.IsCoreRegister()) << scratch;
-  CHECK(size == kMipsWordSize || size == kMipsDoublewordSize) << size;
-  if (size == kMipsWordSize) {
+  CHECK(size == static_cast<size_t>(kMipsPointerSize) || size == kMipsDoublewordSize) << size;
+  if (size == static_cast<size_t>(kMipsPointerSize)) {
     LoadFromOffset(kLoadWord, scratch.AsCoreRegister(), SP, src.Int32Value());
     StoreToOffset(kStoreWord, scratch.AsCoreRegister(), SP, dest.Int32Value());
   } else if (size == kMipsDoublewordSize) {
     LoadFromOffset(kLoadWord, scratch.AsCoreRegister(), SP, src.Int32Value());
     StoreToOffset(kStoreWord, scratch.AsCoreRegister(), SP, dest.Int32Value());
-    LoadFromOffset(kLoadWord, scratch.AsCoreRegister(), SP, src.Int32Value() + kMipsWordSize);
-    StoreToOffset(kStoreWord, scratch.AsCoreRegister(), SP, dest.Int32Value() + kMipsWordSize);
+    LoadFromOffset(kLoadWord,
+                   scratch.AsCoreRegister(),
+                   SP,
+                   src.Int32Value() + static_cast<size_t>(kMipsPointerSize));
+    StoreToOffset(kStoreWord,
+                  scratch.AsCoreRegister(),
+                  SP,
+                  dest.Int32Value() +static_cast<size_t>(kMipsPointerSize));
   }
 }
 
 void MipsAssembler::Copy(FrameOffset dest, ManagedRegister src_base, Offset src_offset,
                          ManagedRegister mscratch, size_t size) {
   Register scratch = mscratch.AsMips().AsCoreRegister();
-  CHECK_EQ(size, kMipsWordSize);
+  CHECK_EQ(size, static_cast<size_t>(kMipsPointerSize));
   LoadFromOffset(kLoadWord, scratch, src_base.AsMips().AsCoreRegister(), src_offset.Int32Value());
   StoreToOffset(kStoreWord, scratch, SP, dest.Int32Value());
 }
@@ -2958,7 +2968,7 @@ void MipsAssembler::Copy(FrameOffset dest, ManagedRegister src_base, Offset src_
 void MipsAssembler::Copy(ManagedRegister dest_base, Offset dest_offset, FrameOffset src,
                          ManagedRegister mscratch, size_t size) {
   Register scratch = mscratch.AsMips().AsCoreRegister();
-  CHECK_EQ(size, kMipsWordSize);
+  CHECK_EQ(size, static_cast<size_t>(kMipsPointerSize));
   LoadFromOffset(kLoadWord, scratch, SP, src.Int32Value());
   StoreToOffset(kStoreWord, scratch, dest_base.AsMips().AsCoreRegister(), dest_offset.Int32Value());
 }
@@ -2974,7 +2984,7 @@ void MipsAssembler::Copy(FrameOffset dest ATTRIBUTE_UNUSED,
 void MipsAssembler::Copy(ManagedRegister dest, Offset dest_offset,
                          ManagedRegister src, Offset src_offset,
                          ManagedRegister mscratch, size_t size) {
-  CHECK_EQ(size, kMipsWordSize);
+  CHECK_EQ(size, static_cast<size_t>(kMipsPointerSize));
   Register scratch = mscratch.AsMips().AsCoreRegister();
   LoadFromOffset(kLoadWord, scratch, src.AsMips().AsCoreRegister(), src_offset.Int32Value());
   StoreToOffset(kStoreWord, scratch, dest.AsMips().AsCoreRegister(), dest_offset.Int32Value());
@@ -3095,7 +3105,7 @@ void MipsAssembler::Call(FrameOffset base, Offset offset, ManagedRegister mscrat
   // TODO: place reference map on call.
 }
 
-void MipsAssembler::CallFromThread32(ThreadOffset<kMipsWordSize> offset ATTRIBUTE_UNUSED,
+void MipsAssembler::CallFromThread32(ThreadOffset<kMipsPointerSize> offset ATTRIBUTE_UNUSED,
                                      ManagedRegister mscratch ATTRIBUTE_UNUSED) {
   UNIMPLEMENTED(FATAL) << "no mips implementation";
 }
@@ -3113,7 +3123,7 @@ void MipsAssembler::ExceptionPoll(ManagedRegister mscratch, size_t stack_adjust)
   MipsManagedRegister scratch = mscratch.AsMips();
   exception_blocks_.emplace_back(scratch, stack_adjust);
   LoadFromOffset(kLoadWord, scratch.AsCoreRegister(),
-                 S1, Thread::ExceptionOffset<kMipsWordSize>().Int32Value());
+                 S1, Thread::ExceptionOffset<kMipsPointerSize>().Int32Value());
   // TODO: on MIPS32R6 prefer Bnezc(scratch.AsCoreRegister(), slow.Entry());
   // as the NAL instruction (occurring in long R2 branches) may become deprecated.
   // For now use common for R2 and R6 instructions as this code must execute on both.
@@ -3130,8 +3140,10 @@ void MipsAssembler::EmitExceptionPoll(MipsExceptionSlowPath* exception) {
   CheckEntrypointTypes<kQuickDeliverException, void, mirror::Object*>();
   Move(A0, exception->scratch_.AsCoreRegister());
   // Set up call to Thread::Current()->pDeliverException.
-  LoadFromOffset(kLoadWord, T9, S1,
-    QUICK_ENTRYPOINT_OFFSET(kMipsWordSize, pDeliverException).Int32Value());
+  LoadFromOffset(kLoadWord,
+                 T9,
+                 S1,
+                 QUICK_ENTRYPOINT_OFFSET(kMipsPointerSize, pDeliverException).Int32Value());
   Jr(T9);
   Nop();
 

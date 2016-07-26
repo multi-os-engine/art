@@ -21,6 +21,7 @@
 #include <fcntl.h>
 
 #include "art_method-inl.h"
+#include "base/enums.h"
 #include "base/systrace.h"
 #include "base/time_utils.h"
 #include "compiler_filter.h"
@@ -206,12 +207,12 @@ class GetMethodsVisitor : public ClassVisitor {
     if (Runtime::Current()->GetHeap()->ObjectIsInBootImageSpace(klass)) {
       return true;
     }
-    for (ArtMethod& method : klass->GetMethods(sizeof(void*))) {
+    for (ArtMethod& method : klass->GetMethods(kPointerSizeCur)) {
       if (!method.IsNative()) {
         if (method.GetCounter() >= startup_method_samples_ ||
-            method.GetProfilingInfo(sizeof(void*)) != nullptr) {
+            method.GetProfilingInfo(kPointerSizeCur) != nullptr) {
           // Have samples, add to profile.
-          const DexFile* dex_file = method.GetInterfaceMethodIfProxy(sizeof(void*))->GetDexFile();
+          const DexFile* dex_file = method.GetInterfaceMethodIfProxy(kPointerSizeCur)->GetDexFile();
           methods_->push_back(MethodReference(dex_file, method.GetDexMethodIndex()));
         }
       }

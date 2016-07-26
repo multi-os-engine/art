@@ -18,6 +18,8 @@
 #define ART_COMPILER_DEX_QUICK_DEX_FILE_METHOD_INLINER_H_
 
 #include <stdint.h>
+
+#include "base/enums.h"
 #include "base/mutex.h"
 #include "base/macros.h"
 #include "safe_map.h"
@@ -76,7 +78,7 @@ class DexFileMethodInliner {
     /**
      * Gets the thread pointer entrypoint offset for a string init method index and pointer size.
      */
-    uint32_t GetOffsetForStringInit(uint32_t method_index, size_t pointer_size)
+    uint32_t GetOffsetForStringInit(uint32_t method_index, PointerSize pointer_size)
         REQUIRES(!lock_);
 
     /**

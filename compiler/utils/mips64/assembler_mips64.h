@@ -383,10 +383,10 @@ class Mips64Assembler FINAL : public Assembler {
 
   void StoreImmediateToFrame(FrameOffset dest, uint32_t imm, ManagedRegister mscratch) OVERRIDE;
 
-  void StoreStackOffsetToThread64(ThreadOffset<kMips64DoublewordSize> thr_offs, FrameOffset fr_offs,
+  void StoreStackOffsetToThread64(ThreadOffset<kMips64PointerSize> thr_offs, FrameOffset fr_offs,
                                   ManagedRegister mscratch) OVERRIDE;
 
-  void StoreStackPointerToThread64(ThreadOffset<kMips64DoublewordSize> thr_offs) OVERRIDE;
+  void StoreStackPointerToThread64(ThreadOffset<kMips64PointerSize> thr_offs) OVERRIDE;
 
   void StoreSpanning(FrameOffset dest, ManagedRegister msrc, FrameOffset in_off,
                      ManagedRegister mscratch) OVERRIDE;
@@ -395,7 +395,7 @@ class Mips64Assembler FINAL : public Assembler {
   void Load(ManagedRegister mdest, FrameOffset src, size_t size) OVERRIDE;
 
   void LoadFromThread64(ManagedRegister mdest,
-                        ThreadOffset<kMips64DoublewordSize> src,
+                        ThreadOffset<kMips64PointerSize> src,
                         size_t size) OVERRIDE;
 
   void LoadRef(ManagedRegister dest, FrameOffset src) OVERRIDE;
@@ -406,15 +406,15 @@ class Mips64Assembler FINAL : public Assembler {
   void LoadRawPtr(ManagedRegister mdest, ManagedRegister base, Offset offs) OVERRIDE;
 
   void LoadRawPtrFromThread64(ManagedRegister mdest,
-                              ThreadOffset<kMips64DoublewordSize> offs) OVERRIDE;
+                              ThreadOffset<kMips64PointerSize> offs) OVERRIDE;
 
   // Copying routines.
   void Move(ManagedRegister mdest, ManagedRegister msrc, size_t size) OVERRIDE;
 
-  void CopyRawPtrFromThread64(FrameOffset fr_offs, ThreadOffset<kMips64DoublewordSize> thr_offs,
+  void CopyRawPtrFromThread64(FrameOffset fr_offs, ThreadOffset<kMips64PointerSize> thr_offs,
                               ManagedRegister mscratch) OVERRIDE;
 
-  void CopyRawPtrToThread64(ThreadOffset<kMips64DoublewordSize> thr_offs, FrameOffset fr_offs,
+  void CopyRawPtrToThread64(ThreadOffset<kMips64PointerSize> thr_offs, FrameOffset fr_offs,
                             ManagedRegister mscratch) OVERRIDE;
 
   void CopyRef(FrameOffset dest, FrameOffset src, ManagedRegister mscratch) OVERRIDE;
@@ -471,7 +471,7 @@ class Mips64Assembler FINAL : public Assembler {
   // Call to address held at [base+offset].
   void Call(ManagedRegister base, Offset offset, ManagedRegister mscratch) OVERRIDE;
   void Call(FrameOffset base, Offset offset, ManagedRegister mscratch) OVERRIDE;
-  void CallFromThread64(ThreadOffset<kMips64DoublewordSize> offset,
+  void CallFromThread64(ThreadOffset<kMips64PointerSize> offset,
                         ManagedRegister mscratch) OVERRIDE;
 
   // Generate code to check if Thread::Current()->exception_ is non-null

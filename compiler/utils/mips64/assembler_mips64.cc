@@ -2110,7 +2110,7 @@ void Mips64Assembler::StoreImmediateToFrame(FrameOffset dest, uint32_t imm,
   StoreToOffset(kStoreWord, scratch.AsGpuRegister(), SP, dest.Int32Value());
 }
 
-void Mips64Assembler::StoreStackOffsetToThread64(ThreadOffset<kMips64DoublewordSize> thr_offs,
+void Mips64Assembler::StoreStackOffsetToThread64(ThreadOffset<kMips64PointerSize> thr_offs,
                                                  FrameOffset fr_offs,
                                                  ManagedRegister mscratch) {
   Mips64ManagedRegister scratch = mscratch.AsMips64();
@@ -2119,7 +2119,7 @@ void Mips64Assembler::StoreStackOffsetToThread64(ThreadOffset<kMips64DoublewordS
   StoreToOffset(kStoreDoubleword, scratch.AsGpuRegister(), S1, thr_offs.Int32Value());
 }
 
-void Mips64Assembler::StoreStackPointerToThread64(ThreadOffset<kMips64DoublewordSize> thr_offs) {
+void Mips64Assembler::StoreStackPointerToThread64(ThreadOffset<kMips64PointerSize> thr_offs) {
   StoreToOffset(kStoreDoubleword, SP, S1, thr_offs.Int32Value());
 }
 
@@ -2137,7 +2137,7 @@ void Mips64Assembler::Load(ManagedRegister mdest, FrameOffset src, size_t size) 
 }
 
 void Mips64Assembler::LoadFromThread64(ManagedRegister mdest,
-                                       ThreadOffset<kMips64DoublewordSize> src,
+                                       ThreadOffset<kMips64PointerSize> src,
                                        size_t size) {
   return EmitLoad(mdest, S1, src.Int32Value(), size);
 }
@@ -2172,7 +2172,7 @@ void Mips64Assembler::LoadRawPtr(ManagedRegister mdest, ManagedRegister base,
 }
 
 void Mips64Assembler::LoadRawPtrFromThread64(ManagedRegister mdest,
-                                             ThreadOffset<kMips64DoublewordSize> offs) {
+                                             ThreadOffset<kMips64PointerSize> offs) {
   Mips64ManagedRegister dest = mdest.AsMips64();
   CHECK(dest.IsGpuRegister());
   LoadFromOffset(kLoadDoubleword, dest.AsGpuRegister(), S1, offs.Int32Value());
@@ -2217,7 +2217,7 @@ void Mips64Assembler::CopyRef(FrameOffset dest, FrameOffset src,
 }
 
 void Mips64Assembler::CopyRawPtrFromThread64(FrameOffset fr_offs,
-                                             ThreadOffset<kMips64DoublewordSize> thr_offs,
+                                             ThreadOffset<kMips64PointerSize> thr_offs,
                                              ManagedRegister mscratch) {
   Mips64ManagedRegister scratch = mscratch.AsMips64();
   CHECK(scratch.IsGpuRegister()) << scratch;
@@ -2225,7 +2225,7 @@ void Mips64Assembler::CopyRawPtrFromThread64(FrameOffset fr_offs,
   StoreToOffset(kStoreDoubleword, scratch.AsGpuRegister(), SP, fr_offs.Int32Value());
 }
 
-void Mips64Assembler::CopyRawPtrToThread64(ThreadOffset<kMips64DoublewordSize> thr_offs,
+void Mips64Assembler::CopyRawPtrToThread64(ThreadOffset<kMips64PointerSize> thr_offs,
                                            FrameOffset fr_offs,
                                            ManagedRegister mscratch) {
   Mips64ManagedRegister scratch = mscratch.AsMips64();
@@ -2429,7 +2429,7 @@ void Mips64Assembler::Call(FrameOffset base, Offset offset, ManagedRegister mscr
   // TODO: place reference map on call
 }
 
-void Mips64Assembler::CallFromThread64(ThreadOffset<kMips64DoublewordSize> offset ATTRIBUTE_UNUSED,
+void Mips64Assembler::CallFromThread64(ThreadOffset<kMips64PointerSize> offset ATTRIBUTE_UNUSED,
                                        ManagedRegister mscratch ATTRIBUTE_UNUSED) {
   UNIMPLEMENTED(FATAL) << "No MIPS64 implementation";
 }
@@ -2449,7 +2449,7 @@ void Mips64Assembler::ExceptionPoll(ManagedRegister mscratch, size_t stack_adjus
   LoadFromOffset(kLoadDoubleword,
                  scratch.AsGpuRegister(),
                  S1,
-                 Thread::ExceptionOffset<kMips64DoublewordSize>().Int32Value());
+                 Thread::ExceptionOffset<kMips64PointerSize>().Int32Value());
   Bnezc(scratch.AsGpuRegister(), exception_blocks_.back().Entry());
 }
 
@@ -2466,7 +2466,7 @@ void Mips64Assembler::EmitExceptionPoll(Mips64ExceptionSlowPath* exception) {
   LoadFromOffset(kLoadDoubleword,
                  T9,
                  S1,
-                 QUICK_ENTRYPOINT_OFFSET(kMips64DoublewordSize, pDeliverException).Int32Value());
+                 QUICK_ENTRYPOINT_OFFSET(kMips64PointerSize, pDeliverException).Int32Value());
   Jr(T9);
   Nop();
 
