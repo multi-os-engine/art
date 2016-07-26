@@ -1369,9 +1369,9 @@ class OatDumper {
       // The optimizing compiler outputs its CodeInfo data in the vmap table.
       StackMapsHelper helper(oat_method.GetVmapTable());
       const uint8_t* quick_native_pc = reinterpret_cast<const uint8_t*>(quick_code);
-      size_t offset = 0;
-      while (offset < code_size) {
-        offset += disassembler_->Dump(vios->Stream(), quick_native_pc + offset);
+      for (size_t offset = 0;
+           offset < code_size;
+           offset += disassembler_->Dump(vios->Stream(), quick_native_pc + offset)) {
         if (offset == helper.GetOffset()) {
           ScopedIndentation indent1(vios);
           StackMap stack_map = helper.GetStackMap();

@@ -266,10 +266,10 @@ bool HInstructionBuilder::Build() {
   // Find locations where we want to generate extra stackmaps for native debugging.
   // This allows us to generate the info only at interesting points (for example,
   // at start of java statement) rather than before every dex instruction.
-  const bool native_debuggable = compiler_driver_ != nullptr &&
-                                 compiler_driver_->GetCompilerOptions().GetNativeDebuggable();
   ArenaBitVector* native_debug_info_locations = nullptr;
-  if (native_debuggable) {
+  if (compiler_driver_ != nullptr &&
+      (compiler_driver_->GetCompilerOptions().GetNativeDebuggable() ||
+       compiler_driver_->GetCompilerOptions().GetGenerateDebugInfo())) {
     const uint32_t num_instructions = code_item_.insns_size_in_code_units_;
     native_debug_info_locations = new (arena_) ArenaBitVector (arena_, num_instructions, false);
     FindNativeDebugInfoLocations(native_debug_info_locations);
@@ -321,7 +321,8 @@ bool HInstructionBuilder::Build() {
         PropagateLocalsToCatchBlocks();
       }
 
-      if (native_debuggable && native_debug_info_locations->IsBitSet(dex_pc)) {
+      if (native_debug_info_locations != nullptr &&
+          native_debug_info_locations->IsBitSet(dex_pc)) {
         AppendInstruction(new (arena_) HNativeDebugInfo(dex_pc));
       }
 
