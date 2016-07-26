@@ -1257,6 +1257,10 @@ inline bool MethodVerifier::CheckNewInstance(uint32_t idx) {
   if (descriptor[0] != 'L') {
     Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "can't call new-instance on type '" << descriptor << "'";
     return false;
+  } else if (strcmp(descriptor, "Ljava/lang/Class;") == 0) {
+    // An unlikely new instance on Class is not allowed. Fall back to interpreter
+    // to ensure only single path needs to properly deal with this.
+    Fail(VERIFY_ERROR_FORCE_INTERPRETER);
   }
   return true;
 }
