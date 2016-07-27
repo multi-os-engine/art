@@ -773,6 +773,8 @@ void RegType::CheckInvariants() const {
   }
   if (!klass_.IsNull()) {
     CHECK(!descriptor_.empty()) << *this;
+    std::string tmp;
+    CHECK_EQ(descriptor_.ToString(), klass_.Read()->GetDescriptor(&tmp)) << *this;
   }
 }
 
