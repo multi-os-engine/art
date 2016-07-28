@@ -5208,6 +5208,7 @@ class HArraySet FINAL : public HTemplateInstruction<3> {
   }
 
   void ClearNeedsTypeCheck() {
+    RemoveEnvironment();
     SetPackedFlag<kFlagNeedsTypeCheck>(false);
   }
 

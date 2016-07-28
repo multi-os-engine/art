@@ -2344,6 +2344,7 @@ void HInvoke::SetIntrinsic(Intrinsics intrinsic,
   if (needs_env_or_cache == kNoEnvironmentOrCache) {
     opt.SetDoesNotNeedDexCache();
     opt.SetDoesNotNeedEnvironment();
+    RemoveEnvironment();
   } else {
     // If we need an environment, that means there will be a call, which can trigger GC.
     SetSideEffects(GetSideEffects().Union(SideEffects::CanTriggerGC()));

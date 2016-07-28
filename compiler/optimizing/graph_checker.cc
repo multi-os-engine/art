@@ -484,6 +484,15 @@ void GraphChecker::VisitInstruction(HInstruction* instruction) {
       }
     }
   }
+
+  // Ensure NeedsEnvironment == HasEnvironment.
+  if (instruction->NeedsEnvironment() != instruction->HasEnvironment()) {
+    AddError(StringPrintf(instruction->NeedsEnvironment() ?
+                          "Instruction %s:%d needs environment but does not have one." :
+                          "Instruction %s:%d has environment but does not need any.",
+                          instruction->DebugName(),
+                          instruction->GetId()));
+  }
 }
 
 void GraphChecker::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
