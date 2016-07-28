@@ -32,6 +32,7 @@
 #include "gc/collector_type.h"
 #include "gc/space/large_object_space.h"
 #include "jit/profile_saver_options.h"
+#include "ti/agent.h"
 
 namespace art {
 
@@ -381,6 +382,22 @@ struct CmdlineType<std::string> : CmdlineTypeParser<std::string> {
 };
 
 template <>
+struct CmdlineType<std::vector<ti::Agent>> : CmdlineTypeParser<std::vector<ti::Agent>> {
+  Result Parse(const std::string& args) {
+    assert(false && "Use AppendValues() for an Agent vector type");
+    return Result::Failure("Unconditional failure: string vector must be appended: " + args);
+  }
+
+  Result ParseAndAppend(const std::string& args,
+                        std::vector<ti::Agent>& existing_value) {
+    existing_value.push_back(ti::Agent::Create(args));
+    return Result::SuccessNoValue();
+  }
+
+  static const char* Name() { return "std::vector<ti::Agent>"; }
+};
+
+template <>
 struct CmdlineType<std::vector<std::string>> : CmdlineTypeParser<std::vector<std::string>> {
   Result Parse(const std::string& args) {
     assert(false && "Use AppendValues() for a string vector type");
@@ -428,6 +445,28 @@ struct ParseStringList {
 
  private:
   std::vector<std::string> list_;
+};
+
+// TODO Use this maybe
+template <>
+struct CmdlineType<std::vector<std::pair<std::string, std::string>>>
+    : CmdlineTypeParser<std::vector<std::pair<std::string, std::string>>> {
+  Result Parse(const std::string& args) {
+    assert(false && "Use AppendValues() for a string vector type");
+    return Result::Failure("Unconditional failure: string vector must be appended: " + args);
+  }
+
+  Result ParseAndAppend(const std::string& args,
+                        std::vector<std::pair<std::string, std::string>>& existing_value) {
+    std::vector<std::string> strings(ParseStringList<'='>::Split(args));
+    if (strings.size() > 2) {
+      return Result::Failure("Unconditional failure: more than 1 '=' sign: " + args);
+    }
+    existing_value.push_back({strings[0], (strings.size() == 2) ? strings[1] : ""});
+    return Result::SuccessNoValue();
+  }
+
+  static const char* Name() { return "std::vector<std::pair<std::string, std::string>>"; }
 };
 
 template <char Separator>
@@ -734,6 +773,8 @@ struct CmdlineType<ExperimentalFlags> : CmdlineTypeParser<ExperimentalFlags> {
       existing = ExperimentalFlags::kNone;
     } else if (option == "lambdas") {
       existing = existing | ExperimentalFlags::kLambdas;
+    } else if (option == "jvmti") {
+      existing = existing | ExperimentalFlags::kJvmti;
     } else {
       return Result::Failure(std::string("Unknown option '") + option + "'");
     }

@@ -22,7 +22,9 @@
 #include "jni_env_ext-inl.h"
 #include "art_field.h"
 #include "read_barrier.h"
+#include "runtime-inl.h"
 #include "thread-inl.h"
+#include "ti/env.h"
 #include "verify_object.h"
 
 namespace art {
@@ -116,6 +118,10 @@ class ScopedObjectAccessAlreadyRunnable : public ValueObject {
     return vm_;
   }
 
+  ti::Env* ArtTiEnv() const {
+    return ti_env_;
+  }
+
   bool ForceCopy() const {
     return vm_->ForceCopy();
   }
@@ -177,19 +183,26 @@ class ScopedObjectAccessAlreadyRunnable : public ValueObject {
  protected:
   explicit ScopedObjectAccessAlreadyRunnable(JNIEnv* env)
       REQUIRES(!Locks::thread_suspend_count_lock_) ALWAYS_INLINE
-      : self_(ThreadForEnv(env)), env_(down_cast<JNIEnvExt*>(env)), vm_(env_->vm) {
+      : self_(ThreadForEnv(env)), env_(down_cast<JNIEnvExt*>(env)), vm_(env_->vm),
+        ti_env_(self_->GetTiEnv()) {
   }
 
   explicit ScopedObjectAccessAlreadyRunnable(Thread* self)
       REQUIRES(!Locks::thread_suspend_count_lock_) ALWAYS_INLINE
       : self_(self), env_(down_cast<JNIEnvExt*>(self->GetJniEnv())),
-        vm_(env_ != nullptr ? env_->vm : nullptr) {
+        vm_(env_ != nullptr ? env_->vm : nullptr), ti_env_(self->GetTiEnv()) {
+  }
+
+  explicit ScopedObjectAccessAlreadyRunnable(ti::Env* env)
+      REQUIRES(!Locks::thread_suspend_count_lock_) ALWAYS_INLINE
+      : self_(env->Self()), env_(down_cast<JNIEnvExt*>(env->Self()->GetJniEnv())),
+        vm_(env->vm_), ti_env_(env) {
   }
 
   // Used when we want a scoped JNI thread state but have no thread/JNIEnv. Consequently doesn't
   // change into Runnable or acquire a share on the mutator_lock_.
   explicit ScopedObjectAccessAlreadyRunnable(JavaVM* vm)
-      : self_(nullptr), env_(nullptr), vm_(down_cast<JavaVMExt*>(vm)) {}
+      : self_(nullptr), env_(nullptr), vm_(down_cast<JavaVMExt*>(vm)), ti_env_(nullptr) {}
 
   // Here purely to force inlining.
   ~ScopedObjectAccessAlreadyRunnable() ALWAYS_INLINE {
@@ -201,6 +214,8 @@ class ScopedObjectAccessAlreadyRunnable : public ValueObject {
   JNIEnvExt* const env_;
   // The full JavaVM.
   JavaVMExt* const vm_;
+  // The Tooling environment.
+  ti::Env* const ti_env_;
 };
 
 // Entry/exit processing for transitions from Native to Runnable (ie within JNI functions).
@@ -220,6 +235,13 @@ class ScopedObjectAccessAlreadyRunnable : public ValueObject {
 class ScopedObjectAccessUnchecked : public ScopedObjectAccessAlreadyRunnable {
  public:
   explicit ScopedObjectAccessUnchecked(JNIEnv* env)
+      REQUIRES(!Locks::thread_suspend_count_lock_) ALWAYS_INLINE
+      : ScopedObjectAccessAlreadyRunnable(env), tsc_(Self(), kRunnable) {
+    Self()->VerifyStack();
+    Locks::mutator_lock_->AssertSharedHeld(Self());
+  }
+
+  explicit ScopedObjectAccessUnchecked(ti::Env* env)
       REQUIRES(!Locks::thread_suspend_count_lock_) ALWAYS_INLINE
       : ScopedObjectAccessAlreadyRunnable(env), tsc_(Self(), kRunnable) {
     Self()->VerifyStack();
@@ -250,6 +272,12 @@ class ScopedObjectAccessUnchecked : public ScopedObjectAccessAlreadyRunnable {
 class ScopedObjectAccess : public ScopedObjectAccessUnchecked {
  public:
   explicit ScopedObjectAccess(JNIEnv* env)
+      REQUIRES(!Locks::thread_suspend_count_lock_)
+      SHARED_LOCK_FUNCTION(Locks::mutator_lock_) ALWAYS_INLINE
+      : ScopedObjectAccessUnchecked(env) {
+  }
+
+  explicit ScopedObjectAccess(ti::Env* env)
       REQUIRES(!Locks::thread_suspend_count_lock_)
       SHARED_LOCK_FUNCTION(Locks::mutator_lock_) ALWAYS_INLINE
       : ScopedObjectAccessUnchecked(env) {
