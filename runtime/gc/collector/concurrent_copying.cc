@@ -47,6 +47,9 @@ static constexpr bool kGrayDirtyImmuneObjects = true;
 // If kFilterModUnionCards then we attempt to filter cards that don't need to be dirty in the mod
 // union table. Disabled since it does not seem to help the pause much.
 static constexpr bool kFilterModUnionCards = kIsDebugBuild;
+// If kDisallowReadBarrierDuringScan is true then the GC aborts if there are any that occur during
+// ConcurrentCopying::Scan. May be used to diagnose possibly unnecessary read barriers.
+static constexpr bool kDisallowReadBarrierDuringScan = false;
 
 ConcurrentCopying::ConcurrentCopying(Heap* heap,
                                      const std::string& name_prefix,
@@ -1723,7 +1726,7 @@ class ConcurrentCopying::RefFieldsVisitor {
 
 // Scan ref fields of an object.
 inline void ConcurrentCopying::Scan(mirror::Object* to_ref) {
-  if (kIsDebugBuild) {
+  if (kDisallowReadBarrierDuringScan) {
     // Avoid all read barriers during visit references to help performance.
     Thread::Current()->ModifyDebugDisallowReadBarrier(1);
   }
@@ -1733,7 +1736,7 @@ inline void ConcurrentCopying::Scan(mirror::Object* to_ref) {
   // Disable the read barrier for a performance reason.
   to_ref->VisitReferences</*kVisitNativeRoots*/true, kDefaultVerifyFlags, kWithoutReadBarrier>(
       visitor, visitor);
-  if (kIsDebugBuild) {
+  if (kDisallowReadBarrierDuringScan) {
     Thread::Current()->ModifyDebugDisallowReadBarrier(-1);
   }
 }
@@ -1859,9 +1862,9 @@ void ConcurrentCopying::FillWithDummyObject(mirror::Object* dummy_obj, size_t by
     // An int array is too big. Use java.lang.Object.
     mirror::Class* java_lang_Object = WellKnownClasses::ToClass(WellKnownClasses::java_lang_Object);
     AssertToSpaceInvariant(nullptr, MemberOffset(0), java_lang_Object);
-    CHECK_EQ(byte_size, java_lang_Object->GetObjectSize());
+    CHECK_EQ(byte_size, (java_lang_Object->GetObjectSize<kVerifyNone, kWithoutReadBarrier>()));
     dummy_obj->SetClass(java_lang_Object);
-    CHECK_EQ(byte_size, dummy_obj->SizeOf());
+    CHECK_EQ(byte_size, (dummy_obj->SizeOf<kVerifyNone, kWithoutReadBarrier>()));
   } else {
     // Use an int array.
     dummy_obj->SetClass(int_array_class);
