@@ -129,6 +129,7 @@
 #include "signal_set.h"
 #include "thread.h"
 #include "thread_list.h"
+#include "ti/agent.h"
 #include "trace.h"
 #include "transaction.h"
 #include "utils.h"
@@ -960,6 +961,13 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   experimental_flags_ = runtime_options.GetOrDefault(Opt::Experimental);
   is_low_memory_mode_ = runtime_options.Exists(Opt::LowMemoryMode);
 
+  if (experimental_flags_ & ExperimentalFlags::kJvmti) {
+    agents_ = runtime_options.ReleaseOrDefault(Opt::AgentPath);
+    // TODO Add back in -agentlib
+    // for (auto lib : runtime_options.ReleaseOrDefault(Opt::AgentLib)) {
+    //   agents_.push_back(lib);
+    // }
+  }
   XGcOption xgc_option = runtime_options.GetOrDefault(Opt::GcOption);
   heap_ = new gc::Heap(runtime_options.GetOrDefault(Opt::MemoryInitialSize),
                        runtime_options.GetOrDefault(Opt::HeapGrowthLimit),
@@ -1232,6 +1240,13 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   {
     std::string native_bridge_file_name = runtime_options.ReleaseOrDefault(Opt::NativeBridge);
     is_native_bridge_loaded_ = LoadNativeBridge(native_bridge_file_name);
+  }
+  // Startup agents
+  for (auto& agent : agents_) {
+    // TODO Check err
+    int res = 0;
+    std::string err = "";
+    agent.Load(&res, &err);
   }
 
   VLOG(startup) << "Runtime::Init exiting";

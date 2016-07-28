@@ -89,6 +89,10 @@ class ScopedObjectAccessAlreadyRunnable;
 class ShadowFrame;
 class SingleStepControl;
 class StackedShadowFrameRecord;
+namespace ti {
+class Env;
+}  // namespace ti
+
 class Thread;
 class ThreadList;
 
@@ -439,6 +443,10 @@ class Thread {
   // JNI methods
   JNIEnvExt* GetJniEnv() const {
     return tlsPtr_.jni_env;
+  }
+
+  ti::Env* GetTiEnv() const {
+    return tlsPtr_.ti_env;
   }
 
   // Convert a jobject into a Object*
@@ -1356,7 +1364,7 @@ class Thread {
       mterp_current_ibase(nullptr), mterp_default_ibase(nullptr), mterp_alt_ibase(nullptr),
       thread_local_alloc_stack_top(nullptr), thread_local_alloc_stack_end(nullptr),
       nested_signal_state(nullptr), flip_function(nullptr), method_verifier(nullptr),
-      thread_local_mark_stack(nullptr) {
+      thread_local_mark_stack(nullptr), ti_env(nullptr) {
       std::fill(held_mutexes, held_mutexes + kLockLevelCount, nullptr);
     }
 
@@ -1500,6 +1508,9 @@ class Thread {
 
     // Thread-local mark stack for the concurrent copying collector.
     gc::accounting::AtomicStack<mirror::Object>* thread_local_mark_stack;
+
+    // Every thread may have an associated tooling environment
+    ti::Env* ti_env;
   } tlsPtr_;
 
   // Guards the 'interrupted_' and 'wait_monitor_' members.

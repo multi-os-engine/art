@@ -31,6 +31,7 @@
 #include "gc/space/large_object_space.h"
 #include "arch/instruction_set.h"
 #include "jit/profile_saver_options.h"
+#include "ti/agent.h"
 #include "verifier/verify_mode.h"
 #include <stdio.h>
 #include <stdarg.h>

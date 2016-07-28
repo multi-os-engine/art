@@ -26,7 +26,8 @@ struct ExperimentalFlags {
   // The actual flag values.
   enum {
     kNone           = 0x0000,
-    kLambdas        = 0x0001,
+    kLambdas        = 0x0001,  // 0b00000001
+    kJvmti          = 0x0002,  // 0b00000010
   };
 
   constexpr ExperimentalFlags() : value_(0x0000) {}
@@ -66,6 +67,10 @@ inline std::ostream& operator<<(std::ostream& stream, const ExperimentalFlags& e
   bool started = false;
   if (e & ExperimentalFlags::kLambdas) {
     stream << (started ? "|" : "") << "kLambdas";
+    started = true;
+  }
+  if (e & ExperimentalFlags::kJvmti) {
+    stream << (started ? "|" : "") << "kJvmti";
     started = true;
   }
   if (!started) {
