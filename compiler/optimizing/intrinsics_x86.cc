@@ -752,14 +752,7 @@ void IntrinsicCodeGeneratorX86::VisitMathRint(HInvoke* invoke) {
   GenSSE41FPToFPIntrinsic(codegen_, invoke, GetAssembler(), 0);
 }
 
-// Note that 32 bit x86 doesn't have the capability to inline MathRoundDouble,
-// as it needs 64 bit instructions.
 void IntrinsicLocationsBuilderX86::VisitMathRoundFloat(HInvoke* invoke) {
-  // See intrinsics.h.
-  if (!kRoundIsPlusPointFive) {
-    return;
-  }
-
   // Do we have instruction support?
   if (codegen_->GetInstructionSetFeatures().HasSSE4_1()) {
     LocationSummary* locations = new (arena_) LocationSummary(invoke,
@@ -768,13 +761,12 @@ void IntrinsicLocationsBuilderX86::VisitMathRoundFloat(HInvoke* invoke) {
     locations->SetInAt(0, Location::RequiresFpuRegister());
     locations->SetOut(Location::RequiresRegister());
     locations->AddTemp(Location::RequiresFpuRegister());
-    locations->AddTemp(Location::RequiresFpuRegister());
     return;
   }
 
   // We have to fall back to a call to the intrinsic.
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
-                                                           LocationSummary::kCallOnMainOnly);
+                                                            LocationSummary::kCallOnMainOnly);
   InvokeRuntimeCallingConvention calling_convention;
   locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetFpuRegisterAt(0)));
   locations->SetOut(Location::RegisterLocation(EAX));
@@ -784,46 +776,35 @@ void IntrinsicLocationsBuilderX86::VisitMathRoundFloat(HInvoke* invoke) {
 
 void IntrinsicCodeGeneratorX86::VisitMathRoundFloat(HInvoke* invoke) {
   LocationSummary* locations = invoke->GetLocations();
-  if (locations->WillCall()) {
+  if (locations->WillCall()) {  // TODO: can we reach this?
     InvokeOutOfLineIntrinsic(codegen_, invoke);
     return;
   }
 
-  // Implement RoundFloat as t1 = floor(input + 0.5f);  convert to int.
   XmmRegister in = locations->InAt(0).AsFpuRegister<XmmRegister>();
+  XmmRegister tmp = locations->GetTemp(0).AsFpuRegister<XmmRegister>();
   Register out = locations->Out().AsRegister<Register>();
-  XmmRegister maxInt = locations->GetTemp(0).AsFpuRegister<XmmRegister>();
-  XmmRegister inPlusPointFive = locations->GetTemp(1).AsFpuRegister<XmmRegister>();
-  NearLabel done, nan;
+  NearLabel nan;
+  NearLabel done;
   X86Assembler* assembler = GetAssembler();
 
-  // Generate 0.5 into inPlusPointFive.
-  __ movl(out, Immediate(bit_cast<int32_t, float>(0.5f)));
-  __ movd(inPlusPointFive, out);
+  // Setup maxint.
+  __ movl(out, Immediate(INT32_C(0x7fffffff)));
+  __ cvtsi2ss(tmp, out);
 
-  // Add in the input.
-  __ addss(inPlusPointFive, in);
+  // Compute result = round-to-inf(in).
+  __ roundss(in, in, Immediate(2));
 
-  // And truncate to an integer.
-  __ roundss(inPlusPointFive, inPlusPointFive, Immediate(1));
-
-  __ movl(out, Immediate(kPrimIntMax));
-  // maxInt = int-to-float(out)
-  __ cvtsi2ss(maxInt, out);
-
-  // if inPlusPointFive >= maxInt goto done
-  __ comiss(inPlusPointFive, maxInt);
-  __ j(kAboveEqual, &done);
-
-  // if input == NaN goto nan
+  // Compare:
+  //   (1) if result unordered (NaN) out = 0
+  //   (2) if result >= maxint       out = maxint
+  //   (3) otherwise                 out = float-to-int-truncate(result)
+  __ comiss(in, tmp);
   __ j(kUnordered, &nan);
-
-  // output = float-to-int-truncate(input)
-  __ cvttss2si(out, inPlusPointFive);
+  __ j(kAboveEqual, &done);
+  __ cvttss2si(out, in);
   __ jmp(&done);
   __ Bind(&nan);
-
-  //  output = 0
   __ xorl(out, out);
   __ Bind(&done);
 }
