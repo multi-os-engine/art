@@ -197,7 +197,13 @@
   V(ReadBarrierMarkReg30, mirror::Object*, mirror::Object*) \
   V(ReadBarrierMarkReg31, mirror::Object*, mirror::Object*) \
   V(ReadBarrierSlow, mirror::Object*, mirror::Object*, mirror::Object*, uint32_t) \
-  V(ReadBarrierForRootSlow, mirror::Object*, GcRoot<mirror::Object>*)
+  V(ReadBarrierForRootSlow, mirror::Object*, GcRoot<mirror::Object>*) \
+\
+\
+  V(JniMethodFastStart, uint32_t, Thread*) \
+  V(JniMethodFastEnd, void, uint32_t, Thread*)
+
+  // TODO: Actually move this to the JNI section before checking anything in.
 
 #endif  // ART_RUNTIME_ENTRYPOINTS_QUICK_QUICK_ENTRYPOINTS_LIST_H_
 #undef ART_RUNTIME_ENTRYPOINTS_QUICK_QUICK_ENTRYPOINTS_LIST_H_   // #define is only for lint.

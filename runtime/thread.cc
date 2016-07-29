@@ -2608,6 +2608,9 @@ void Thread::DumpThreadOffset(std::ostream& os, uint32_t offset) {
   QUICK_ENTRY_POINT_INFO(pReadBarrierMarkReg31)
   QUICK_ENTRY_POINT_INFO(pReadBarrierSlow)
   QUICK_ENTRY_POINT_INFO(pReadBarrierForRootSlow)
+
+  QUICK_ENTRY_POINT_INFO(pJniMethodFastStart)
+  QUICK_ENTRY_POINT_INFO(pJniMethodFastEnd)
 #undef QUICK_ENTRY_POINT_INFO
 
   os << offset;

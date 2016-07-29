@@ -556,6 +556,50 @@ static bool InstructionSetHasGenericJniStub(InstructionSet isa) {
   }
 }
 
+// Checks to see if the method was annotated with
+// @dalvik.annotation.intrinsics.FastNative
+//
+// The result is saved into access flags for future faster lookup.
+static bool IsMethodAnnotatedWithFastNative(const DexFile& dex_file,
+                                            ArtMethod* method,
+                                            uint32_t& access_flags /* inout */) {
+  if (UNLIKELY(method == nullptr)) {
+    // Happens very rarely, e.g. ancestor class cannot be resolved.
+    return false;
+  }
+
+  // XX: Perhaps introduce kAccIntrinsicsQueried = true/false ?
+  if (method->IsFastNative()) {
+    return true;  // Annotations already looked up.
+  }
+
+  Thread* self = Thread::Current();
+  ScopedObjectAccess soa(self);
+  StackHandleScope<1> shs(self);
+  mirror::Class* fast_native_annotation =
+      Runtime::Current()->GetClassLinker()->GetClassRoot(
+          ClassLinker::kDalvikAnnotationIntrinsicsFastNativeClass);
+
+  Handle<mirror::Class> fast_native_handle(shs.NewHandle(fast_native_annotation));
+
+  // Note: Resolves any method annotations' classes as a side-effect.
+  // -- This seems allowed by the spec since it says we can preload any classes
+  //    referenced by another classes's constant pool table.
+  bool is_annotation_present =
+      dex_file.IsMethodAnnotationPresent(method, fast_native_handle);
+
+  // Speed-up further queries by avoiding having to check annotations.
+  DCHECK_EQ(access_flags, method->GetAccessFlags());
+  DCHECK_EQ(0u, access_flags & kAccFastNative);
+  if (is_annotation_present) {
+    access_flags |= kAccFastNative;
+    method->SetAccessFlags(access_flags);
+    // XX: Doesn't seem thread safe. Is this thread safe?
+  }
+
+  return is_annotation_present;
+}
+
 static void CompileMethod(Thread* self,
                           CompilerDriver* driver,
                           const DexFile::CodeItem* code_item,
@@ -602,7 +646,30 @@ static void CompileMethod(Thread* self,
         InstructionSetHasGenericJniStub(driver->GetInstructionSet())) {
       // Leaving this empty will trigger the generic JNI version
     } else {
-      compiled_method = driver->GetCompiler()->JniCompile(access_flags, method_idx, dex_file);
+      // Look-up the ArtMethod associated with this code_item (if any)
+      // -- It is later used to lookup any [intrinsic] annotations for this method.
+      ScopedObjectAccess soa(self);
+      StackHandleScope<1> hs(soa.Self());
+      Handle<mirror::ClassLoader> class_loader_handle(hs.NewHandle(
+          soa.Decode<mirror::ClassLoader*>(class_loader)));
+
+      ArtMethod* method =
+          Runtime::Current()->GetClassLinker()->ResolveMethod<ClassLinker::kNoICCECheckForCache>(
+              dex_file,
+              method_idx,
+              dex_cache,
+              class_loader_handle,
+              /* referrer */ nullptr,
+              invoke_type);
+      if (UNLIKELY(self->IsExceptionPending())) {
+        DCHECK(method == nullptr);
+        self->ClearException();
+      }
+
+      IsMethodAnnotatedWithFastNative(dex_file, method, /* inout */ access_flags);
+      compiled_method = driver->GetCompiler()->JniCompile(access_flags,
+                                                          method_idx,
+                                                          dex_file);
       CHECK(compiled_method != nullptr);
     }
   } else if ((access_flags & kAccAbstract) != 0) {

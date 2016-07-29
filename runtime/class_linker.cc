@@ -674,6 +674,11 @@ bool ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
                FindSystemClass(self, "[Ljava/lang/StackTraceElement;"));
   mirror::StackTraceElement::SetClass(GetClassRoot(kJavaLangStackTraceElement));
 
+  // Setup dalvik.annotation.intrinsics classes.
+  // Create dalvik.annotation.intrinsics.FastNative root.
+  SetClassRoot(kDalvikAnnotationIntrinsicsFastNativeClass,
+               FindSystemClass(self, "Ldalvik/annotation/intrinsics/FastNative;"));
+
   // Ensure void type is resolved in the core's dex cache so java.lang.Void is correctly
   // initialized.
   {
@@ -3171,6 +3176,7 @@ void ClassLinker::LoadMethod(Thread* self,
       }
     }
   }
+
   dst->SetAccessFlags(access_flags);
 }
 
@@ -7926,6 +7932,7 @@ const char* ClassLinker::GetClassRootDescriptor(ClassRoot class_root) {
     "[J",
     "[S",
     "[Ljava/lang/StackTraceElement;",
+    "Ldalvik/annotation/intrinsics/FastNative;",
   };
   static_assert(arraysize(class_roots_descriptors) == size_t(kClassRootsMax),
                 "Mismatch between class descriptors and class-root enum");

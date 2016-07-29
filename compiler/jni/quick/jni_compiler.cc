@@ -17,6 +17,7 @@
 #include "jni_compiler.h"
 
 #include <algorithm>
+#include <ios>
 #include <memory>
 #include <vector>
 #include <fstream>
@@ -40,6 +41,7 @@
 #include "utils/mips/managed_register_mips.h"
 #include "utils/mips64/managed_register_mips64.h"
 #include "utils/x86/managed_register_x86.h"
+#include "utils.h"
 #include "thread.h"
 
 #define __ jni_asm->
@@ -60,7 +62,8 @@ static void SetNativeParameter(Assembler* jni_asm,
 //   convention.
 //
 CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
-                                            uint32_t access_flags, uint32_t method_idx,
+                                            uint32_t access_flags,
+                                            uint32_t method_idx,
                                             const DexFile& dex_file) {
   const bool is_native = (access_flags & kAccNative) != 0;
   CHECK(is_native);
@@ -70,6 +73,18 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
   InstructionSet instruction_set = driver->GetInstructionSet();
   const InstructionSetFeatures* instruction_set_features = driver->GetInstructionSetFeatures();
   const bool is_64_bit_target = Is64BitInstructionSet(instruction_set);
+
+  // i.e. if the method was annotated with @FastNative
+  const bool is_fast_native = (access_flags & kAccFastNative) != 0;
+
+  VLOG(jni) << "JniCompile: Method :: "
+              << art::PrettyMethod(method_idx, dex_file, /* with signature */ true)
+              << " :: access_flags = " << std::hex << access_flags << std::dec;
+
+  if (UNLIKELY(is_fast_native)) {
+    VLOG(jni) << "JniCompile: Fast native method detected :: "
+              << art::PrettyMethod(method_idx, dex_file, /* with signature */ true);
+  }
 
   ArenaPool pool;
   ArenaAllocator arena(&pool);
@@ -249,6 +264,12 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
                                                 : QUICK_ENTRYPOINT_OFFSET(4, pJniMethodStart);
   ThreadOffset<8> jni_start64 = is_synchronized ? QUICK_ENTRYPOINT_OFFSET(8, pJniMethodStartSynchronized)
                                                 : QUICK_ENTRYPOINT_OFFSET(8, pJniMethodStart);
+
+  if (!is_synchronized && is_fast_native) {
+    jni_start32 = QUICK_ENTRYPOINT_OFFSET(4, pJniMethodFastStart);
+    jni_start64 = QUICK_ENTRYPOINT_OFFSET(8, pJniMethodFastStart);
+  }
+
   main_jni_conv->ResetIterator(FrameOffset(main_out_arg_size));
   FrameOffset locked_object_handle_scope_offset(0);
   if (is_synchronized) {
@@ -408,6 +429,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
   end_jni_conv->ResetIterator(FrameOffset(end_out_arg_size));
   ThreadOffset<4> jni_end32(-1);
   ThreadOffset<8> jni_end64(-1);
+  // TODO: Use JniMethodFastStart/JniMethodFastEnd here.
   if (reference_return) {
     // Pass result.
     jni_end32 = is_synchronized ? QUICK_ENTRYPOINT_OFFSET(4, pJniMethodEndWithReferenceSynchronized)
@@ -421,6 +443,11 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
                                 : QUICK_ENTRYPOINT_OFFSET(4, pJniMethodEnd);
     jni_end64 = is_synchronized ? QUICK_ENTRYPOINT_OFFSET(8, pJniMethodEndSynchronized)
                                 : QUICK_ENTRYPOINT_OFFSET(8, pJniMethodEnd);
+
+    if (!is_synchronized && is_fast_native) {
+      jni_end32 = QUICK_ENTRYPOINT_OFFSET(4, pJniMethodFastEnd);
+      jni_end64 = QUICK_ENTRYPOINT_OFFSET(8, pJniMethodFastEnd);
+    }
   }
   // Pass saved local reference state.
   if (end_jni_conv->IsCurrentParamOnStack()) {

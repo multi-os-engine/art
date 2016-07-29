@@ -2201,6 +2201,7 @@ class JNI {
 
       VLOG(jni) << "[Registering JNI native method " << PrettyMethod(m) << "]";
 
+      is_fast = is_fast || m->IsFastNative();  // Merge with @FastNative state.
       m->RegisterNative(fnPtr, is_fast);
     }
     return JNI_OK;

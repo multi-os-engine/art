@@ -119,6 +119,7 @@ class ClassLinker {
     kLongArrayClass,
     kShortArrayClass,
     kJavaLangStackTraceElementArrayClass,
+    kDalvikAnnotationIntrinsicsFastNativeClass,
     kClassRootsMax,
   };
 
