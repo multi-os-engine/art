@@ -155,10 +155,15 @@ inline mirror::Object* ConcurrentCopying::Mark(mirror::Object* from_ref) {
 
 inline mirror::Object* ConcurrentCopying::MarkFromReadBarrier(mirror::Object* from_ref) {
   // TODO: Consider removing this check when we are done investigating slow paths. b/30162165
+  mirror::Object* ret;
   if (UNLIKELY(mark_from_read_barrier_measurements_)) {
-    return MarkFromReadBarrierWithMeasurements(from_ref);
+    ret = MarkFromReadBarrierWithMeasurements(from_ref);
   }
-  return Mark(from_ref);
+  ret = Mark(from_ref);
+  if (ret != nullptr && ret->AtomicSetMarkBit(0, 1)) {
+    rb_mark_stack_->AtomicPushBack(ret);
+  }
+  return ret;
 }
 
 inline mirror::Object* ConcurrentCopying::GetFwdPtr(mirror::Object* from_ref) {

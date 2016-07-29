@@ -147,6 +147,7 @@ inline void Object::SetReadBarrierPointer(Object* rb_ptr) {
 #ifdef USE_BAKER_READ_BARRIER
   DCHECK(kUseBakerReadBarrier);
   DCHECK_EQ(reinterpret_cast<uint64_t>(rb_ptr) >> 32, 0U);
+  DCHECK_NE(rb_ptr, ReadBarrier::BlackPtr()) << "Setting to black is not supported";
   LockWord lw = GetLockWord(false);
   lw.SetReadBarrierState(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(rb_ptr)));
   SetLockWord(lw, false);
@@ -169,6 +170,8 @@ inline bool Object::AtomicSetReadBarrierPointer(Object* expected_rb_ptr, Object*
   DCHECK(kUseBakerReadBarrier);
   DCHECK_EQ(reinterpret_cast<uint64_t>(expected_rb_ptr) >> 32, 0U);
   DCHECK_EQ(reinterpret_cast<uint64_t>(rb_ptr) >> 32, 0U);
+  DCHECK_NE(expected_rb_ptr, ReadBarrier::BlackPtr()) << "Setting to black is not supported";
+  DCHECK_NE(rb_ptr, ReadBarrier::BlackPtr()) << "Setting to black is not supported";
   LockWord expected_lw;
   LockWord new_lw;
   do {
@@ -211,6 +214,30 @@ inline bool Object::AtomicSetReadBarrierPointer(Object* expected_rb_ptr, Object*
   UNREACHABLE();
 #endif
 }
+
+template<bool kCasRelease>
+inline bool Object::AtomicSetMarkBit(uint32_t expected_mark_bit, uint32_t mark_bit) {
+  LockWord expected_lw;
+  LockWord new_lw;
+  do {
+    LockWord lw = GetLockWord(false);
+    if (UNLIKELY(lw.MarkBitState() != expected_mark_bit)) {
+      // Lost the race.
+      return false;
+    }
+    expected_lw = lw;
+    new_lw = lw;
+    new_lw.SetMarkBitState(mark_bit);
+    // ConcurrentCopying::ProcessMarkStackRef uses this with kCasRelease == true.
+    // If kCasRelease == true, use a CAS release so that when GC updates all the fields of
+    // an object and then changes the object from gray to black, the field updates (stores) will be
+    // visible (won't be reordered after this CAS.)
+  } while (!(kCasRelease ?
+             CasLockWordWeakRelease(expected_lw, new_lw) :
+             CasLockWordWeakRelaxed(expected_lw, new_lw)));
+  return true;
+}
+
 
 inline void Object::AssertReadBarrierPointer() const {
   if (kUseBakerReadBarrier) {

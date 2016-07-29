@@ -1022,7 +1022,7 @@ DEFINE_FUNCTION art_quick_lock_object
     test LITERAL(LOCK_WORD_STATE_MASK), %ecx         // Test the 2 high bits.
     jne  .Lslow_lock                      // Slow path if either of the two high bits are set.
     movl %ecx, %edx                       // save lock word (edx) to keep read barrier bits.
-    andl LITERAL(LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED), %ecx  // zero the read barrier bits.
+    andl LITERAL(LOCK_WORD_GC_STATE_MASK_TOGGLED), %ecx  // zero the gc bits.
     test %ecx, %ecx
     jnz  .Lalready_thin                   // Lock word contains a thin lock.
     // unlocked case - edx: original lock word, edi: obj.
@@ -1037,9 +1037,9 @@ DEFINE_FUNCTION art_quick_lock_object
     cmpw %cx, %dx                         // do we hold the lock already?
     jne  .Lslow_lock
     movl %edx, %ecx                       // copy the lock word to check count overflow.
-    andl LITERAL(LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED), %ecx  // zero the read barrier bits.
+    andl LITERAL(LOCK_WORD_GC_STATE_MASK_TOGGLED), %ecx  // zero the gc bits.
     addl LITERAL(LOCK_WORD_THIN_LOCK_COUNT_ONE), %ecx  // increment recursion count
-    test LITERAL(LOCK_WORD_READ_BARRIER_STATE_MASK), %ecx  // overflowed if either of the upper two bits (28-29) are set
+    test LITERAL(LOCK_WORD_READ_BARRIER_STATE_MASK), %ecx  // overflowed if the upper bit (28) is set
     jne  .Lslow_lock                      // count overflowed so go slow
     movl %edx, %eax                       // copy the lock word as the old val for cmpxchg.
     addl LITERAL(LOCK_WORD_THIN_LOCK_COUNT_ONE), %edx   // increment recursion count again for real.
@@ -1074,12 +1074,12 @@ DEFINE_FUNCTION art_quick_unlock_object
     cmpw %cx, %dx                         // does the thread id match?
     jne  .Lslow_unlock
     movl %ecx, %edx                       // copy the lock word to detect new count of 0.
-    andl LITERAL(LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED), %edx  // zero the read barrier bits.
+    andl LITERAL(LOCK_WORD_GC_STATE_MASK_TOGGLED), %edx  // zero the gc bits.
     cmpl LITERAL(LOCK_WORD_THIN_LOCK_COUNT_ONE), %edx
     jae  .Lrecursive_thin_unlock
     // update lockword, cmpxchg necessary for read barrier bits.
     movl %ecx, %eax                       // eax: old lock word.
-    andl LITERAL(LOCK_WORD_READ_BARRIER_STATE_MASK), %ecx  // ecx: new lock word zero except original rb bits.
+    andl LITERAL(LOCK_WORD_GC_STATE_MASK), %ecx  // ecx: new lock word zero except original gc bits.
 #ifndef USE_READ_BARRIER
     movl %ecx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi)
 #else

@@ -62,6 +62,9 @@ ConcurrentCopying::ConcurrentCopying(Heap* heap,
       gc_mark_stack_(accounting::ObjectStack::Create("concurrent copying gc mark stack",
                                                      kDefaultGcMarkStackSize,
                                                      kDefaultGcMarkStackSize)),
+      rb_mark_stack_(accounting::ObjectStack::Create("rb copying gc mark stack",
+                                                     kDefaultGcMarkStackSize,
+                                                     kDefaultGcMarkStackSize)),
       mark_stack_lock_("concurrent copying mark stack lock", kMarkSweepMarkStackLock),
       thread_running_gc_(nullptr),
       is_marking_(false), is_active_(false), is_asserting_to_space_invariant_(false),
@@ -904,9 +907,9 @@ class ConcurrentCopying::VerifyNoFromSpaceRefsVisitor : public SingleRootVisitor
     }
     collector_->AssertToSpaceInvariant(nullptr, MemberOffset(0), ref);
     if (kUseBakerReadBarrier) {
-      CHECK(ref->GetReadBarrierPointer() == ReadBarrier::WhitePtr())
+      CHECK_EQ(ref->GetReadBarrierPointer(), ReadBarrier::WhitePtr())
           << "Ref " << ref << " " << PrettyTypeOf(ref)
-          << " has non-white rb_ptr " << ref->GetReadBarrierPointer();
+          << " has non-white rb_ptr ";
     }
   }
 
@@ -972,7 +975,7 @@ class ConcurrentCopying::VerifyNoFromSpaceRefsObjectVisitor {
     VerifyNoFromSpaceRefsFieldVisitor visitor(collector);
     obj->VisitReferences(visitor, visitor);
     if (kUseBakerReadBarrier) {
-      CHECK(obj->GetReadBarrierPointer() == ReadBarrier::WhitePtr())
+      CHECK_EQ(obj->GetReadBarrierPointer(), ReadBarrier::WhitePtr())
           << "obj=" << obj << " non-white rb_ptr " << obj->GetReadBarrierPointer();
     }
   }
@@ -2233,6 +2236,13 @@ void ConcurrentCopying::FinishPhase() {
         }
       }
     }
+    DCHECK(rb_mark_stack_.get() != nullptr);
+    const auto* limit = rb_mark_stack_->End();
+    for (StackReference<mirror::Object>* it = rb_mark_stack_->Begin(); it != limit; ++it) {
+      // CHECK(it->AsMirrorPtr()->AtomicSetMarkBit(1, 0));
+      it->AsMirrorPtr()->AtomicSetMarkBit(1, 0);
+    }
+    rb_mark_stack_->Reset();
   }
   if (measure_read_barrier_slow_path_) {
     MutexLock mu(self, rb_slow_path_histogram_lock_);

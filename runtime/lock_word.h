@@ -35,21 +35,21 @@ class Monitor;
  * the state. The four possible states are fat locked, thin/unlocked, hash code, and forwarding
  * address. When the lock word is in the "thin" state and its bits are formatted as follows:
  *
- *  |33|22|222222221111|1111110000000000|
- *  |10|98|765432109876|5432109876543210|
- *  |00|rb| lock count |thread id owner |
+ *  |33|2|2|222222221111|1111110000000000|
+ *  |10|9|8|765432109876|5432109876543210|
+ *  |00|m|r| lock count |thread id owner |
  *
  * When the lock word is in the "fat" state and its bits are formatted as follows:
  *
- *  |33|22|2222222211111111110000000000|
- *  |10|98|7654321098765432109876543210|
- *  |01|rb| MonitorId                  |
+ *  |33|2|2|2222222211111111110000000000|
+ *  |10|9|8|7654321098765432109876543210|
+ *  |01|m|r| MonitorId                  |
  *
  * When the lock word is in hash state and its bits are formatted as follows:
  *
- *  |33|22|2222222211111111110000000000|
- *  |10|98|7654321098765432109876543210|
- *  |10|rb| HashCode                   |
+ *  |33|2|2|2222222211111111110000000000|
+ *  |10|9|8|7654321098765432109876543210|
+ *  |10|m|r| HashCode                   |
  *
  * When the lock word is in fowarding address state and its bits are formatted as follows:
  *
@@ -64,11 +64,13 @@ class LockWord {
   enum SizeShiftsAndMasks {  // private marker to avoid generate-operator-out.py from processing.
     // Number of bits to encode the state, currently just fat or thin/unlocked or hash code.
     kStateSize = 2,
-    kReadBarrierStateSize = 2,
+    kReadBarrierStateSize = 1,
+    kMarkBitStateSize = 1,
     // Number of bits to encode the thin lock owner.
     kThinLockOwnerSize = 16,
     // Remaining bits are the recursive lock count.
-    kThinLockCountSize = 32 - kThinLockOwnerSize - kStateSize - kReadBarrierStateSize,
+    kThinLockCountSize = 32 - kThinLockOwnerSize - kStateSize - kReadBarrierStateSize -
+        kMarkBitStateSize,
     // Thin lock bits. Owner in lowest bits.
 
     kThinLockOwnerShift = 0,
@@ -81,22 +83,35 @@ class LockWord {
     kThinLockCountOne = 1 << kThinLockCountShift,  // == 65536 (0x10000)
 
     // State in the highest bits.
-    kStateShift = kReadBarrierStateSize + kThinLockCountSize + kThinLockCountShift,
+    kStateShift = kReadBarrierStateSize + kThinLockCountSize + kThinLockCountShift +
+        kMarkBitStateSize,
     kStateMask = (1 << kStateSize) - 1,
     kStateMaskShifted = kStateMask << kStateShift,
     kStateThinOrUnlocked = 0,
     kStateFat = 1,
     kStateHash = 2,
     kStateForwardingAddress = 3,
+
+    // Read barrier bit.
     kReadBarrierStateShift = kThinLockCountSize + kThinLockCountShift,
     kReadBarrierStateMask = (1 << kReadBarrierStateSize) - 1,
     kReadBarrierStateMaskShifted = kReadBarrierStateMask << kReadBarrierStateShift,
     kReadBarrierStateMaskShiftedToggled = ~kReadBarrierStateMaskShifted,
 
+    // Mark bit.
+    kMarkBitStateShift = kReadBarrierStateSize + kReadBarrierStateShift,
+    kMarkBitStateMask = (1 << kMarkBitStateSize) - 1,
+    kMarkBitStateMaskShifted = kMarkBitStateMask << kMarkBitStateShift,
+    kMarkBitStateMaskShiftedToggled = ~kMarkBitStateMaskShifted,
+
+    // GC state is mark bit and read barrier state.
+    kGCStateMask = kReadBarrierStateMaskShifted | kMarkBitStateMaskShifted,
+    kGCStateMaskToggled = ~kGCStateMask,
+
     // When the state is kHashCode, the non-state bits hold the hashcode.
     // Note Object.hashCode() has the hash code layout hardcoded.
     kHashShift = 0,
-    kHashSize = 32 - kStateSize - kReadBarrierStateSize,
+    kHashSize = 32 - kStateSize - kReadBarrierStateSize - kMarkBitStateSize,
     kHashMask = (1 << kHashSize) - 1,
     kMaxHash = kHashMask,
 
@@ -108,31 +123,28 @@ class LockWord {
     kMaxMonitorId = kMaxHash
   };
 
-  static LockWord FromThinLockId(uint32_t thread_id, uint32_t count, uint32_t rb_state) {
+  static LockWord FromThinLockId(uint32_t thread_id, uint32_t count, uint32_t gc_bits) {
     CHECK_LE(thread_id, static_cast<uint32_t>(kThinLockMaxOwner));
     CHECK_LE(count, static_cast<uint32_t>(kThinLockMaxCount));
-    DCHECK_EQ(rb_state & ~kReadBarrierStateMask, 0U);
+    DCHECK_EQ(gc_bits & kGCStateMaskToggled, 0U);
     return LockWord((thread_id << kThinLockOwnerShift) | (count << kThinLockCountShift) |
-                    (rb_state << kReadBarrierStateShift) |
-                    (kStateThinOrUnlocked << kStateShift));
+                    gc_bits | (kStateThinOrUnlocked << kStateShift));
   }
 
   static LockWord FromForwardingAddress(size_t target) {
     DCHECK_ALIGNED(target, (1 << kStateSize));
-    return LockWord((target >> kStateSize) | (kStateForwardingAddress << kStateShift));
+    return LockWord((target >> kObjectAlignmentShift) | (kStateForwardingAddress << kStateShift));
   }
 
-  static LockWord FromHashCode(uint32_t hash_code, uint32_t rb_state) {
+  static LockWord FromHashCode(uint32_t hash_code, uint32_t gc_bits) {
     CHECK_LE(hash_code, static_cast<uint32_t>(kMaxHash));
-    DCHECK_EQ(rb_state & ~kReadBarrierStateMask, 0U);
-    return LockWord((hash_code << kHashShift) |
-                    (rb_state << kReadBarrierStateShift) |
-                    (kStateHash << kStateShift));
+    DCHECK_EQ(gc_bits & kGCStateMaskToggled, 0U);
+    return LockWord((hash_code << kHashShift) | gc_bits | (kStateHash << kStateShift));
   }
 
-  static LockWord FromDefault(uint32_t rb_state) {
-    DCHECK_EQ(rb_state & ~kReadBarrierStateMask, 0U);
-    return LockWord(rb_state << kReadBarrierStateShift);
+  static LockWord FromDefault(uint32_t gc_bits) {
+    DCHECK_EQ(gc_bits & kGCStateMaskToggled, 0U);
+    return LockWord(gc_bits);
   }
 
   static bool IsDefault(LockWord lw) {
@@ -154,7 +166,7 @@ class LockWord {
   LockState GetState() const {
     CheckReadBarrierState();
     if ((!kUseReadBarrier && UNLIKELY(value_ == 0)) ||
-        (kUseReadBarrier && UNLIKELY((value_ & kReadBarrierStateMaskShiftedToggled) == 0))) {
+        (kUseReadBarrier && UNLIKELY((value_ & kGCStateMaskToggled) == 0))) {
       return kUnlocked;
     } else {
       uint32_t internal_state = (value_ >> kStateShift) & kStateMask;
@@ -176,6 +188,10 @@ class LockWord {
     return (value_ >> kReadBarrierStateShift) & kReadBarrierStateMask;
   }
 
+  uint32_t GCBits() const {
+    return value_ & kGCStateMask;
+  }
+
   void SetReadBarrierState(uint32_t rb_state) {
     DCHECK_EQ(rb_state & ~kReadBarrierStateMask, 0U);
     DCHECK_NE(static_cast<uint32_t>(GetState()), static_cast<uint32_t>(kForwardingAddress));
@@ -183,6 +199,20 @@ class LockWord {
     value_ &= ~(kReadBarrierStateMask << kReadBarrierStateShift);
     value_ |= (rb_state & kReadBarrierStateMask) << kReadBarrierStateShift;
   }
+
+
+  uint32_t MarkBitState() const {
+    return (value_ >> kMarkBitStateShift) & kMarkBitStateMask;
+  }
+
+  void SetMarkBitState(uint32_t mark_bit) {
+    DCHECK_EQ(mark_bit & ~kMarkBitStateMask, 0U);
+    DCHECK_NE(static_cast<uint32_t>(GetState()), static_cast<uint32_t>(kForwardingAddress));
+    // Clear and or the bits.
+    value_ &= ~(kMarkBitStateMask << kMarkBitStateShift);
+    value_ |= (mark_bit & kMarkBitStateMask) << kMarkBitStateShift;
+  }
+
 
   // Return the owner thin lock thread id.
   uint32_t ThinLockOwner() const;
@@ -197,7 +227,7 @@ class LockWord {
   size_t ForwardingAddress() const;
 
   // Constructor a lock word for inflation to use a Monitor.
-  LockWord(Monitor* mon, uint32_t rb_state);
+  LockWord(Monitor* mon, uint32_t gc_bits);
 
   // Return the hash code stored in the lock word, must be kHashCode state.
   int32_t GetHashCode() const;
@@ -207,7 +237,7 @@ class LockWord {
     if (kIncludeReadBarrierState) {
       return lw1.GetValue() == lw2.GetValue();
     }
-    return lw1.GetValueWithoutReadBarrierState() == lw2.GetValueWithoutReadBarrierState();
+    return lw1.GetValueWithoutGCState() == lw2.GetValueWithoutGCState();
   }
 
   void Dump(std::ostream& os) {
@@ -248,9 +278,9 @@ class LockWord {
     return value_;
   }
 
-  uint32_t GetValueWithoutReadBarrierState() const {
+  uint32_t GetValueWithoutGCState() const {
     CheckReadBarrierState();
-    return value_ & ~(kReadBarrierStateMask << kReadBarrierStateShift);
+    return value_ & kGCStateMaskToggled;
   }
 
   // Only Object should be converting LockWords to/from uints.
