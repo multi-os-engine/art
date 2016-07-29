@@ -33,7 +33,7 @@
 namespace art {
 namespace mirror {
 
-inline uint32_t String::ClassSize(size_t pointer_size) {
+inline uint32_t String::ClassSize(PointerSize pointer_size) {
   uint32_t vtable_entries = Object::kVTableLength + 57;
   return Class::ComputeClassSize(true, vtable_entries, 0, 0, 0, 1, 2, pointer_size);
 }
@@ -133,17 +133,38 @@ inline String* String::Intern() {
 }
 
 inline uint16_t String::CharAt(int32_t index) {
-  int32_t count = GetField32(OFFSET_OF_OBJECT_MEMBER(String, count_));
+  int32_t count = GetLength();
   if (UNLIKELY((index < 0) || (index >= count))) {
     ThrowStringIndexOutOfBoundsException(index, count);
     return 0;
   }
-  return GetValue()[index];
+  if (IsCompressed()) {
+    return static_cast<uint16_t>(GetValueCompressed()[index]);
+  } else {
+    return GetValue()[index];
+  }
+}
+
+template <typename MemoryType>
+int32_t String::FastIndexOf(MemoryType* chars, int32_t ch, int32_t start) {
+  const MemoryType* p = chars + start;
+  const MemoryType* end = chars + GetLength();
+  while (p < end) {
+    if (*p++ == ch) {
+      return (p - 1) - chars;
+    }
+  }
+  return -1;
 }
 
 template<VerifyObjectFlags kVerifyFlags>
 inline size_t String::SizeOf() {
-  size_t size = sizeof(String) + (sizeof(uint16_t) * GetLength<kVerifyFlags>());
+  size_t size = sizeof(String);
+  if (IsCompressed()) {
+    size += (sizeof(uint8_t) * GetLength<kVerifyFlags>());
+  } else {
+    size += (sizeof(uint16_t) * GetLength<kVerifyFlags>());
+  }
   // String.equals() intrinsics assume zero-padding up to kObjectAlignment,
   // so make sure the zero-padding is actually copied around if GC compaction
   // chooses to copy only SizeOf() bytes.
@@ -219,8 +240,13 @@ inline int32_t String::GetHashCode() {
   if (UNLIKELY(result == 0)) {
     result = ComputeHashCode();
   }
-  DCHECK(result != 0 || ComputeUtf16Hash(GetValue(), GetLength()) == 0)
-      << ToModifiedUtf8() << " " << result;
+  if (IsCompressed()) {
+    DCHECK(result != 0 || ComputeUtf16Hash(GetValueCompressed(), GetLength()) == 0)
+        << ToModifiedUtf8() << " " << result;
+  } else {
+    DCHECK(result != 0 || ComputeUtf16Hash(GetValue(), GetLength()) == 0)
+        << ToModifiedUtf8() << " " << result;
+  }
   return result;
 }
 
