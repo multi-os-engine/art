@@ -1354,7 +1354,11 @@ void Hprof::DumpHeapInstanceObject(mirror::Object* obj, mirror::Class* klass) {
         string_value = reinterpret_cast<mirror::Object*>(
             reinterpret_cast<uintptr_t>(s) + kObjectAlignment);
       } else {
-        string_value = reinterpret_cast<mirror::Object*>(s->GetValue());
+        if (s->IsCompressed()) {
+          string_value = reinterpret_cast<mirror::Object*>(s->GetValueCompressed());
+        } else {
+          string_value = reinterpret_cast<mirror::Object*>(s->GetValue());
+        }
       }
       __ AddObjectId(string_value);
     }
@@ -1374,7 +1378,11 @@ void Hprof::DumpHeapInstanceObject(mirror::Object* obj, mirror::Class* klass) {
     __ AddStackTraceSerialNumber(LookupStackTraceSerialNumber(obj));
     __ AddU4(s->GetLength());
     __ AddU1(hprof_basic_char);
-    __ AddU2List(s->GetValue(), s->GetLength());
+    if (s->IsCompressed()) {
+      __ AddU1List(s->GetValueCompressed(), s->GetLength());
+    } else {
+      __ AddU2List(s->GetValue(), s->GetLength());
+    }
   }
 }
 

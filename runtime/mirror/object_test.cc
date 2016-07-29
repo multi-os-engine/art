@@ -62,7 +62,11 @@ class ObjectTest : public CommonRuntimeTest {
     Handle<String> string(
         hs.NewHandle(String::AllocFromModifiedUtf8(self, expected_utf16_length, utf8_in)));
     ASSERT_EQ(expected_utf16_length, string->GetLength());
-    ASSERT_TRUE(string->GetValue() != nullptr);
+    if (string->IsCompressed()) {
+      ASSERT_TRUE(string->GetValueCompressed() != nullptr);
+    } else {
+      ASSERT_TRUE(string->GetValue() != nullptr);
+    }
     // strlen is necessary because the 1-character string "\x00\x00" is interpreted as ""
     ASSERT_TRUE(string->Equals(utf8_in) || (expected_utf16_length == 1 && strlen(utf8_in) == 0));
     ASSERT_TRUE(string->Equals(StringPiece(utf8_in)) ||
