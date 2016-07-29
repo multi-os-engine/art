@@ -74,12 +74,18 @@ DEFINE_CHECK_EQ(static_cast<int32_t>(LOCK_WORD_STATE_SHIFT), (static_cast<int32_
 DEFINE_CHECK_EQ(static_cast<uint32_t>(LOCK_WORD_STATE_MASK), (static_cast<uint32_t>(art::LockWord::kStateMaskShifted)))
 #define LOCK_WORD_READ_BARRIER_STATE_SHIFT 28
 DEFINE_CHECK_EQ(static_cast<int32_t>(LOCK_WORD_READ_BARRIER_STATE_SHIFT), (static_cast<int32_t>(art::LockWord::kReadBarrierStateShift)))
-#define LOCK_WORD_READ_BARRIER_STATE_MASK 0x30000000
+#define LOCK_WORD_READ_BARRIER_STATE_MASK 0x10000000
 DEFINE_CHECK_EQ(static_cast<uint32_t>(LOCK_WORD_READ_BARRIER_STATE_MASK), (static_cast<uint32_t>(art::LockWord::kReadBarrierStateMaskShifted)))
-#define LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED 0xcfffffff
+#define LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED 0xefffffff
 DEFINE_CHECK_EQ(static_cast<uint32_t>(LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED), (static_cast<uint32_t>(art::LockWord::kReadBarrierStateMaskShiftedToggled)))
 #define LOCK_WORD_THIN_LOCK_COUNT_ONE 65536
 DEFINE_CHECK_EQ(static_cast<int32_t>(LOCK_WORD_THIN_LOCK_COUNT_ONE), (static_cast<int32_t>(art::LockWord::kThinLockCountOne)))
+#define LOCK_WORD_GC_STATE_MASK 0x30000000
+DEFINE_CHECK_EQ(static_cast<uint32_t>(LOCK_WORD_GC_STATE_MASK), (static_cast<uint32_t>(art::LockWord::kGCStateMask)))
+#define LOCK_WORD_GC_STATE_MASK_TOGGLED 0xcfffffff
+DEFINE_CHECK_EQ(static_cast<uint32_t>(LOCK_WORD_GC_STATE_MASK_TOGGLED), (static_cast<uint32_t>(art::LockWord::kGCStateMaskToggled)))
+#define LOCK_WORD_MARK_BIT_SHIFT 0x1d
+DEFINE_CHECK_EQ(static_cast<uint32_t>(LOCK_WORD_MARK_BIT_SHIFT), (static_cast<uint32_t>(art::LockWord::kMarkBitStateShift)))
 #define OBJECT_ALIGNMENT_MASK 0x7
 DEFINE_CHECK_EQ(static_cast<size_t>(OBJECT_ALIGNMENT_MASK), (static_cast<size_t>(art::kObjectAlignment - 1)))
 #define OBJECT_ALIGNMENT_MASK_TOGGLED 0xfffffff8

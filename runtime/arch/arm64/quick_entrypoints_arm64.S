@@ -1090,7 +1090,7 @@ ENTRY art_quick_lock_object
     ldr    w2, [xSELF, #THREAD_ID_OFFSET] // TODO: Can the thread ID really change during the loop?
     ldxr   w1, [x4]
     mov    x3, x1
-    and    w3, w3, #LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED  // zero the read barrier bits
+    and    w3, w3, #LOCK_WORD_GC_STATE_MASK_TOGGLED  // zero the gc bits
     cbnz   w3, .Lnot_unlocked         // already thin locked
     // unlocked case - x1: original lock word that's zero except for the read barrier bits.
     orr    x2, x1, x2                 // x2 holds thread id with count of 0 with preserved read barrier bits
@@ -1106,9 +1106,9 @@ ENTRY art_quick_lock_object
     cbnz   w2, .Lslow_lock            // lock word and self thread id's match -> recursive lock
                                       // else contention, go to slow path
     mov    x3, x1                     // copy the lock word to check count overflow.
-    and    w3, w3, #LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED  // zero the read barrier bits.
+    and    w3, w3, #LOCK_WORD_GC_STATE_MASK_TOGGLED  // zero the gc bits.
     add    w2, w3, #LOCK_WORD_THIN_LOCK_COUNT_ONE  // increment count in lock word placing in w2 to check overflow
-    lsr    w3, w2, LOCK_WORD_READ_BARRIER_STATE_SHIFT  // if either of the upper two bits (28-29) are set, we overflowed.
+    lsr    w3, w2, LOCK_WORD_READ_BARRIER_STATE_SHIFT  // if the upper bit 28 is set, we overflowed.
     cbnz   w3, .Lslow_lock            // if we overflow the count go slow path
     add    w2, w1, #LOCK_WORD_THIN_LOCK_COUNT_ONE  // increment count for real
     stxr   w3, w2, [x4]
@@ -1152,17 +1152,17 @@ ENTRY art_quick_unlock_object
     cbnz   w2, .Lslow_unlock          // if either of the top two bits are set, go slow path
     ldr    w2, [xSELF, #THREAD_ID_OFFSET]
     mov    x3, x1                     // copy lock word to check thread id equality
-    and    w3, w3, #LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED  // zero the read barrier bits
+    and    w3, w3, #LOCK_WORD_GC_STATE_MASK_TOGGLED  // zero the gc bits
     eor    w3, w3, w2                 // lock_word.ThreadId() ^ self->ThreadId()
     uxth   w3, w3                     // zero top 16 bits
     cbnz   w3, .Lslow_unlock          // do lock word and self thread id's match?
     mov    x3, x1                     // copy lock word to detect transition to unlocked
-    and    w3, w3, #LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED  // zero the read barrier bits
+    and    w3, w3, #LOCK_WORD_GC_STATE_MASK_TOGGLED  // zero the gc bits
     cmp    w3, #LOCK_WORD_THIN_LOCK_COUNT_ONE
     bpl    .Lrecursive_thin_unlock
     // transition to unlocked
     mov    x3, x1
-    and    w3, w3, #LOCK_WORD_READ_BARRIER_STATE_MASK  // w3: zero except for the preserved read barrier bits
+    and    w3, w3, #LOCK_WORD_GC_STATE_MASK  // w3: zero except for the preserved read barrier bits
     dmb    ish                        // full (LoadStore|StoreStore) memory barrier
 #ifndef USE_READ_BARRIER
     str    w3, [x4]
@@ -1791,9 +1791,17 @@ ENTRY art_quick_alloc_object_region_tlab
     ldr    x2, [x1, #ART_METHOD_DEX_CACHE_TYPES_OFFSET_64]    // Load dex cache resolved types array
                                                               // Load the class (x2)
     ldr    w2, [x2, x0, lsl #COMPRESSED_REFERENCE_SIZE_SHIFT]
-                                                              // Read barrier for class load.
+
     ldr    w3, [xSELF, #THREAD_IS_GC_MARKING_OFFSET]
-    cbnz   x3, .Lart_quick_alloc_object_region_tlab_class_load_read_barrier_slow_path
+    cbz    x3, .Lart_quick_alloc_object_region_tlab_class_load_read_barrier_slow_path_exit
+
+    // If the class is null, we can not check the lock word.
+    cbz    w2, .Lart_quick_alloc_object_region_tlab_class_load_read_barrier_slow_path_exit
+    // Class is not null, check mark bit in lock word.
+    ldr    w3, [x2, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
+    // Check the mark bit in the lock word.
+    tbz    w3, #LOCK_WORD_MARK_BIT_SHIFT, .Lart_quick_alloc_object_region_tlab_class_load_read_barrier_slow_path
+
 .Lart_quick_alloc_object_region_tlab_class_load_read_barrier_slow_path_exit:
     ALLOC_OBJECT_TLAB_FAST_PATH .Lart_quick_alloc_object_region_tlab_slow_path
 .Lart_quick_alloc_object_region_tlab_class_load_read_barrier_slow_path:
@@ -2265,6 +2273,8 @@ END art_quick_indexof
      */
 .macro READ_BARRIER_MARK_REG name, wreg, xreg
 ENTRY \name
+    // Reference is null, no work to do at all.
+    cbz \wreg, .Lret_rb_\name
     /*
      * Allocate 46 stack slots * 8 = 368 bytes:
      * - 20 slots for core registers X0-X19
@@ -2277,6 +2287,15 @@ ENTRY \name
     .cfi_adjust_cfa_offset 368
     .cfi_rel_offset x0, 0
     .cfi_rel_offset x1, 8
+    // Use w0 as temp and check the mark bit of the reference.
+    ldr w0, [\xreg, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
+    tbz w0, #LOCK_WORD_MARK_BIT_SHIFT, .Lslow_path_rb_\name
+    // Restore xReg0 and return.
+    ldr x0, [sp, #0]
+    add sp, sp, #368
+    ret
+.Lslow_path_rb_\name:
+    ldr   x0,       [sp, #0]  // restore xReg0
     stp   x2, x3,   [sp, #16]
     .cfi_rel_offset x2, 16
     .cfi_rel_offset x3, 24
@@ -2360,6 +2379,7 @@ ENTRY \name
     .cfi_restore x30
     add sp, sp, #368
     .cfi_adjust_cfa_offset -368
+.Lret_rb_\name:
     ret
 END \name
 .endm

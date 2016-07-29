@@ -520,7 +520,7 @@ ENTRY art_quick_lock_object
     ldr    r2, [r9, #THREAD_ID_OFFSET]
     ldrex  r1, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
     mov    r3, r1
-    and    r3, #LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED  @ zero the read barrier bits
+    and    r3, #LOCK_WORD_GC_STATE_MASK_TOGGLED  @ zero the gc bits
     cbnz   r3, .Lnot_unlocked         @ already thin locked
     @ unlocked case - r1: original lock word that's zero except for the read barrier bits.
     orr    r2, r1, r2                 @ r2 holds thread id with count of 0 with preserved read barrier bits
@@ -536,9 +536,9 @@ ENTRY art_quick_lock_object
     cbnz   r2, .Lslow_lock            @ lock word and self thread id's match -> recursive lock
                                       @ else contention, go to slow path
     mov    r3, r1                     @ copy the lock word to check count overflow.
-    and    r3, #LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED  @ zero the read barrier bits.
+    and    r3, #LOCK_WORD_GC_STATE_MASK_TOGGLED  @ zero the gc bits.
     add    r2, r3, #LOCK_WORD_THIN_LOCK_COUNT_ONE  @ increment count in lock word placing in r2 to check overflow
-    lsr    r3, r2, LOCK_WORD_READ_BARRIER_STATE_SHIFT  @ if either of the upper two bits (28-29) are set, we overflowed.
+    lsr    r3, r2, LOCK_WORD_READ_BARRIER_STATE_SHIFT  @ if the upper bit 28 is set, we overflowed.
     cbnz   r3, .Lslow_lock            @ if we overflow the count go slow path
     add    r2, r1, #LOCK_WORD_THIN_LOCK_COUNT_ONE  @ increment count for real
     strex  r3, r2, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET] @ strex necessary for read barrier bits
@@ -581,17 +581,17 @@ ENTRY art_quick_unlock_object
     cbnz   r2, .Lslow_unlock          @ if either of the top two bits are set, go slow path
     ldr    r2, [r9, #THREAD_ID_OFFSET]
     mov    r3, r1                     @ copy lock word to check thread id equality
-    and    r3, #LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED  @ zero the read barrier bits
+    and    r3, #LOCK_WORD_GC_STATE_MASK_TOGGLED  @ zero the gc bits
     eor    r3, r3, r2                 @ lock_word.ThreadId() ^ self->ThreadId()
     uxth   r3, r3                     @ zero top 16 bits
     cbnz   r3, .Lslow_unlock          @ do lock word and self thread id's match?
     mov    r3, r1                     @ copy lock word to detect transition to unlocked
-    and    r3, #LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED  @ zero the read barrier bits
+    and    r3, #LOCK_WORD_GC_STATE_MASK_TOGGLED  @ zero the gc bits
     cmp    r3, #LOCK_WORD_THIN_LOCK_COUNT_ONE
     bpl    .Lrecursive_thin_unlock
     @ transition to unlocked
     mov    r3, r1
-    and    r3, #LOCK_WORD_READ_BARRIER_STATE_MASK  @ r3: zero except for the preserved read barrier bits
+    and    r3, #LOCK_WORD_GC_STATE_MASK  @ r3: zero except for the preserved gc bits
     dmb    ish                        @ full (LoadStore|StoreStore) memory barrier
 #ifndef USE_READ_BARRIER
     str    r3, [r0, #MIRROR_OBJECT_LOCK_WORD_OFFSET]

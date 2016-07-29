@@ -43,17 +43,16 @@ inline Monitor* LockWord::FatLockMonitor() const {
 
 inline size_t LockWord::ForwardingAddress() const {
   DCHECK_EQ(GetState(), kForwardingAddress);
-  return value_ << kStateSize;
+  return value_ << kObjectAlignmentShift;
 }
 
 inline LockWord::LockWord() : value_(0) {
   DCHECK_EQ(GetState(), kUnlocked);
 }
 
-inline LockWord::LockWord(Monitor* mon, uint32_t rb_state)
-    : value_(mon->GetMonitorId() | (rb_state << kReadBarrierStateShift) |
-             (kStateFat << kStateShift)) {
-  DCHECK_EQ(rb_state & ~kReadBarrierStateMask, 0U);
+inline LockWord::LockWord(Monitor* mon, uint32_t gc_bits)
+    : value_(mon->GetMonitorId() | gc_bits | (kStateFat << kStateShift)) {
+  DCHECK_EQ(gc_bits & kGCStateMaskToggled, 0U);
 #ifndef __LP64__
   DCHECK_ALIGNED(mon, kMonitorIdAlignment);
 #endif

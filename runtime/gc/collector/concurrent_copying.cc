@@ -41,9 +41,6 @@ namespace gc {
 namespace collector {
 
 static constexpr size_t kDefaultGcMarkStackSize = 2 * MB;
-// If kGrayDirtyImmuneObjects is true then we gray dirty objects in the GC pause to prevent dirty
-// pages.
-static constexpr bool kGrayDirtyImmuneObjects = true;
 // If kFilterModUnionCards then we attempt to filter cards that don't need to be dirty in the mod
 // union table. Disabled since it does not seem to help the pause much.
 static constexpr bool kFilterModUnionCards = kIsDebugBuild;
@@ -51,6 +48,9 @@ static constexpr bool kFilterModUnionCards = kIsDebugBuild;
 // ConcurrentCopying::Scan. May be used to diagnose possibly unnecessary read barriers.
 // Only enabled for kIsDebugBuild to avoid performance hit.
 static constexpr bool kDisallowReadBarrierDuringScan = kIsDebugBuild;
+// Slow path mark stack size, increase this if the stack is getting full and it is causing
+// performance problems.
+static constexpr size_t kReadBarrierMarkStackSize = 512 * KB;
 
 ConcurrentCopying::ConcurrentCopying(Heap* heap,
                                      const std::string& name_prefix,
@@ -62,6 +62,10 @@ ConcurrentCopying::ConcurrentCopying(Heap* heap,
       gc_mark_stack_(accounting::ObjectStack::Create("concurrent copying gc mark stack",
                                                      kDefaultGcMarkStackSize,
                                                      kDefaultGcMarkStackSize)),
+      rb_mark_stack_(accounting::ObjectStack::Create("rb copying gc mark stack",
+                                                     kReadBarrierMarkStackSize,
+                                                     kReadBarrierMarkStackSize)),
+      rb_mark_stack_full_(false),
       mark_stack_lock_("concurrent copying mark stack lock", kMarkSweepMarkStackLock),
       thread_running_gc_(nullptr),
       is_marking_(false), is_active_(false), is_asserting_to_space_invariant_(false),
@@ -186,6 +190,7 @@ void ConcurrentCopying::InitializePhase() {
     CHECK(false_gray_stack_.empty());
   }
 
+  rb_mark_stack_full_ = false;
   mark_from_read_barrier_measurements_ = measure_read_barrier_slow_path_;
   if (measure_read_barrier_slow_path_) {
     rb_slow_path_ns_.StoreRelaxed(0);
@@ -904,9 +909,9 @@ class ConcurrentCopying::VerifyNoFromSpaceRefsVisitor : public SingleRootVisitor
     }
     collector_->AssertToSpaceInvariant(nullptr, MemberOffset(0), ref);
     if (kUseBakerReadBarrier) {
-      CHECK(ref->GetReadBarrierPointer() == ReadBarrier::WhitePtr())
+      CHECK_EQ(ref->GetReadBarrierPointer(), ReadBarrier::WhitePtr())
           << "Ref " << ref << " " << PrettyTypeOf(ref)
-          << " has non-white rb_ptr " << ref->GetReadBarrierPointer();
+          << " has non-white rb_ptr ";
     }
   }
 
@@ -972,7 +977,7 @@ class ConcurrentCopying::VerifyNoFromSpaceRefsObjectVisitor {
     VerifyNoFromSpaceRefsFieldVisitor visitor(collector);
     obj->VisitReferences(visitor, visitor);
     if (kUseBakerReadBarrier) {
-      CHECK(obj->GetReadBarrierPointer() == ReadBarrier::WhitePtr())
+      CHECK_EQ(obj->GetReadBarrierPointer(), ReadBarrier::WhitePtr())
           << "obj=" << obj << " non-white rb_ptr " << obj->GetReadBarrierPointer();
     }
   }
@@ -2233,6 +2238,12 @@ void ConcurrentCopying::FinishPhase() {
         }
       }
     }
+    DCHECK(rb_mark_stack_.get() != nullptr);
+    const auto* limit = rb_mark_stack_->End();
+    for (StackReference<mirror::Object>* it = rb_mark_stack_->Begin(); it != limit; ++it) {
+      CHECK(it->AsMirrorPtr()->AtomicSetMarkBit(1, 0));
+    }
+    rb_mark_stack_->Reset();
   }
   if (measure_read_barrier_slow_path_) {
     MutexLock mu(self, rb_slow_path_histogram_lock_);
