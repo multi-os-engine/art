@@ -133,12 +133,16 @@ inline String* String::Intern() {
 }
 
 inline uint16_t String::CharAt(int32_t index) {
-  int32_t count = GetField32(OFFSET_OF_OBJECT_MEMBER(String, count_));
+  int32_t count = GetLength();
   if (UNLIKELY((index < 0) || (index >= count))) {
     ThrowStringIndexOutOfBoundsException(index, count);
     return 0;
   }
-  return GetValue()[index];
+  if (IsCompressed()) {
+    return static_cast<uint16_t>(GetValueCompressed()[index]);
+  } else {
+    return GetValue()[index];
+  }
 }
 
 template<VerifyObjectFlags kVerifyFlags>

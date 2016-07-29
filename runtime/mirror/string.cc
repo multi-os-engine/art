@@ -75,7 +75,7 @@ int32_t String::GetUtfLength() {
 }
 
 void String::SetCharAt(int32_t index, uint16_t c) {
-  DCHECK((index >= 0) && (index < count_));
+  DCHECK((index >= 0) && (index < GetLength()));
   GetValue()[index] = c;
 }
 
@@ -242,11 +242,21 @@ int32_t String::CompareTo(String* rhs) {
   int32_t rhsCount = rhs->GetLength();
   int32_t countDiff = lhsCount - rhsCount;
   int32_t minCount = (countDiff < 0) ? lhsCount : rhsCount;
-  const uint16_t* lhsChars = lhs->GetValue();
-  const uint16_t* rhsChars = rhs->GetValue();
-  int32_t otherRes = MemCmp16(lhsChars, rhsChars, minCount);
-  if (otherRes != 0) {
-    return otherRes;
+  if (IsCompressed()) {
+    const uint8_t* lhsChars = lhs->GetValue();
+    const uint8_t* rhsChars = rhs->GetValue();
+    for (size_t i = 0; i < minCount; ++i) {
+      if (lhsChars[i] != rhsChars[i]) {
+        return static_cast<int32_t>(lhsChars[i]) - static_cast<int32_t>(rhsChars[i]);
+      }
+    }
+  } else {
+    const uint16_t* lhsChars = lhs->GetValue();
+    const uint16_t* rhsChars = rhs->GetValue();
+    int32_t otherRes = MemCmp16(lhsChars, rhsChars, minCount);
+    if (otherRes != 0) {
+      return otherRes;
+    }
   }
   return countDiff;
 }
@@ -260,7 +270,14 @@ CharArray* String::ToCharArray(Thread* self) {
   Handle<String> string(hs.NewHandle(this));
   CharArray* result = CharArray::Alloc(self, GetLength());
   if (result != nullptr) {
-    memcpy(result->GetData(), string->GetValue(), string->GetLength() * sizeof(uint16_t));
+    if (IsCompressed()) {
+      int32_t length = string->GetLength();
+      for (int i = 0; i < length; ++i) {
+        result[i] = string->CharAt(i);
+      }
+    } else {
+      memcpy(result->GetData(), string->GetValue(), string->GetLength() * sizeof(uint16_t));
+    }
   } else {
     self->AssertPendingOOMException();
   }
@@ -269,8 +286,19 @@ CharArray* String::ToCharArray(Thread* self) {
 
 void String::GetChars(int32_t start, int32_t end, Handle<CharArray> array, int32_t index) {
   uint16_t* data = array->GetData() + index;
-  uint16_t* value = GetValue() + start;
-  memcpy(data, value, (end - start) * sizeof(uint16_t));
+  if (IsCompressed()) {
+    for (int i = start; i < end; ++i) {
+      data[i] = CharAt(i);
+    }
+  } else {
+    uint16_t* value = GetValue() + start;
+    memcpy(data, value, (end - start) * sizeof(uint16_t));
+  }
+}
+
+bool String::IsCompressed() {
+  uint32_t uint32_min = (static_cast<uint32_t>(INT32_MAX) << 1) + 1;
+  return (static_cast<uint32_t>(GetLength()) & uint32_min);
 }
 
 }  // namespace mirror
