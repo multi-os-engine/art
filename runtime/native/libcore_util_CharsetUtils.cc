@@ -165,10 +165,9 @@ static jbyteArray charsToBytes(JNIEnv* env, jstring java_string, jint offset, ji
     return nullptr;
   }
 
-  const jchar* src = &(string->GetValue()[offset]);
   jbyte* dst = &bytes[0];
   for (int i = length - 1; i >= 0; --i) {
-    jchar ch = *src++;
+    jchar ch = string->CharAt(offset + i);
     if (ch > maxValidChar) {
       ch = '?';
     }

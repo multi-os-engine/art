@@ -4318,11 +4318,15 @@ void Dbg::DdmSendThreadNotification(Thread* t, uint32_t type) {
     StackHandleScope<1> hs(soa.Self());
     Handle<mirror::String> name(hs.NewHandle(t->GetThreadName(soa)));
     size_t char_count = (name.Get() != nullptr) ? name->GetLength() : 0;
-    const jchar* chars = (name.Get() != nullptr) ? name->GetValue() : nullptr;
 
     std::vector<uint8_t> bytes;
     JDWP::Append4BE(bytes, t->GetThreadId());
-    JDWP::AppendUtf16BE(bytes, chars, char_count);
+    if (name->IsCompressed()) {
+      JDWP::AppendUtf16CompressedBE(bytes, name->GetValueCompressed(), char_count);
+    } else {
+      const jchar* chars = (name.Get() != nullptr) ? name->GetValue() : nullptr;
+      JDWP::AppendUtf16BE(bytes, chars, char_count);
+    }
     CHECK_EQ(bytes.size(), char_count*2 + sizeof(uint32_t)*2);
     Dbg::DdmSendChunk(type, bytes);
   }
