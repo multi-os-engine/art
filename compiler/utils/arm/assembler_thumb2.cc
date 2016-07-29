@@ -2354,7 +2354,7 @@ void Thumb2Assembler::EmitLoadStore(Condition cond,
       }
     } else {
       // 7 bit offset, shifted by 2.
-      if (offset >= (1 << 7)) {
+      if (rn != SP && offset >= (1 << 7)) {
         must_be_32bit = true;
       }
     }
