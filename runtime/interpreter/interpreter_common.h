@@ -997,8 +997,8 @@ static inline void TraceExecution(const ShadowFrame& shadow_frame, const Instruc
       Object* ref_value = shadow_frame.GetVRegReference(i);
       oss << StringPrintf(" vreg%u=0x%08X", i, raw_value);
       if (ref_value != nullptr) {
-        if (ref_value->GetClass()->IsStringClass() &&
-            ref_value->AsString()->GetValue() != nullptr) {
+        if (ref_value->GetClass()->IsStringClass() && ref_value->AsString()->GetValue() != nullptr) {
+            //!ref_value->AsString()->IsValueNull()) {
           oss << "/java.lang.String \"" << ref_value->AsString()->ToModifiedUtf8() << "\"";
         } else {
           oss << "/" << PrettyTypeOf(ref_value);

@@ -1673,7 +1673,8 @@ class JNI {
       ThrowSIOOBE(soa, start, length, s->GetLength());
     } else {
       CHECK_NON_NULL_MEMCPY_ARGUMENT(length, buf);
-      const jchar* chars = s->GetValue();
+      const jchar* chars = (s->IsCompressed()) ? static_cast<jchar*>(s->ToCharArray(soa.Self())->GetData())
+                                               : static_cast<jchar*>(s->GetValue());
       memcpy(buf, chars + start, length * sizeof(jchar));
     }
   }
@@ -1688,8 +1689,14 @@ class JNI {
     } else {
       CHECK_NON_NULL_MEMCPY_ARGUMENT(length, buf);
       const jchar* chars = s->GetValue();
-      size_t bytes = CountUtf8Bytes(chars + start, length);
-      ConvertUtf16ToModifiedUtf8(buf, bytes, chars + start, length);
+      if (s->IsCompressed()) {
+        for (int i = start; i < start+length; ++i) {
+          buf[i] = s->CharAt(i);
+        }
+      } else {
+        size_t bytes = CountUtf8Bytes(chars + start, length);
+        ConvertUtf16ToModifiedUtf8(buf, bytes, chars + start, length);
+      }
     }
   }
 
@@ -1700,7 +1707,14 @@ class JNI {
     gc::Heap* heap = Runtime::Current()->GetHeap();
     if (heap->IsMovableObject(s)) {
       jchar* chars = new jchar[s->GetLength()];
-      memcpy(chars, s->GetValue(), sizeof(jchar) * s->GetLength());
+      if (s->IsCompressed()) {
+        int32_t length = s->GetLength();
+        for (int i = 0; i < length; ++i) {
+          chars[i] = s->CharAt(i);
+        }
+      } else {
+        memcpy(chars, s->GetValue(), sizeof(jchar) * s->GetLength());
+      }
       if (is_copy != nullptr) {
         *is_copy = JNI_TRUE;
       }
@@ -1716,6 +1730,8 @@ class JNI {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(java_string);
     ScopedObjectAccess soa(env);
     mirror::String* s = soa.Decode<mirror::String*>(java_string);
+    /*if ((s->IsCompressed() == false && chars != s->GetValue()) ||
+        (s->IsCompressed() && chars != s->ToCharArray(soa.Self())->GetData())) {*/
     if (chars != s->GetValue()) {
       delete[] chars;
     }
@@ -1740,7 +1756,11 @@ class JNI {
     if (is_copy != nullptr) {
       *is_copy = JNI_FALSE;
     }
-    return static_cast<jchar*>(s->GetValue());
+    if (s->IsCompressed()) {
+      return static_cast<jchar*>(s->ToCharArray(soa.Self())->GetData());
+    } else {
+      return static_cast<jchar*>(s->GetValue());
+    }
   }
 
   static void ReleaseStringCritical(JNIEnv* env,
@@ -1771,8 +1791,14 @@ class JNI {
     size_t byte_count = s->GetUtfLength();
     char* bytes = new char[byte_count + 1];
     CHECK(bytes != nullptr);  // bionic aborts anyway.
-    const uint16_t* chars = s->GetValue();
-    ConvertUtf16ToModifiedUtf8(bytes, byte_count, chars, s->GetLength());
+    if (s->IsCompressed()) {
+      for (size_t i = 0; i < byte_count; ++i) {
+        bytes[i] = s->CharAt(i);
+      }
+    } else {
+      const uint16_t* chars = s->GetValue();
+      ConvertUtf16ToModifiedUtf8(bytes, byte_count, chars, s->GetLength());
+    }
     bytes[byte_count] = '\0';
     return bytes;
   }

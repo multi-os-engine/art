@@ -401,8 +401,14 @@ TEST_F(UnstartedRuntimeTest, StringInit) {
   interpreter::DoCall<false, false>(method, self, *shadow_frame, inst, inst_data[0], &result);
   mirror::String* string_result = reinterpret_cast<mirror::String*>(result.GetL());
   EXPECT_EQ(string_arg->GetLength(), string_result->GetLength());
-  EXPECT_EQ(memcmp(string_arg->GetValue(), string_result->GetValue(),
-                   string_arg->GetLength() * sizeof(uint16_t)), 0);
+
+  if (string_arg->IsCompressed()) {
+    EXPECT_EQ(memcmp(string_arg->GetValueCompressed(), string_result->GetValueCompressed(),
+                     string_arg->GetLength() * sizeof(uint8_t)), 0);
+  } else {
+    EXPECT_EQ(memcmp(string_arg->GetValue(), string_result->GetValue(),
+                     string_arg->GetLength() * sizeof(uint16_t)), 0);
+  }
 
   ShadowFrame::DeleteDeoptimizedFrame(shadow_frame);
 }

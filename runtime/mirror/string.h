@@ -51,15 +51,20 @@ class MANAGED String FINAL : public Object {
   }
 
   uint16_t* GetValue() SHARED_REQUIRES(Locks::mutator_lock_) {
-    return &value_[0];
+    return (IsCompressed()) ? nullptr : &value_[0];
+  }
+
+  uint8_t* GetValueCompressed() SHARED_REQUIRES(Locks::mutator_lock_) {
+    return (IsCompressed()) ? &value_compressed_[0] : nullptr;
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   size_t SizeOf() SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Taking out the first/uppermost bit because it is not part of actual length value
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   int32_t GetLength() SHARED_REQUIRES(Locks::mutator_lock_) {
-    return GetField32<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(String, count_));
+    return (GetField32<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(String, count_)) & INT32_MAX);
   }
 
   void SetCount(int32_t new_count) SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -149,6 +154,10 @@ class MANAGED String FINAL : public Object {
 
   int32_t FastIndexOf(int32_t ch, int32_t start) SHARED_REQUIRES(Locks::mutator_lock_);
 
+  template <typename MemoryType>
+  int32_t FastIndexOf(MemoryType* chars, int32_t ch, int32_t start)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   int32_t CompareTo(String* other) SHARED_REQUIRES(Locks::mutator_lock_);
 
   CharArray* ToCharArray(Thread* self) SHARED_REQUIRES(Locks::mutator_lock_)
@@ -156,6 +165,10 @@ class MANAGED String FINAL : public Object {
 
   void GetChars(int32_t start, int32_t end, Handle<CharArray> array, int32_t index)
       SHARED_REQUIRES(Locks::mutator_lock_);
+
+  bool IsCompressed() SHARED_REQUIRES(Locks::mutator_lock_);
+
+  bool IsValueNull() SHARED_REQUIRES(Locks::mutator_lock_);
 
   static Class* GetJavaLangString() SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK(!java_lang_String_.IsNull());
@@ -175,11 +188,17 @@ class MANAGED String FINAL : public Object {
   }
 
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
-  int32_t count_;
+  // First bit (uppermost/leftmost) is taken out for Compressed/Uncompressed flag
+  // [0] Uncompressed: string uses 16-bit memory | [1] Compressed: 8-bit memory
+  uint32_t count_;
 
   uint32_t hash_code_;
 
-  uint16_t value_[0];
+  // Compression of all-ASCII into 8-bit memory leads to usage one of these fields
+  union {
+    uint16_t value_[0];
+    uint8_t value_compressed_[0];
+  };
 
   static GcRoot<Class> java_lang_String_;
 

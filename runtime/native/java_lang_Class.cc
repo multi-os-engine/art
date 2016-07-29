@@ -198,12 +198,20 @@ ALWAYS_INLINE static inline ArtField* FindFieldByName(
   }
   size_t low = 0;
   size_t high = fields->size();
+  /*const bool nameIsCompressed = name->IsCompressed();
+  const uint16_t* const data = (nameIsCompressed) ? nullptr : name->GetValue();
+  const uint8_t* const dataCompressed = (nameIsCompressed) ? name->GetValueCompressed() : nullptr;*/
   const uint16_t* const data = name->GetValue();
   const size_t length = name->GetLength();
   while (low < high) {
     auto mid = (low + high) / 2;
     ArtField& field = fields->At(mid);
-    int result = CompareModifiedUtf8ToUtf16AsCodePointValues(field.GetName(), data, length);
+    int result = 0;
+    /*if (nameIsCompressed) {
+      result = memcmp(field.GetName(), dataCompressed, length);
+    } else {*/
+      result = CompareModifiedUtf8ToUtf16AsCodePointValues(field.GetName(), data, length);
+    //}
     // Alternate approach, only a few % faster at the cost of more allocations.
     // int result = field->GetStringName(self, true)->CompareTo(name);
     if (result < 0) {

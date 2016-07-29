@@ -386,8 +386,12 @@ bool InternTable::StringHashEquals::operator()(const GcRoot<mirror::String>& a,
   if (a_length != b.GetUtf16Length()) {
     return false;
   }
-  const uint16_t* a_value = a_string->GetValue();
-  return CompareModifiedUtf8ToUtf16AsCodePointValues(b.GetUtf8Data(), a_value, a_length) == 0;
+  if (a_string->IsCompressed()) {
+    return memcmp(b.GetUtf8Data(), a_string->GetValueCompressed(), a_length) == 0;
+  } else {
+    const uint16_t* a_value = a_string->GetValue();
+    return CompareModifiedUtf8ToUtf16AsCodePointValues(b.GetUtf8Data(), a_value, a_length) == 0;
+  }
 }
 
 size_t InternTable::Table::AddTableFromMemory(const uint8_t* ptr) {
