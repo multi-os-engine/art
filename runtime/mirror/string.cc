@@ -75,7 +75,7 @@ int32_t String::GetUtfLength() {
 }
 
 void String::SetCharAt(int32_t index, uint16_t c) {
-  DCHECK((index >= 0) && (index < count_));
+  DCHECK((index >= 0) && (index < GetLength()));
   GetValue()[index] = c;
 }
 
@@ -271,6 +271,11 @@ void String::GetChars(int32_t start, int32_t end, Handle<CharArray> array, int32
   uint16_t* data = array->GetData() + index;
   uint16_t* value = GetValue() + start;
   memcpy(data, value, (end - start) * sizeof(uint16_t));
+}
+
+bool String::IsCompressed() {
+  uint32_t uint32_min = (static_cast<uint32_t>(INT32_MAX) << 1) + 1;
+  return (static_cast<uint32_t>(GetLength()) & uint32_min);
 }
 
 }  // namespace mirror
