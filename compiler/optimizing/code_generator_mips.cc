@@ -794,11 +794,23 @@ void CodeGeneratorMIPS::GenerateFrameExit() {
       // TODO: __ cfi().Restore(DWARFReg(reg));
     }
 
-    __ DecreaseFrameSize(GetFrameSize());
+    size_t frame_size = GetFrameSize();
+    // Adjust the stack pointer in the delay slot if doing so doesn't break CFI.
+    bool exchange = IsInt<16>(static_cast<int32_t>(frame_size));
+    bool reordering = __ SetReorder(false);
+    if (exchange) {
+      __ Jr(RA);
+      __ DecreaseFrameSize(frame_size);  // Single instruction in delay slot.
+    } else {
+      __ DecreaseFrameSize(frame_size);
+      __ Jr(RA);
+      __ Nop();  // In delay slot.
+    }
+    __ SetReorder(reordering);
+  } else {
+    __ Jr(RA);
+    __ NopIfNoReordering();
   }
-
-  __ Jr(RA);
-  __ Nop();
 
   __ cfi().RestoreState();
   __ cfi().DefCFAOffset(GetFrameSize());
@@ -1253,6 +1265,7 @@ void CodeGeneratorMIPS::InvokeRuntime(int32_t entry_point_offset,
                                       uint32_t dex_pc,
                                       SlowPathCode* slow_path,
                                       bool is_direct_entrypoint) {
+  bool reordering = __ SetReorder(false);
   __ LoadFromOffset(kLoadWord, T9, TR, entry_point_offset);
   __ Jalr(T9);
   if (is_direct_entrypoint) {
@@ -1264,6 +1277,7 @@ void CodeGeneratorMIPS::InvokeRuntime(int32_t entry_point_offset,
   } else {
     __ Nop();  // In delay slot.
   }
+  __ SetReorder(reordering);
   RecordPcInfo(instruction, dex_pc, slow_path);
 }
 
@@ -3973,7 +3987,7 @@ void InstructionCodeGeneratorMIPS::VisitInvokeInterface(HInvokeInterface* invoke
   __ LoadFromOffset(kLoadWord, T9, temp, entry_point.Int32Value());
   // T9();
   __ Jalr(T9);
-  __ Nop();
+  __ NopIfNoReordering();
   DCHECK(!codegen_->IsLeafMethod());
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
 }
@@ -4274,7 +4288,7 @@ void CodeGeneratorMIPS::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke
       // T9 prepared above for better instruction scheduling.
       // T9()
       __ Jalr(T9);
-      __ Nop();
+      __ NopIfNoReordering();
       break;
     case HInvokeStaticOrDirect::CodePtrLocation::kCallPCRelative:
       // TODO: Implement this type.
@@ -4290,7 +4304,7 @@ void CodeGeneratorMIPS::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke
                             kMipsWordSize).Int32Value());
       // T9()
       __ Jalr(T9);
-      __ Nop();
+      __ NopIfNoReordering();
       break;
   }
   DCHECK(!IsLeafMethod());
@@ -4332,7 +4346,7 @@ void CodeGeneratorMIPS::GenerateVirtualCall(HInvokeVirtual* invoke, Location tem
   __ LoadFromOffset(kLoadWord, T9, temp, entry_point.Int32Value());
   // T9();
   __ Jalr(T9);
-  __ Nop();
+  __ NopIfNoReordering();
 }
 
 void InstructionCodeGeneratorMIPS::VisitInvokeVirtual(HInvokeVirtual* invoke) {
@@ -4441,6 +4455,7 @@ void InstructionCodeGeneratorMIPS::VisitLoadClass(HLoadClass* cls) {
       DCHECK(!kEmitCompilerReadBarrier);
       CodeGeneratorMIPS::PcRelativePatchInfo* info =
           codegen_->NewPcRelativeTypePatch(cls->GetDexFile(), cls->GetTypeIndex());
+      bool reordering = __ SetReorder(false);
       if (isR6) {
         __ Bind(&info->high_label);
         __ Bind(&info->pc_rel_label);
@@ -4456,6 +4471,7 @@ void InstructionCodeGeneratorMIPS::VisitLoadClass(HLoadClass* cls) {
         // Add a 32-bit offset to PC.
         __ Addu(out, out, base_or_current_method_reg);
       }
+      __ SetReorder(reordering);
       break;
     }
     case HLoadClass::LoadKind::kBootImageAddress: {
@@ -4604,6 +4620,7 @@ void InstructionCodeGeneratorMIPS::VisitLoadString(HLoadString* load) {
       DCHECK(!kEmitCompilerReadBarrier);
       CodeGeneratorMIPS::PcRelativePatchInfo* info =
           codegen_->NewPcRelativeStringPatch(load->GetDexFile(), load->GetStringIndex());
+      bool reordering = __ SetReorder(false);
       if (isR6) {
         __ Bind(&info->high_label);
         __ Bind(&info->pc_rel_label);
@@ -4619,6 +4636,7 @@ void InstructionCodeGeneratorMIPS::VisitLoadString(HLoadString* load) {
         // Add a 32-bit offset to PC.
         __ Addu(out, out, base_or_current_method_reg);
       }
+      __ SetReorder(reordering);
       return;  // No dex cache slow path.
     }
     case HLoadString::LoadKind::kBootImageAddress: {
@@ -4913,7 +4931,7 @@ void InstructionCodeGeneratorMIPS::VisitNewInstance(HNewInstance* instruction) {
     __ LoadFromOffset(kLoadWord, temp, TR, QUICK_ENTRY_POINT(pNewEmptyString));
     __ LoadFromOffset(kLoadWord, T9, temp, code_offset.Int32Value());
     __ Jalr(T9);
-    __ Nop();
+    __ NopIfNoReordering();
     codegen_->RecordPcInfo(instruction, instruction->GetDexPc());
   } else {
     codegen_->InvokeRuntime(
@@ -5813,7 +5831,7 @@ void InstructionCodeGeneratorMIPS::VisitMipsDexCacheArraysBase(HMipsDexCacheArra
   Register reg = base->GetLocations()->Out().AsRegister<Register>();
   CodeGeneratorMIPS::PcRelativePatchInfo* info =
       codegen_->NewPcRelativeDexCacheArrayPatch(base->GetDexFile(), base->GetElementOffset());
-
+  bool reordering = __ SetReorder(false);
   if (codegen_->GetInstructionSetFeatures().IsR6()) {
     __ Bind(&info->high_label);
     __ Bind(&info->pc_rel_label);
@@ -5831,6 +5849,7 @@ void InstructionCodeGeneratorMIPS::VisitMipsDexCacheArraysBase(HMipsDexCacheArra
     __ Addu(reg, reg, RA);
     // TODO: Can we share this code with that of VisitMipsComputeBaseMethodAddress()?
   }
+  __ SetReorder(reordering);
 }
 
 void LocationsBuilderMIPS::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {

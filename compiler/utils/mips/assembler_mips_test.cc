@@ -2009,14 +2009,17 @@ TEST_F(AssemblerMIPSTest, B) {
 }
 
 TEST_F(AssemblerMIPSTest, Beq) {
+  __ SetReorder(false);
   BranchCondTwoRegsHelper(&mips::MipsAssembler::Beq, "Beq");
 }
 
 TEST_F(AssemblerMIPSTest, Bne) {
+  __ SetReorder(false);
   BranchCondTwoRegsHelper(&mips::MipsAssembler::Bne, "Bne");
 }
 
 TEST_F(AssemblerMIPSTest, Beqz) {
+  __ SetReorder(false);
   mips::MipsLabel label;
   __ Beqz(mips::A0, &label);
   constexpr size_t kAdduCount1 = 63;
@@ -2043,6 +2046,7 @@ TEST_F(AssemblerMIPSTest, Beqz) {
 }
 
 TEST_F(AssemblerMIPSTest, Bnez) {
+  __ SetReorder(false);
   mips::MipsLabel label;
   __ Bnez(mips::A0, &label);
   constexpr size_t kAdduCount1 = 63;
@@ -2069,22 +2073,27 @@ TEST_F(AssemblerMIPSTest, Bnez) {
 }
 
 TEST_F(AssemblerMIPSTest, Bltz) {
+  __ SetReorder(false);
   BranchCondOneRegHelper(&mips::MipsAssembler::Bltz, "Bltz");
 }
 
 TEST_F(AssemblerMIPSTest, Bgez) {
+  __ SetReorder(false);
   BranchCondOneRegHelper(&mips::MipsAssembler::Bgez, "Bgez");
 }
 
 TEST_F(AssemblerMIPSTest, Blez) {
+  __ SetReorder(false);
   BranchCondOneRegHelper(&mips::MipsAssembler::Blez, "Blez");
 }
 
 TEST_F(AssemblerMIPSTest, Bgtz) {
+  __ SetReorder(false);
   BranchCondOneRegHelper(&mips::MipsAssembler::Bgtz, "Bgtz");
 }
 
 TEST_F(AssemblerMIPSTest, Blt) {
+  __ SetReorder(false);
   mips::MipsLabel label;
   __ Blt(mips::A0, mips::A1, &label);
   constexpr size_t kAdduCount1 = 63;
@@ -2113,6 +2122,7 @@ TEST_F(AssemblerMIPSTest, Blt) {
 }
 
 TEST_F(AssemblerMIPSTest, Bge) {
+  __ SetReorder(false);
   mips::MipsLabel label;
   __ Bge(mips::A0, mips::A1, &label);
   constexpr size_t kAdduCount1 = 63;
@@ -2141,6 +2151,7 @@ TEST_F(AssemblerMIPSTest, Bge) {
 }
 
 TEST_F(AssemblerMIPSTest, Bltu) {
+  __ SetReorder(false);
   mips::MipsLabel label;
   __ Bltu(mips::A0, mips::A1, &label);
   constexpr size_t kAdduCount1 = 63;
@@ -2169,6 +2180,7 @@ TEST_F(AssemblerMIPSTest, Bltu) {
 }
 
 TEST_F(AssemblerMIPSTest, Bgeu) {
+  __ SetReorder(false);
   mips::MipsLabel label;
   __ Bgeu(mips::A0, mips::A1, &label);
   constexpr size_t kAdduCount1 = 63;
@@ -2197,6 +2209,7 @@ TEST_F(AssemblerMIPSTest, Bgeu) {
 }
 
 TEST_F(AssemblerMIPSTest, Bc1f) {
+  __ SetReorder(false);
   mips::MipsLabel label;
   __ Bc1f(0, &label);
   constexpr size_t kAdduCount1 = 63;
@@ -2223,6 +2236,7 @@ TEST_F(AssemblerMIPSTest, Bc1f) {
 }
 
 TEST_F(AssemblerMIPSTest, Bc1t) {
+  __ SetReorder(false);
   mips::MipsLabel label;
   __ Bc1t(0, &label);
   constexpr size_t kAdduCount1 = 63;
