@@ -36,7 +36,8 @@ public class Main {
     expectEquals32(-2, round32(-1.51f));
     expectEquals32(-1, round32(-1.2f));
     expectEquals32(-1, round32(-1.0f));
-    expectEquals32(-1, round32(-0.51f));
+    expectEquals32(-1, round32(-0.5000001f));
+    expectEquals32(0, round32(-0.5f));
     expectEquals32(0, round32(-0.2f));
     expectEquals32(0, round32(-0.0f));
     expectEquals32(0, round32(+0.0f));
@@ -61,14 +62,18 @@ public class Main {
     float[] fvals = {
       -16777215.5f,
       -16777215.0f,
-      -0.4999f,
-      0.4999f,
+      -0.49999998f,
+      -0.4999999701976776123046875f,
+      0.4999999701976776123046875f,
+      0.49999998f,
       16777215.0f,
       16777215.5f
     };
     int[] ivals = {
       -16777216,
       -16777215,
+      0,
+      0,
       0,
       0,
       16777215,
@@ -98,7 +103,8 @@ public class Main {
     expectEquals64(-2L, round64(-1.51d));
     expectEquals64(-1L, round64(-1.2d));
     expectEquals64(-1L, round64(-1.0d));
-    expectEquals64(-1L, round64(-0.51d));
+    expectEquals64(-1L, round64(-0.5000001f));
+    expectEquals64(0L, round64(-0.5d));
     expectEquals64(0L, round64(-0.2d));
     expectEquals64(0L, round64(-0.0d));
     expectEquals64(0L, round64(+0.0d));
@@ -123,14 +129,18 @@ public class Main {
     double[] dvals = {
       -9007199254740991.5d,
       -9007199254740991.0d,
+      -0.49999999999999997d,
       -0.49999999999999994d,
       0.49999999999999994d,
+      0.49999999999999997d,
       9007199254740991.0d,
       9007199254740991.5d
     };
     long[] lvals = {
       -9007199254740992L,
       -9007199254740991L,
+      0L,
+      0L,
       0L,
       0L,
       9007199254740991L,
