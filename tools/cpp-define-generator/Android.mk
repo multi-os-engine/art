@@ -30,11 +30,11 @@ CPP_DEFINE_GENERATOR_MULTILIB :=
 # Builds are for host only, target-specific define generation is possibly but is trickier and would need extra tooling.
 #
 # In the future we may wish to parameterize this on (32,64)x(read_barrier,no_read_barrier).
-$(eval $(call build-art-executable,cpp-define-generator-data,$(CPP_DEFINE_GENERATOR_SRC_FILES),$(CPP_DEFINE_GENERATOR_EXTRA_SHARED_LIBRARIES),$(CPP_DEFINE_GENERATOR_EXTRA_INCLUDE),host,debug,$(CPP_DEFINE_GENERATOR_MULTILIB),shared))
+$(eval $(call build-art-executable,cpp-define-generator-data,$(CPP_DEFINE_GENERATOR_SRC_FILES),$(CPP_DEFINE_GENERATOR_EXTRA_SHARED_LIBRARIES),$(CPP_DEFINE_GENERATOR_EXTRA_INCLUDE),host,ndebug,$(CPP_DEFINE_GENERATOR_MULTILIB),shared))
 
 #####################
 #####################
 .PHONY: art-update-cpp-defines
-art-update-cpp-defines: cpp-define-generator-datad
+art-update-cpp-defines: cpp-define-generator-data
 	art/tools/cpp-define-generator/generate-asm-support
 
