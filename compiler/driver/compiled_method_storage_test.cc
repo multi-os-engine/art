@@ -40,6 +40,7 @@ TEST(CompiledMethodStorage, Deduplicate) {
                         /* image_classes */ nullptr,
                         /* compiled_classes */ nullptr,
                         /* compiled_methods */ nullptr,
+                        /* passes_to_run */ nullptr,
                         /* thread_count */ 1u,
                         /* dump_stats */ false,
                         /* dump_passes */ false,
