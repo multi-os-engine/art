@@ -34,6 +34,7 @@
 #include "utils/stack_checks.h"
 
 using namespace vixl::aarch64;  // NOLINT(build/namespaces)
+using VIXLMacroAssembler = vixl::aarch64::MacroAssembler;
 
 #ifdef __
 #error "ARM64 Codegen VIXL macro-assembler macro already defined."
@@ -150,7 +151,7 @@ static void SaveRestoreLiveRegistersHelper(CodeGenerator* codegen,
   CPURegList fp_list = CPURegList(CPURegister::kFPRegister, kDRegSize,
       register_set->GetFloatingPointRegisters() & (~callee_saved_fp_registers.GetList()));
 
-  MacroAssembler* masm = down_cast<CodeGeneratorARM64*>(codegen)->GetVIXLAssembler();
+  VIXLMacroAssembler* masm = down_cast<CodeGeneratorARM64*>(codegen)->GetVIXLAssembler();
   UseScratchRegisterScope temps(masm);
 
   Register base = masm->StackPointer();
@@ -1019,7 +1020,7 @@ void ParallelMoveResolverARM64::EmitMove(size_t index) {
 }
 
 void CodeGeneratorARM64::GenerateFrameEntry() {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   BlockPoolsScope block_pools(masm);
   __ Bind(&frame_entry_label_);
 
@@ -1341,7 +1342,7 @@ void CodeGeneratorARM64::LoadAcquire(HInstruction* instruction,
                                      CPURegister dst,
                                      const MemOperand& src,
                                      bool needs_null_check) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   BlockPoolsScope block_pools(masm);
   UseScratchRegisterScope temps(masm);
   Register temp_base = temps.AcquireX();
@@ -1666,7 +1667,7 @@ void InstructionCodeGeneratorARM64::HandleFieldGet(HInstruction* instruction,
 
   if (field_type == Primitive::kPrimNot && kEmitCompilerReadBarrier && kUseBakerReadBarrier) {
     // Object FieldGet with Baker's read barrier case.
-    MacroAssembler* masm = GetVIXLAssembler();
+    VIXLMacroAssembler* masm = GetVIXLAssembler();
     UseScratchRegisterScope temps(masm);
     // /* HeapReference<Object> */ out = *(base + offset)
     Register base = RegisterFrom(base_loc, Primitive::kPrimNot);
@@ -2027,7 +2028,7 @@ void InstructionCodeGeneratorARM64::VisitMultiplyAccumulate(HMultiplyAccumulate*
   // madd, msub, smaddl, smsubl, umaddl and umsubl.
   if (instr->GetType() == Primitive::kPrimLong &&
       codegen_->GetInstructionSetFeatures().NeedFixCortexA53_835769()) {
-    MacroAssembler* masm = down_cast<CodeGeneratorARM64*>(codegen_)->GetVIXLAssembler();
+    VIXLMacroAssembler* masm = down_cast<CodeGeneratorARM64*>(codegen_)->GetVIXLAssembler();
     vixl::aarch64::Instruction* prev =
         masm->GetCursorAddress<vixl::aarch64::Instruction*>() - kInstructionSize;
     if (prev->IsLoadOrStore()) {
@@ -2085,7 +2086,7 @@ void InstructionCodeGeneratorARM64::VisitArrayGet(HArrayGet* instruction) {
   Location out = locations->Out();
   uint32_t offset = CodeGenerator::GetArrayDataOffset(instruction);
 
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   UseScratchRegisterScope temps(masm);
   // Block pools between `Load` and `MaybeRecordImplicitNullCheck`.
   BlockPoolsScope block_pools(masm);
@@ -2188,7 +2189,7 @@ void InstructionCodeGeneratorARM64::VisitArraySet(HArraySet* instruction) {
   Location index = locations->InAt(1);
   size_t offset = mirror::Array::DataOffset(Primitive::ComponentSize(value_type)).Uint32Value();
   MemOperand destination = HeapOperand(array);
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   BlockPoolsScope block_pools(masm);
 
   if (!needs_write_barrier) {
@@ -3015,7 +3016,7 @@ void LocationsBuilderARM64::VisitSelect(HSelect* select) {
         Operand(Int64FromConstant(cst_false_value)) : Operand(x2);
     bool true_value_in_register = false;
     bool false_value_in_register = false;
-    MacroAssembler::GetCselSynthesisInformation(
+    VIXLMacroAssembler::GetCselSynthesisInformation(
         x0, true_op, false_op, &true_value_in_register, &false_value_in_register);
     true_value_in_register |= !is_true_value_constant;
     false_value_in_register |= !is_false_value_constant;
@@ -3530,7 +3531,7 @@ void InstructionCodeGeneratorARM64::VisitInvokeInterface(HInvokeInterface* invok
 
   // The register ip1 is required to be used for the hidden argument in
   // art_quick_imt_conflict_trampoline, so prevent VIXL from using it.
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   UseScratchRegisterScope scratch_scope(masm);
   BlockPoolsScope block_pools(masm);
   scratch_scope.Exclude(ip1);
@@ -5092,7 +5093,7 @@ void InstructionCodeGeneratorARM64::GenerateGcRootFieldLoad(HInstruction* instru
           new (GetGraph()->GetArena()) ReadBarrierMarkSlowPathARM64(instruction, root);
       codegen_->AddSlowPath(slow_path);
 
-      MacroAssembler* masm = GetVIXLAssembler();
+      VIXLMacroAssembler* masm = GetVIXLAssembler();
       UseScratchRegisterScope temps(masm);
       Register temp = temps.AcquireW();
       // temp = Thread::Current()->GetIsGcMarking()
@@ -5199,7 +5200,7 @@ void CodeGeneratorARM64::GenerateReferenceLoadWithBakerReadBarrier(HInstruction*
   // `instruction->IsArrayGet()` => `!use_load_acquire`.
   DCHECK(!instruction->IsArrayGet() || !use_load_acquire);
 
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   UseScratchRegisterScope temps(masm);
 
   // In slow path based read barriers, the read barrier call is

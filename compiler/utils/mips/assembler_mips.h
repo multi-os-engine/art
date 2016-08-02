@@ -23,12 +23,14 @@
 
 #include "arch/mips/instruction_set_features_mips.h"
 #include "base/arena_containers.h"
+#include "base/enums.h"
 #include "base/macros.h"
 #include "constants_mips.h"
 #include "globals.h"
 #include "managed_register_mips.h"
 #include "offsets.h"
 #include "utils/assembler.h"
+#include "utils/macro_assembler.h"
 #include "utils/label.h"
 
 namespace art {
@@ -145,11 +147,11 @@ class MipsExceptionSlowPath {
   DISALLOW_COPY_AND_ASSIGN(MipsExceptionSlowPath);
 };
 
-class MipsAssembler FINAL : public Assembler {
+class MipsAssembler FINAL : public MacroAssembler<PointerSize::k32> {
  public:
   explicit MipsAssembler(ArenaAllocator* arena,
                          const MipsInstructionSetFeatures* instruction_set_features = nullptr)
-      : Assembler(arena),
+      : MacroAssembler<PointerSize::k32>(arena),
         overwriting_(false),
         overwrite_location_(0),
         literals_(arena->Adapter(kArenaAllocAssembler)),
@@ -500,15 +502,11 @@ class MipsAssembler FINAL : public Assembler {
 
   void StoreImmediateToFrame(FrameOffset dest, uint32_t imm, ManagedRegister mscratch) OVERRIDE;
 
-  void StoreImmediateToThread32(ThreadOffset32 dest,
-                                uint32_t imm,
+  void StoreStackOffsetToThread(ThreadOffset32 thr_offs,
+                                FrameOffset fr_offs,
                                 ManagedRegister mscratch) OVERRIDE;
 
-  void StoreStackOffsetToThread32(ThreadOffset32 thr_offs,
-                                  FrameOffset fr_offs,
-                                  ManagedRegister mscratch) OVERRIDE;
-
-  void StoreStackPointerToThread32(ThreadOffset32 thr_offs) OVERRIDE;
+  void StoreStackPointerToThread(ThreadOffset32 thr_offs) OVERRIDE;
 
   void StoreSpanning(FrameOffset dest,
                      ManagedRegister msrc,
@@ -518,7 +516,7 @@ class MipsAssembler FINAL : public Assembler {
   // Load routines.
   void Load(ManagedRegister mdest, FrameOffset src, size_t size) OVERRIDE;
 
-  void LoadFromThread32(ManagedRegister mdest, ThreadOffset32 src, size_t size) OVERRIDE;
+  void LoadFromThread(ManagedRegister mdest, ThreadOffset32 src, size_t size) OVERRIDE;
 
   void LoadRef(ManagedRegister dest, FrameOffset src) OVERRIDE;
 
@@ -529,18 +527,18 @@ class MipsAssembler FINAL : public Assembler {
 
   void LoadRawPtr(ManagedRegister mdest, ManagedRegister base, Offset offs) OVERRIDE;
 
-  void LoadRawPtrFromThread32(ManagedRegister mdest, ThreadOffset32 offs) OVERRIDE;
+  void LoadRawPtrFromThread(ManagedRegister mdest, ThreadOffset32 offs) OVERRIDE;
 
   // Copying routines.
   void Move(ManagedRegister mdest, ManagedRegister msrc, size_t size) OVERRIDE;
 
-  void CopyRawPtrFromThread32(FrameOffset fr_offs,
-                              ThreadOffset32 thr_offs,
-                              ManagedRegister mscratch) OVERRIDE;
-
-  void CopyRawPtrToThread32(ThreadOffset32 thr_offs,
-                            FrameOffset fr_offs,
+  void CopyRawPtrFromThread(FrameOffset fr_offs,
+                            ThreadOffset32 thr_offs,
                             ManagedRegister mscratch) OVERRIDE;
+
+  void CopyRawPtrToThread(ThreadOffset32 thr_offs,
+                          FrameOffset fr_offs,
+                          ManagedRegister mscratch) OVERRIDE;
 
   void CopyRef(FrameOffset dest, FrameOffset src, ManagedRegister mscratch) OVERRIDE;
 
@@ -617,7 +615,7 @@ class MipsAssembler FINAL : public Assembler {
   // Call to address held at [base+offset].
   void Call(ManagedRegister base, Offset offset, ManagedRegister mscratch) OVERRIDE;
   void Call(FrameOffset base, Offset offset, ManagedRegister mscratch) OVERRIDE;
-  void CallFromThread32(ThreadOffset32 offset, ManagedRegister mscratch) OVERRIDE;
+  void CallFromThread(ThreadOffset32 offset, ManagedRegister mscratch) OVERRIDE;
 
   // Generate code to check if Thread::Current()->exception_ is non-null
   // and branch to a ExceptionSlowPath if it is.
