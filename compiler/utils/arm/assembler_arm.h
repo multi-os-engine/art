@@ -23,12 +23,14 @@
 #include "base/arena_allocator.h"
 #include "base/arena_containers.h"
 #include "base/bit_utils.h"
+#include "base/enums.h"
 #include "base/logging.h"
 #include "base/stl_util.h"
 #include "base/value_object.h"
 #include "constants_arm.h"
 #include "utils/arm/managed_register_arm.h"
 #include "utils/assembler.h"
+#include "utils/macro_assembler.h"
 #include "offsets.h"
 
 namespace art {
@@ -433,7 +435,7 @@ extern const char* kConditionNames[];
 // This is an abstract ARM assembler.  Subclasses provide assemblers for the individual
 // instruction sets (ARM32, Thumb2, etc.)
 //
-class ArmAssembler : public Assembler {
+class ArmAssembler : public MacroAssembler<PointerSize::k32> {
  public:
   virtual ~ArmAssembler() {}
 
@@ -904,13 +906,11 @@ class ArmAssembler : public Assembler {
 
   void StoreImmediateToFrame(FrameOffset dest, uint32_t imm, ManagedRegister scratch) OVERRIDE;
 
-  void StoreImmediateToThread32(ThreadOffset32 dest, uint32_t imm, ManagedRegister scratch)
-      OVERRIDE;
+  void StoreStackOffsetToThread(ThreadOffset32 thr_offs,
+                                FrameOffset fr_offs,
+                                ManagedRegister scratch) OVERRIDE;
 
-  void StoreStackOffsetToThread32(ThreadOffset32 thr_offs, FrameOffset fr_offs,
-                                  ManagedRegister scratch) OVERRIDE;
-
-  void StoreStackPointerToThread32(ThreadOffset32 thr_offs) OVERRIDE;
+  void StoreStackPointerToThread(ThreadOffset32 thr_offs) OVERRIDE;
 
   void StoreSpanning(FrameOffset dest, ManagedRegister src, FrameOffset in_off,
                      ManagedRegister scratch) OVERRIDE;
@@ -918,7 +918,7 @@ class ArmAssembler : public Assembler {
   // Load routines
   void Load(ManagedRegister dest, FrameOffset src, size_t size) OVERRIDE;
 
-  void LoadFromThread32(ManagedRegister dest, ThreadOffset32 src, size_t size) OVERRIDE;
+  void LoadFromThread(ManagedRegister dest, ThreadOffset32 src, size_t size) OVERRIDE;
 
   void LoadRef(ManagedRegister dest, FrameOffset src) OVERRIDE;
 
@@ -927,15 +927,16 @@ class ArmAssembler : public Assembler {
 
   void LoadRawPtr(ManagedRegister dest, ManagedRegister base, Offset offs) OVERRIDE;
 
-  void LoadRawPtrFromThread32(ManagedRegister dest, ThreadOffset32 offs) OVERRIDE;
+  void LoadRawPtrFromThread(ManagedRegister dest, ThreadOffset32 offs) OVERRIDE;
 
   // Copying routines
   void Move(ManagedRegister dest, ManagedRegister src, size_t size) OVERRIDE;
 
-  void CopyRawPtrFromThread32(FrameOffset fr_offs, ThreadOffset32 thr_offs,
-                              ManagedRegister scratch) OVERRIDE;
+  void CopyRawPtrFromThread(FrameOffset fr_offs,
+                            ThreadOffset32 thr_offs,
+                            ManagedRegister scratch) OVERRIDE;
 
-  void CopyRawPtrToThread32(ThreadOffset32 thr_offs, FrameOffset fr_offs, ManagedRegister scratch)
+  void CopyRawPtrToThread(ThreadOffset32 thr_offs, FrameOffset fr_offs, ManagedRegister scratch)
       OVERRIDE;
 
   void CopyRef(FrameOffset dest, FrameOffset src, ManagedRegister scratch) OVERRIDE;
@@ -990,7 +991,7 @@ class ArmAssembler : public Assembler {
   // Call to address held at [base+offset]
   void Call(ManagedRegister base, Offset offset, ManagedRegister scratch) OVERRIDE;
   void Call(FrameOffset base, Offset offset, ManagedRegister scratch) OVERRIDE;
-  void CallFromThread32(ThreadOffset32 offset, ManagedRegister scratch) OVERRIDE;
+  void CallFromThread(ThreadOffset32 offset, ManagedRegister scratch) OVERRIDE;
 
   // Generate code to check if Thread::Current()->exception_ is non-null
   // and branch to a ExceptionSlowPath if it is.
@@ -1060,7 +1061,8 @@ class ArmAssembler : public Assembler {
 
  protected:
   explicit ArmAssembler(ArenaAllocator* arena)
-      : Assembler(arena), tracked_labels_(arena->Adapter(kArenaAllocAssembler)) {}
+      : MacroAssembler<PointerSize::k32>(arena),
+        tracked_labels_(arena->Adapter(kArenaAllocAssembler)) {}
 
   // Returns whether or not the given register is used for passing parameters.
   static int RegisterCompare(const Register* reg1, const Register* reg2) {

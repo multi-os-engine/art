@@ -28,14 +28,15 @@
 #include "utils/arm64/assembler_arm64.h"
 #include "utils/arm64/constants_arm64.h"
 
-using namespace vixl::aarch64;  // NOLINT(build/namespaces)
-
 // TODO: make vixl clean wrt -Wshadow.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"
 #include "a64/disasm-a64.h"
 #include "a64/macro-assembler-a64.h"
 #pragma GCC diagnostic pop
+
+using namespace vixl::aarch64;  // NOLINT(build/namespaces)
+using VIXLMacroAssembler = vixl::aarch64::MacroAssembler;
 
 namespace art {
 
@@ -61,7 +62,7 @@ ALWAYS_INLINE inline MemOperand AbsoluteHeapOperandFrom(Location location, size_
 
 }  // namespace
 
-MacroAssembler* IntrinsicCodeGeneratorARM64::GetVIXLAssembler() {
+VIXLMacroAssembler* IntrinsicCodeGeneratorARM64::GetVIXLAssembler() {
   return codegen_->GetAssembler()->vixl_masm_;
 }
 
@@ -174,14 +175,14 @@ static void CreateIntToFPLocations(ArenaAllocator* arena, HInvoke* invoke) {
   locations->SetOut(Location::RequiresFpuRegister());
 }
 
-static void MoveFPToInt(LocationSummary* locations, bool is64bit, MacroAssembler* masm) {
+static void MoveFPToInt(LocationSummary* locations, bool is64bit, VIXLMacroAssembler* masm) {
   Location input = locations->InAt(0);
   Location output = locations->Out();
   __ Fmov(is64bit ? XRegisterFrom(output) : WRegisterFrom(output),
           is64bit ? DRegisterFrom(input) : SRegisterFrom(input));
 }
 
-static void MoveIntToFP(LocationSummary* locations, bool is64bit, MacroAssembler* masm) {
+static void MoveIntToFP(LocationSummary* locations, bool is64bit, VIXLMacroAssembler* masm) {
   Location input = locations->InAt(0);
   Location output = locations->Out();
   __ Fmov(is64bit ? DRegisterFrom(output) : SRegisterFrom(output),
@@ -226,7 +227,7 @@ static void CreateIntToIntLocations(ArenaAllocator* arena, HInvoke* invoke) {
 
 static void GenReverseBytes(LocationSummary* locations,
                             Primitive::Type type,
-                            MacroAssembler* masm) {
+                            VIXLMacroAssembler* masm) {
   Location in = locations->InAt(0);
   Location out = locations->Out();
 
@@ -280,7 +281,7 @@ static void CreateIntIntToIntLocations(ArenaAllocator* arena, HInvoke* invoke) {
 
 static void GenNumberOfLeadingZeros(LocationSummary* locations,
                                     Primitive::Type type,
-                                    MacroAssembler* masm) {
+                                    VIXLMacroAssembler* masm) {
   DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
 
   Location in = locations->InAt(0);
@@ -307,7 +308,7 @@ void IntrinsicCodeGeneratorARM64::VisitLongNumberOfLeadingZeros(HInvoke* invoke)
 
 static void GenNumberOfTrailingZeros(LocationSummary* locations,
                                      Primitive::Type type,
-                                     MacroAssembler* masm) {
+                                     VIXLMacroAssembler* masm) {
   DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
 
   Location in = locations->InAt(0);
@@ -335,7 +336,7 @@ void IntrinsicCodeGeneratorARM64::VisitLongNumberOfTrailingZeros(HInvoke* invoke
 
 static void GenReverse(LocationSummary* locations,
                        Primitive::Type type,
-                       MacroAssembler* masm) {
+                       VIXLMacroAssembler* masm) {
   DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
 
   Location in = locations->InAt(0);
@@ -360,7 +361,7 @@ void IntrinsicCodeGeneratorARM64::VisitLongReverse(HInvoke* invoke) {
   GenReverse(invoke->GetLocations(), Primitive::kPrimLong, GetVIXLAssembler());
 }
 
-static void GenBitCount(HInvoke* instr, Primitive::Type type, MacroAssembler* masm) {
+static void GenBitCount(HInvoke* instr, Primitive::Type type, VIXLMacroAssembler* masm) {
   DCHECK(Primitive::IsIntOrLongType(type)) << type;
   DCHECK_EQ(instr->GetType(), Primitive::kPrimInt);
   DCHECK_EQ(Primitive::PrimitiveKind(instr->InputAt(0)->GetType()), type);
@@ -401,7 +402,7 @@ static void CreateFPToFPLocations(ArenaAllocator* arena, HInvoke* invoke) {
   locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
 }
 
-static void MathAbsFP(LocationSummary* locations, bool is64bit, MacroAssembler* masm) {
+static void MathAbsFP(LocationSummary* locations, bool is64bit, VIXLMacroAssembler* masm) {
   Location in = locations->InAt(0);
   Location out = locations->Out();
 
@@ -437,7 +438,7 @@ static void CreateIntToInt(ArenaAllocator* arena, HInvoke* invoke) {
 
 static void GenAbsInteger(LocationSummary* locations,
                           bool is64bit,
-                          MacroAssembler* masm) {
+                          VIXLMacroAssembler* masm) {
   Location in = locations->InAt(0);
   Location output = locations->Out();
 
@@ -467,7 +468,7 @@ void IntrinsicCodeGeneratorARM64::VisitMathAbsLong(HInvoke* invoke) {
 static void GenMinMaxFP(LocationSummary* locations,
                         bool is_min,
                         bool is_double,
-                        MacroAssembler* masm) {
+                        VIXLMacroAssembler* masm) {
   Location op1 = locations->InAt(0);
   Location op2 = locations->InAt(1);
   Location out = locations->Out();
@@ -527,7 +528,7 @@ void IntrinsicCodeGeneratorARM64::VisitMathMaxFloatFloat(HInvoke* invoke) {
 static void GenMinMax(LocationSummary* locations,
                       bool is_min,
                       bool is_long,
-                      MacroAssembler* masm) {
+                      VIXLMacroAssembler* masm) {
   Location op1 = locations->InAt(0);
   Location op2 = locations->InAt(1);
   Location out = locations->Out();
@@ -578,7 +579,7 @@ void IntrinsicLocationsBuilderARM64::VisitMathSqrt(HInvoke* invoke) {
 
 void IntrinsicCodeGeneratorARM64::VisitMathSqrt(HInvoke* invoke) {
   LocationSummary* locations = invoke->GetLocations();
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   __ Fsqrt(DRegisterFrom(locations->Out()), DRegisterFrom(locations->InAt(0)));
 }
 
@@ -588,7 +589,7 @@ void IntrinsicLocationsBuilderARM64::VisitMathCeil(HInvoke* invoke) {
 
 void IntrinsicCodeGeneratorARM64::VisitMathCeil(HInvoke* invoke) {
   LocationSummary* locations = invoke->GetLocations();
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   __ Frintp(DRegisterFrom(locations->Out()), DRegisterFrom(locations->InAt(0)));
 }
 
@@ -598,7 +599,7 @@ void IntrinsicLocationsBuilderARM64::VisitMathFloor(HInvoke* invoke) {
 
 void IntrinsicCodeGeneratorARM64::VisitMathFloor(HInvoke* invoke) {
   LocationSummary* locations = invoke->GetLocations();
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   __ Frintm(DRegisterFrom(locations->Out()), DRegisterFrom(locations->InAt(0)));
 }
 
@@ -608,7 +609,7 @@ void IntrinsicLocationsBuilderARM64::VisitMathRint(HInvoke* invoke) {
 
 void IntrinsicCodeGeneratorARM64::VisitMathRint(HInvoke* invoke) {
   LocationSummary* locations = invoke->GetLocations();
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   __ Frintn(DRegisterFrom(locations->Out()), DRegisterFrom(locations->InAt(0)));
 }
 
@@ -621,7 +622,7 @@ static void CreateFPToIntPlusFPTempLocations(ArenaAllocator* arena, HInvoke* inv
   locations->AddTemp(Location::RequiresFpuRegister());
 }
 
-static void GenMathRound(HInvoke* invoke, bool is_double, vixl::aarch64::MacroAssembler* masm) {
+static void GenMathRound(HInvoke* invoke, bool is_double, VIXLMacroAssembler* masm) {
   // Java 8 API definition for Math.round():
   // Return the closest long or int to the argument, with ties rounding to positive infinity.
   //
@@ -679,7 +680,7 @@ void IntrinsicLocationsBuilderARM64::VisitMemoryPeekByte(HInvoke* invoke) {
 }
 
 void IntrinsicCodeGeneratorARM64::VisitMemoryPeekByte(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   __ Ldrsb(WRegisterFrom(invoke->GetLocations()->Out()),
           AbsoluteHeapOperandFrom(invoke->GetLocations()->InAt(0), 0));
 }
@@ -689,7 +690,7 @@ void IntrinsicLocationsBuilderARM64::VisitMemoryPeekIntNative(HInvoke* invoke) {
 }
 
 void IntrinsicCodeGeneratorARM64::VisitMemoryPeekIntNative(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   __ Ldr(WRegisterFrom(invoke->GetLocations()->Out()),
          AbsoluteHeapOperandFrom(invoke->GetLocations()->InAt(0), 0));
 }
@@ -699,7 +700,7 @@ void IntrinsicLocationsBuilderARM64::VisitMemoryPeekLongNative(HInvoke* invoke) 
 }
 
 void IntrinsicCodeGeneratorARM64::VisitMemoryPeekLongNative(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   __ Ldr(XRegisterFrom(invoke->GetLocations()->Out()),
          AbsoluteHeapOperandFrom(invoke->GetLocations()->InAt(0), 0));
 }
@@ -709,7 +710,7 @@ void IntrinsicLocationsBuilderARM64::VisitMemoryPeekShortNative(HInvoke* invoke)
 }
 
 void IntrinsicCodeGeneratorARM64::VisitMemoryPeekShortNative(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   __ Ldrsh(WRegisterFrom(invoke->GetLocations()->Out()),
            AbsoluteHeapOperandFrom(invoke->GetLocations()->InAt(0), 0));
 }
@@ -727,7 +728,7 @@ void IntrinsicLocationsBuilderARM64::VisitMemoryPokeByte(HInvoke* invoke) {
 }
 
 void IntrinsicCodeGeneratorARM64::VisitMemoryPokeByte(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   __ Strb(WRegisterFrom(invoke->GetLocations()->InAt(1)),
           AbsoluteHeapOperandFrom(invoke->GetLocations()->InAt(0), 0));
 }
@@ -737,7 +738,7 @@ void IntrinsicLocationsBuilderARM64::VisitMemoryPokeIntNative(HInvoke* invoke) {
 }
 
 void IntrinsicCodeGeneratorARM64::VisitMemoryPokeIntNative(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   __ Str(WRegisterFrom(invoke->GetLocations()->InAt(1)),
          AbsoluteHeapOperandFrom(invoke->GetLocations()->InAt(0), 0));
 }
@@ -747,7 +748,7 @@ void IntrinsicLocationsBuilderARM64::VisitMemoryPokeLongNative(HInvoke* invoke) 
 }
 
 void IntrinsicCodeGeneratorARM64::VisitMemoryPokeLongNative(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   __ Str(XRegisterFrom(invoke->GetLocations()->InAt(1)),
          AbsoluteHeapOperandFrom(invoke->GetLocations()->InAt(0), 0));
 }
@@ -757,7 +758,7 @@ void IntrinsicLocationsBuilderARM64::VisitMemoryPokeShortNative(HInvoke* invoke)
 }
 
 void IntrinsicCodeGeneratorARM64::VisitMemoryPokeShortNative(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   __ Strh(WRegisterFrom(invoke->GetLocations()->InAt(1)),
           AbsoluteHeapOperandFrom(invoke->GetLocations()->InAt(0), 0));
 }
@@ -782,7 +783,7 @@ static void GenUnsafeGet(HInvoke* invoke,
   DCHECK((type == Primitive::kPrimInt) ||
          (type == Primitive::kPrimLong) ||
          (type == Primitive::kPrimNot));
-  MacroAssembler* masm = codegen->GetAssembler()->vixl_masm_;
+  VIXLMacroAssembler* masm = codegen->GetAssembler()->vixl_masm_;
   Location base_loc = locations->InAt(1);
   Register base = WRegisterFrom(base_loc);      // Object pointer.
   Location offset_loc = locations->InAt(2);
@@ -916,7 +917,7 @@ static void GenUnsafePut(LocationSummary* locations,
                          bool is_volatile,
                          bool is_ordered,
                          CodeGeneratorARM64* codegen) {
-  MacroAssembler* masm = codegen->GetAssembler()->vixl_masm_;
+  VIXLMacroAssembler* masm = codegen->GetAssembler()->vixl_masm_;
 
   Register base = WRegisterFrom(locations->InAt(1));    // Object pointer.
   Register offset = XRegisterFrom(locations->InAt(2));  // Long offset.
@@ -1035,7 +1036,7 @@ static void CreateIntIntIntIntIntToInt(ArenaAllocator* arena,
 }
 
 static void GenCas(LocationSummary* locations, Primitive::Type type, CodeGeneratorARM64* codegen) {
-  MacroAssembler* masm = codegen->GetAssembler()->vixl_masm_;
+  VIXLMacroAssembler* masm = codegen->GetAssembler()->vixl_masm_;
 
   Register out = WRegisterFrom(locations->Out());                  // Boolean result.
 
@@ -1158,7 +1159,7 @@ void IntrinsicLocationsBuilderARM64::VisitStringCompareTo(HInvoke* invoke) {
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringCompareTo(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   LocationSummary* locations = invoke->GetLocations();
 
   Register str = XRegisterFrom(locations->InAt(0));
@@ -1273,7 +1274,7 @@ void IntrinsicLocationsBuilderARM64::VisitStringEquals(HInvoke* invoke) {
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringEquals(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   LocationSummary* locations = invoke->GetLocations();
 
   Register str = WRegisterFrom(locations->InAt(0));
@@ -1361,7 +1362,7 @@ void IntrinsicCodeGeneratorARM64::VisitStringEquals(HInvoke* invoke) {
 }
 
 static void GenerateVisitStringIndexOf(HInvoke* invoke,
-                                       MacroAssembler* masm,
+                                       VIXLMacroAssembler* masm,
                                        CodeGeneratorARM64* codegen,
                                        ArenaAllocator* allocator,
                                        bool start_at_zero) {
@@ -1458,7 +1459,7 @@ void IntrinsicLocationsBuilderARM64::VisitStringNewStringFromBytes(HInvoke* invo
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringNewStringFromBytes(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   LocationSummary* locations = invoke->GetLocations();
 
   Register byte_array = WRegisterFrom(locations->InAt(0));
@@ -1488,7 +1489,7 @@ void IntrinsicLocationsBuilderARM64::VisitStringNewStringFromChars(HInvoke* invo
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringNewStringFromChars(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
 
   // No need to emit code checking whether `locations->InAt(2)` is a null
   // pointer, as callers of the native method
@@ -1514,7 +1515,7 @@ void IntrinsicLocationsBuilderARM64::VisitStringNewStringFromString(HInvoke* inv
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringNewStringFromString(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   LocationSummary* locations = invoke->GetLocations();
 
   Register string_to_copy = WRegisterFrom(locations->InAt(0));
@@ -1563,7 +1564,7 @@ static void CreateFPFPToFPCallLocations(ArenaAllocator* arena, HInvoke* invoke) 
 }
 
 static void GenFPToFPCall(HInvoke* invoke,
-                          MacroAssembler* masm,
+                          VIXLMacroAssembler* masm,
                           CodeGeneratorARM64* codegen,
                           QuickEntrypointEnum entry) {
   __ Ldr(lr, MemOperand(tr,
@@ -1724,7 +1725,7 @@ void IntrinsicLocationsBuilderARM64::VisitStringGetCharsNoCheck(HInvoke* invoke)
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringGetCharsNoCheck(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   LocationSummary* locations = invoke->GetLocations();
 
   // Check assumption that sizeof(Char) is 2 (used in scaling below).
@@ -1855,7 +1856,7 @@ void IntrinsicLocationsBuilderARM64::VisitSystemArrayCopyChar(HInvoke* invoke) {
   locations->AddTemp(Location::RequiresRegister());
 }
 
-static void CheckSystemArrayCopyPosition(MacroAssembler* masm,
+static void CheckSystemArrayCopyPosition(VIXLMacroAssembler* masm,
                                          const Location& pos,
                                          const Register& input,
                                          const Location& length,
@@ -1901,7 +1902,7 @@ static void CheckSystemArrayCopyPosition(MacroAssembler* masm,
 
 // Compute base source address, base destination address, and end source address
 // for System.arraycopy* intrinsics.
-static void GenSystemArrayCopyAddresses(MacroAssembler* masm,
+static void GenSystemArrayCopyAddresses(VIXLMacroAssembler* masm,
                                         Primitive::Type type,
                                         const Register& src,
                                         const Location& src_pos,
@@ -1942,7 +1943,7 @@ static void GenSystemArrayCopyAddresses(MacroAssembler* masm,
 }
 
 void IntrinsicCodeGeneratorARM64::VisitSystemArrayCopyChar(HInvoke* invoke) {
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   LocationSummary* locations = invoke->GetLocations();
   Register src = XRegisterFrom(locations->InAt(0));
   Location src_pos = locations->InAt(1);
@@ -2096,7 +2097,7 @@ void IntrinsicCodeGeneratorARM64::VisitSystemArrayCopy(HInvoke* invoke) {
   // intrinsic and re-enable it (b/29516905).
   DCHECK(!kEmitCompilerReadBarrier);
 
-  MacroAssembler* masm = GetVIXLAssembler();
+  VIXLMacroAssembler* masm = GetVIXLAssembler();
   LocationSummary* locations = invoke->GetLocations();
 
   uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
@@ -2307,7 +2308,7 @@ void IntrinsicCodeGeneratorARM64::VisitSystemArrayCopy(HInvoke* invoke) {
 
 static void GenIsInfinite(LocationSummary* locations,
                           bool is64bit,
-                          MacroAssembler* masm) {
+                          VIXLMacroAssembler* masm) {
   Operand infinity;
   Register out;
 

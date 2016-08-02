@@ -28,6 +28,7 @@
 #include "offsets.h"
 #include "utils/array_ref.h"
 #include "utils/assembler.h"
+#include "utils/macro_assembler.h"
 
 namespace art {
 namespace x86_64 {
@@ -332,9 +333,10 @@ class NearLabel : private Label {
 };
 
 
-class X86_64Assembler FINAL : public Assembler {
+class X86_64Assembler FINAL : public MacroAssembler<PointerSize::k64> {
  public:
-  explicit X86_64Assembler(ArenaAllocator* arena) : Assembler(arena), constant_area_(arena) {}
+  explicit X86_64Assembler(ArenaAllocator* arena)
+      : MacroAssembler<PointerSize::k64>(arena), constant_area_(arena) {}
   virtual ~X86_64Assembler() {}
 
   /*
@@ -723,13 +725,11 @@ class X86_64Assembler FINAL : public Assembler {
 
   void StoreImmediateToFrame(FrameOffset dest, uint32_t imm, ManagedRegister scratch) OVERRIDE;
 
-  void StoreImmediateToThread64(ThreadOffset64 dest, uint32_t imm, ManagedRegister scratch)
-      OVERRIDE;
+  void StoreStackOffsetToThread(ThreadOffset64 thr_offs,
+                                FrameOffset fr_offs,
+                                ManagedRegister scratch) OVERRIDE;
 
-  void StoreStackOffsetToThread64(ThreadOffset64 thr_offs, FrameOffset fr_offs,
-                                  ManagedRegister scratch) OVERRIDE;
-
-  void StoreStackPointerToThread64(ThreadOffset64 thr_offs) OVERRIDE;
+  void StoreStackPointerToThread(ThreadOffset64 thr_offs) OVERRIDE;
 
   void StoreSpanning(FrameOffset dest, ManagedRegister src, FrameOffset in_off,
                      ManagedRegister scratch) OVERRIDE;
@@ -737,7 +737,7 @@ class X86_64Assembler FINAL : public Assembler {
   // Load routines
   void Load(ManagedRegister dest, FrameOffset src, size_t size) OVERRIDE;
 
-  void LoadFromThread64(ManagedRegister dest, ThreadOffset64 src, size_t size) OVERRIDE;
+  void LoadFromThread(ManagedRegister dest, ThreadOffset64 src, size_t size) OVERRIDE;
 
   void LoadRef(ManagedRegister dest, FrameOffset  src) OVERRIDE;
 
@@ -746,15 +746,16 @@ class X86_64Assembler FINAL : public Assembler {
 
   void LoadRawPtr(ManagedRegister dest, ManagedRegister base, Offset offs) OVERRIDE;
 
-  void LoadRawPtrFromThread64(ManagedRegister dest, ThreadOffset64 offs) OVERRIDE;
+  void LoadRawPtrFromThread(ManagedRegister dest, ThreadOffset64 offs) OVERRIDE;
 
   // Copying routines
   void Move(ManagedRegister dest, ManagedRegister src, size_t size);
 
-  void CopyRawPtrFromThread64(FrameOffset fr_offs, ThreadOffset64 thr_offs,
-                              ManagedRegister scratch) OVERRIDE;
+  void CopyRawPtrFromThread(FrameOffset fr_offs,
+                            ThreadOffset64 thr_offs,
+                            ManagedRegister scratch) OVERRIDE;
 
-  void CopyRawPtrToThread64(ThreadOffset64 thr_offs, FrameOffset fr_offs, ManagedRegister scratch)
+  void CopyRawPtrToThread(ThreadOffset64 thr_offs, FrameOffset fr_offs, ManagedRegister scratch)
       OVERRIDE;
 
   void CopyRef(FrameOffset dest, FrameOffset src, ManagedRegister scratch) OVERRIDE;
@@ -812,7 +813,7 @@ class X86_64Assembler FINAL : public Assembler {
   // Call to address held at [base+offset]
   void Call(ManagedRegister base, Offset offset, ManagedRegister scratch) OVERRIDE;
   void Call(FrameOffset base, Offset offset, ManagedRegister scratch) OVERRIDE;
-  void CallFromThread64(ThreadOffset64 offset, ManagedRegister scratch) OVERRIDE;
+  void CallFromThread(ThreadOffset64 offset, ManagedRegister scratch) OVERRIDE;
 
   // Generate code to check if Thread::Current()->exception_ is non-null
   // and branch to a ExceptionSlowPath if it is.
