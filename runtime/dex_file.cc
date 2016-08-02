@@ -432,6 +432,11 @@ std::unique_ptr<const DexFile> DexFile::OpenMemory(const uint8_t* base,
                                                    MemMap* mem_map,
                                                    const OatDexFile* oat_dex_file,
                                                    std::string* error_msg) {
+  if (base == nullptr || size == 0) {
+    CHECK(base == nullptr) << "Couldn't open " << location;
+    CHECK(size == 0) << "Couldn't open " << location;
+    return nullptr;
+  }
   CHECK_ALIGNED(base, 4);  // various dex file structures must be word aligned
   std::unique_ptr<DexFile> dex_file(
       new DexFile(base, size, location, location_checksum, mem_map, oat_dex_file));

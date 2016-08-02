@@ -27,8 +27,11 @@
 
 namespace art {
 
+static const uint32_t kInvalidMagic = 0xffffffffU;
+
 File OpenAndReadMagic(const char* filename, uint32_t* magic, std::string* error_msg) {
   CHECK(magic != nullptr);
+  *magic = kInvalidMagic;  // Ensure magic number is always defined.
   File fd(filename, O_RDONLY, /* check_usage */ false);
   if (fd.Fd() == -1) {
     *error_msg = StringPrintf("Unable to open '%s' : %s", filename, strerror(errno));
