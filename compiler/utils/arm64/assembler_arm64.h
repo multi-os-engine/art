@@ -84,16 +84,11 @@ class Arm64Exception {
 
 class Arm64Assembler FINAL : public Assembler {
  public:
-  // We indicate the size of the initial code generation buffer to the VIXL
-  // assembler. From there we it will automatically manage the buffer.
   explicit Arm64Assembler(ArenaAllocator* arena)
       : Assembler(arena),
-        exception_blocks_(arena->Adapter(kArenaAllocAssembler)),
-        vixl_masm_(new vixl::aarch64::MacroAssembler(kArm64BaseBufferSize)) {}
+        exception_blocks_(arena->Adapter(kArenaAllocAssembler)) {}
 
-  virtual ~Arm64Assembler() {
-    delete vixl_masm_;
-  }
+  virtual ~Arm64Assembler() {}
 
   // Finalize the code.
   void FinalizeCode() OVERRIDE;
@@ -288,8 +283,8 @@ class Arm64Assembler FINAL : public Assembler {
   ArenaVector<std::unique_ptr<Arm64Exception>> exception_blocks_;
 
  public:
-  // Vixl assembler.
-  vixl::aarch64::MacroAssembler* const vixl_masm_;
+  // VIXL assembler.
+  vixl::aarch64::MacroAssembler vixl_masm_;
 
   // Used for testing.
   friend class Arm64ManagedRegister_VixlRegisters_Test;

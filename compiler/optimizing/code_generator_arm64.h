@@ -243,7 +243,7 @@ class InstructionCodeGeneratorARM64 : public InstructionCodeGenerator {
   }
 
   Arm64Assembler* GetAssembler() const { return assembler_; }
-  vixl::aarch64::MacroAssembler* GetVIXLAssembler() { return GetAssembler()->vixl_masm_; }
+  vixl::aarch64::MacroAssembler* GetVIXLAssembler() { return &GetAssembler()->vixl_masm_; }
 
  private:
   void GenerateClassInitializationCheck(SlowPathCodeARM64* slow_path,
@@ -364,7 +364,7 @@ class ParallelMoveResolverARM64 : public ParallelMoveResolverNoSwap {
  private:
   Arm64Assembler* GetAssembler() const;
   vixl::aarch64::MacroAssembler* GetVIXLAssembler() const {
-    return GetAssembler()->vixl_masm_;
+    return &GetAssembler()->vixl_masm_;
   }
 
   CodeGeneratorARM64* const codegen_;
@@ -413,7 +413,7 @@ class CodeGeneratorARM64 : public CodeGenerator {
   HGraphVisitor* GetInstructionVisitor() OVERRIDE { return &instruction_visitor_; }
   Arm64Assembler* GetAssembler() OVERRIDE { return &assembler_; }
   const Arm64Assembler& GetAssembler() const OVERRIDE { return assembler_; }
-  vixl::aarch64::MacroAssembler* GetVIXLAssembler() { return GetAssembler()->vixl_masm_; }
+  vixl::aarch64::MacroAssembler* GetVIXLAssembler() { return &GetAssembler()->vixl_masm_; }
 
   // Emit a write barrier.
   void MarkGCCard(vixl::aarch64::Register object,

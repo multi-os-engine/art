@@ -62,14 +62,14 @@ ALWAYS_INLINE inline MemOperand AbsoluteHeapOperandFrom(Location location, size_
 }  // namespace
 
 MacroAssembler* IntrinsicCodeGeneratorARM64::GetVIXLAssembler() {
-  return codegen_->GetAssembler()->vixl_masm_;
+  return codegen_->GetVIXLAssembler();
 }
 
 ArenaAllocator* IntrinsicCodeGeneratorARM64::GetAllocator() {
   return codegen_->GetGraph()->GetArena();
 }
 
-#define __ codegen->GetAssembler()->vixl_masm_->
+#define __ codegen->GetVIXLAssembler()->
 
 static void MoveFromReturnRegister(Location trg,
                                    Primitive::Type type,
@@ -782,7 +782,7 @@ static void GenUnsafeGet(HInvoke* invoke,
   DCHECK((type == Primitive::kPrimInt) ||
          (type == Primitive::kPrimLong) ||
          (type == Primitive::kPrimNot));
-  MacroAssembler* masm = codegen->GetAssembler()->vixl_masm_;
+  MacroAssembler* masm = codegen->GetVIXLAssembler();
   Location base_loc = locations->InAt(1);
   Register base = WRegisterFrom(base_loc);      // Object pointer.
   Location offset_loc = locations->InAt(2);
@@ -916,7 +916,7 @@ static void GenUnsafePut(LocationSummary* locations,
                          bool is_volatile,
                          bool is_ordered,
                          CodeGeneratorARM64* codegen) {
-  MacroAssembler* masm = codegen->GetAssembler()->vixl_masm_;
+  MacroAssembler* masm = codegen->GetVIXLAssembler();
 
   Register base = WRegisterFrom(locations->InAt(1));    // Object pointer.
   Register offset = XRegisterFrom(locations->InAt(2));  // Long offset.
@@ -1035,7 +1035,7 @@ static void CreateIntIntIntIntIntToInt(ArenaAllocator* arena,
 }
 
 static void GenCas(LocationSummary* locations, Primitive::Type type, CodeGeneratorARM64* codegen) {
-  MacroAssembler* masm = codegen->GetAssembler()->vixl_masm_;
+  MacroAssembler* masm = codegen->GetVIXLAssembler();
 
   Register out = WRegisterFrom(locations->Out());                  // Boolean result.
 
