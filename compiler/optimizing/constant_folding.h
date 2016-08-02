@@ -45,6 +45,10 @@ class HConstantFolding : public HOptimization {
   void Run() OVERRIDE;
 
   static constexpr const char* kConstantFoldingPassName = "constant_folding";
+  static constexpr const char* kConstantFoldingAfterInliningPassName =
+    "constant_folding_after_inlining";
+  static constexpr const char* kConstantFoldingAfterBCEPassName =
+    "constant_folding_after_bce";
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HConstantFolding);

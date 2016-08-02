@@ -41,6 +41,10 @@ class InstructionSimplifier : public HOptimization {
       : HOptimization(graph, name, stats) {}
 
   static constexpr const char* kInstructionSimplifierPassName = "instruction_simplifier";
+  static constexpr const char* kInstructionSimplifierAfterBCEPassName =
+    "instruction_simplifier_after_bce";
+  static constexpr const char* kInstructionSimplifierBeforeCodegenPassName =
+    "instruction_simplifier_before_codegen";
 
   void Run() OVERRIDE;
 
