@@ -26,7 +26,9 @@ namespace mips {
 class DexCacheArrayFixups : public HOptimization {
  public:
   DexCacheArrayFixups(HGraph* graph, OptimizingCompilerStats* stats)
-      : HOptimization(graph, "dex_cache_array_fixups_mips", stats) {}
+      : HOptimization(graph, kDexCacheArrayFixupsMipsPassName, stats) {}
+
+  static constexpr const char* kDexCacheArrayFixupsMipsPassName = "dex_cache_array_fixups_mips";
 
   void Run() OVERRIDE;
 };

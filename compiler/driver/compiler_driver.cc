@@ -76,10 +76,6 @@ namespace art {
 
 static constexpr bool kTimeCompileMethod = !kIsDebugBuild;
 
-// Whether classes-to-compile and methods-to-compile are only applied to the boot image, or, when
-// given, too all compilations.
-static constexpr bool kRestrictCompilationFiltersToImage = true;
-
 // Print additional info during profile guided compilation.
 static constexpr bool kDebugProfileGuidedCompilation = false;
 
@@ -364,6 +360,7 @@ CompilerDriver::CompilerDriver(
     std::unordered_set<std::string>* image_classes,
     std::unordered_set<std::string>* compiled_classes,
     std::unordered_set<std::string>* compiled_methods,
+    std::vector<std::string>* run_passes,
     size_t thread_count,
     bool dump_stats,
     bool dump_passes,
@@ -387,6 +384,7 @@ CompilerDriver::CompilerDriver(
       image_classes_(image_classes),
       classes_to_compile_(compiled_classes),
       methods_to_compile_(compiled_methods),
+      passes_to_run_(run_passes),
       had_hard_verifier_failure_(false),
       parallel_thread_count_(thread_count),
       stats_(new AOTCompilationStats),
@@ -945,10 +943,6 @@ bool CompilerDriver::IsImageClass(const char* descriptor) const {
 }
 
 bool CompilerDriver::IsClassToCompile(const char* descriptor) const {
-  if (kRestrictCompilationFiltersToImage && !IsBootImage()) {
-    return true;
-  }
-
   if (classes_to_compile_ == nullptr) {
     return true;
   }
@@ -956,10 +950,6 @@ bool CompilerDriver::IsClassToCompile(const char* descriptor) const {
 }
 
 bool CompilerDriver::IsMethodToCompile(const MethodReference& method_ref) const {
-  if (kRestrictCompilationFiltersToImage && !IsBootImage()) {
-    return true;
-  }
-
   if (methods_to_compile_ == nullptr) {
     return true;
   }
@@ -2834,6 +2824,10 @@ bool CompilerDriver::IsMethodVerifiedWithoutFailures(uint32_t method_idx,
 size_t CompilerDriver::GetNonRelativeLinkerPatchCount() const {
   MutexLock mu(Thread::Current(), compiled_methods_lock_);
   return non_relative_linker_patch_count_;
+}
+
+const std::vector<std::string>* CompilerDriver::GetPassesToRun() const {
+  return passes_to_run_.get();
 }
 
 void CompilerDriver::SetRequiresConstructorBarrier(Thread* self,

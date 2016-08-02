@@ -97,6 +97,7 @@ class CompilerDriver {
                  std::unordered_set<std::string>* image_classes,
                  std::unordered_set<std::string>* compiled_classes,
                  std::unordered_set<std::string>* compiled_methods,
+                 std::vector<std::string>* run_passes,
                  size_t thread_count,
                  bool dump_stats,
                  bool dump_passes,
@@ -176,6 +177,8 @@ class CompilerDriver {
       REQUIRES(!compiled_methods_lock_);
   size_t GetNonRelativeLinkerPatchCount() const
       REQUIRES(!compiled_methods_lock_);
+
+  const std::vector<std::string>* GetPassesToRun() const;
 
   // Add a compiled method.
   void AddCompiledMethod(const MethodReference& method_ref,
@@ -676,6 +679,13 @@ class CompilerDriver {
   // all methods are eligible for compilation (compilation filters etc. will still apply).
   // This option may be restricted to the boot image, depending on a flag in the implementation.
   std::unique_ptr<std::unordered_set<std::string>> methods_to_compile_;
+
+  // If not null, specifies optimization passes which will be run instead of defaults.
+  // Note that passes_to_run_ is not checked for correctness and providing incorrect
+  // set of passes can lead to unexpected compiler behaviour. This is caused by dependencies
+  // between passes. Failing to satisfy them can for example lead to compiler crashes.
+  // Passing pass names which are not recognized by the compiler will result in an error.
+  std::unique_ptr<const std::vector<std::string>> passes_to_run_;
 
   bool had_hard_verifier_failure_;
 
