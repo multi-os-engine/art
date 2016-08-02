@@ -116,6 +116,7 @@ class OatTest : public CommonCompilerTest {
                                               /* image_classes */ nullptr,
                                               /* compiled_classes */ nullptr,
                                               /* compiled_methods */ nullptr,
+                                              /* passes_to_run */ nullptr,
                                               /* thread_count */ 2,
                                               /* dump_stats */ true,
                                               /* dump_passes */ true,

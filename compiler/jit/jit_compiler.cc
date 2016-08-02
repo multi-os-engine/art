@@ -160,6 +160,7 @@ JitCompiler::JitCompiler() {
       /* image_classes */ nullptr,
       /* compiled_classes */ nullptr,
       /* compiled_methods */ nullptr,
+      /* passes_to_run */ nullptr,
       /* thread_count */ 1,
       /* dump_stats */ false,
       /* dump_passes */ false,
