@@ -34,6 +34,7 @@ class GVNOptimization : public HOptimization {
   void Run() OVERRIDE;
 
   static constexpr const char* kGlobalValueNumberingPassName = "GVN";
+  static constexpr const char* kGlobalValueNumberingAfterArchPassName = "GVN::after_arch";
 
  private:
   const SideEffectsAnalysis& side_effects_;

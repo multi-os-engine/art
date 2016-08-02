@@ -64,13 +64,13 @@ public class Main {
 
   // Test when the phi is the input of the if.
 
-  /// CHECK-START: void Main.testInline(java.lang.String[]) dead_code_elimination_final (before)
+  /// CHECK-START: void Main.testInline(java.lang.String[]) dead_code_elimination::final (before)
   /// CHECK-DAG: <<Const0:i\d+>>   IntConstant 0
   /// CHECK-DAG:                   If
   /// CHECK-DAG: <<Phi:i\d+>>      Phi
   /// CHECK-DAG:                   If [<<Phi>>]
 
-  /// CHECK-START: void Main.testInline(java.lang.String[]) dead_code_elimination_final (after)
+  /// CHECK-START: void Main.testInline(java.lang.String[]) dead_code_elimination::final (after)
   /// CHECK:      If
   /// CHECK-NOT:  Phi
   /// CHECK-NOT:  If
