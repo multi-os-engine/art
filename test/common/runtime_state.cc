@@ -140,8 +140,6 @@ extern "C" JNIEXPORT void JNICALL Java_Main_ensureJitCompiled(JNIEnv* env,
 
   jit::JitCodeCache* code_cache = jit->GetCodeCache();
   OatQuickMethodHeader* header = nullptr;
-  // Make sure there is a profiling info, required by the compiler.
-  ProfilingInfo::Create(soa.Self(), method, /* retry_allocation */ true);
   while (true) {
     header = OatQuickMethodHeader::FromEntryPoint(method->GetEntryPointFromQuickCompiledCode());
     if (code_cache->ContainsPc(header->GetCode())) {
@@ -149,6 +147,8 @@ extern "C" JNIEXPORT void JNICALL Java_Main_ensureJitCompiled(JNIEnv* env,
     } else {
       // Sleep to yield to the compiler thread.
       usleep(1000);
+      // Make sure there is a profiling info, required by the compiler.
+      ProfilingInfo::Create(soa.Self(), method, /* retry_allocation */ true);
       // Will either ensure it's compiled or do the compilation itself.
       jit->CompileMethod(method, soa.Self(), /* osr */ false);
     }
