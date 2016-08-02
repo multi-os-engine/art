@@ -313,6 +313,11 @@ std::unique_ptr<const DexFile> DexFile::OpenMemory(const std::string& location,
                                                    uint32_t location_checksum,
                                                    MemMap* mem_map,
                                                    std::string* error_msg) {
+  if (base == nullptr || size == 0) {
+    CHECK(base == nullptr) << "Couldn't open " << location;
+    CHECK(size == 0) << "Couldn't open " << location;
+    return nullptr;
+  }
   return OpenMemory(mem_map->Begin(),
                     mem_map->Size(),
                     location,
