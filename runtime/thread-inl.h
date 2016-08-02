@@ -182,6 +182,7 @@ inline void Thread::TransitionFromRunnableToSuspended(ThreadState new_state) {
 }
 
 inline ThreadState Thread::TransitionFromSuspendedToRunnable() {
+  ScopedTransitioningToRunnable scoped_transitioning_to_runnable(this);
   union StateAndFlags old_state_and_flags;
   old_state_and_flags.as_int = tls32_.state_and_flags.as_int;
   int16_t old_state = old_state_and_flags.as_struct.state;
