@@ -111,8 +111,10 @@ class Instruction {
     k31t,  // op vAA, +BBBBBBBB
     k31i,  // op vAA, #+BBBBBBBB
     k31c,  // op vAA, thing@BBBBBBBB
-    k35c,  // op {vC, vD, vE, vF, vG}, thing@BBBB (B: count, A: vG)
+    k35c,  // op {vC, vD, vE, vF, vG}, thing@BBBB (A: count)
     k3rc,  // op {vCCCC .. v(CCCC+AA-1)}, meth@BBBB
+    k45cc, // op {vC, vD, vE, vF, vG}, meth@BBBB, proto@HHHH (A: count)
+    k4rcc, // op {VCCCC .. v(CCCC+AA-1)}, meth@BBBB, proto@HHHH (AA: count)
     k51l,  // op vAA, #+BBBBBBBBBBBBBBBB
   };
 
@@ -156,31 +158,32 @@ class Instruction {
   };
 
   enum VerifyFlag {
-    kVerifyNone               = 0x000000,
-    kVerifyRegA               = 0x000001,
-    kVerifyRegAWide           = 0x000002,
-    kVerifyRegB               = 0x000004,
-    kVerifyRegBField          = 0x000008,
-    kVerifyRegBMethod         = 0x000010,
-    kVerifyRegBNewInstance    = 0x000020,
-    kVerifyRegBString         = 0x000040,
-    kVerifyRegBType           = 0x000080,
-    kVerifyRegBWide           = 0x000100,
-    kVerifyRegC               = 0x000200,
-    kVerifyRegCField          = 0x000400,
-    kVerifyRegCNewArray       = 0x000800,
-    kVerifyRegCType           = 0x001000,
-    kVerifyRegCWide           = 0x002000,
-    kVerifyArrayData          = 0x004000,
-    kVerifyBranchTarget       = 0x008000,
-    kVerifySwitchTargets      = 0x010000,
-    kVerifyVarArg             = 0x020000,
-    kVerifyVarArgNonZero      = 0x040000,
-    kVerifyVarArgRange        = 0x080000,
-    kVerifyVarArgRangeNonZero = 0x100000,
-    kVerifyRuntimeOnly        = 0x200000,
-    kVerifyError              = 0x400000,
-    kVerifyRegCString         = 0x800000,
+    kVerifyNone               = 0x0000000,
+    kVerifyRegA               = 0x0000001,
+    kVerifyRegAWide           = 0x0000002,
+    kVerifyRegB               = 0x0000004,
+    kVerifyRegBField          = 0x0000008,
+    kVerifyRegBMethod         = 0x0000010,
+    kVerifyRegBNewInstance    = 0x0000020,
+    kVerifyRegBString         = 0x0000040,
+    kVerifyRegBType           = 0x0000080,
+    kVerifyRegBWide           = 0x0000100,
+    kVerifyRegC               = 0x0000200,
+    kVerifyRegCField          = 0x0000400,
+    kVerifyRegCNewArray       = 0x0000800,
+    kVerifyRegCType           = 0x0001000,
+    kVerifyRegCWide           = 0x0002000,
+    kVerifyArrayData          = 0x0004000,
+    kVerifyBranchTarget       = 0x0008000,
+    kVerifySwitchTargets      = 0x0010000,
+    kVerifyVarArg             = 0x0020000,
+    kVerifyVarArgNonZero      = 0x0040000,
+    kVerifyVarArgRange        = 0x0080000,
+    kVerifyVarArgRangeNonZero = 0x0100000,
+    kVerifyRuntimeOnly        = 0x0200000,
+    kVerifyError              = 0x0400000,
+    kVerifyRegCString         = 0x0800000,
+    kVerifyRegHProto          = 0x1000000
   };
 
   static constexpr uint32_t kMaxVarArgRegs = 5;
@@ -229,6 +232,12 @@ class Instruction {
   const Instruction* Next_3xx() const {
     DCHECK(FormatOf(Opcode()) >= k32x && FormatOf(Opcode()) <= k3rc);
     return RelativeAt(3);
+  }
+
+  // Returns a pointer to the instruction after this 4xx instruction in the stream.
+  const Instruction* Next_4xx() const {
+    DCHECK(FormatOf(Opcode()) >= k45cc && FormatOf(Opcode()) <= k4rcc);
+    return RelativeAt(4);
   }
 
   // Returns a pointer to the instruction after this 51l instruction in the stream.
@@ -317,6 +326,12 @@ class Instruction {
   uint8_t VRegA_51l() const {
     return VRegA_51l(Fetch16(0));
   }
+  uint4_t VRegA_45cc() const {
+    return VRegA_45cc(Fetch16(0));
+  }
+  uint8_t VRegA_4rcc() const {
+    return VRegA_4rcc(Fetch16(0));
+  }
 
   // The following methods return the vA operand for various instruction formats. The "inst_data"
   // parameter holds the first 16 bits of instruction which the returned value is decoded from.
@@ -341,6 +356,8 @@ class Instruction {
   uint4_t VRegA_35c(uint16_t inst_data) const;
   uint8_t VRegA_3rc(uint16_t inst_data) const;
   uint8_t VRegA_51l(uint16_t inst_data) const;
+  uint4_t VRegA_45cc(uint16_t inst_data) const;
+  uint8_t VRegA_4rcc(uint16_t inst_data) const;
 
   // VRegB
   bool HasVRegB() const;
@@ -379,6 +396,8 @@ class Instruction {
   uint16_t VRegB_35c() const;
   uint16_t VRegB_3rc() const;
   uint64_t VRegB_51l() const;  // vB_wide
+  uint16_t VRegB_45cc() const;
+  uint16_t VRegB_4rcc() const;
 
   // The following methods return the vB operand for all instruction formats where it is encoded in
   // the first 16 bits of instruction. The "inst_data" parameter holds these 16 bits. The returned
@@ -401,6 +420,15 @@ class Instruction {
   uint4_t VRegC_25x() const;
   uint4_t VRegC_35c() const;
   uint16_t VRegC_3rc() const;
+  uint4_t VRegC_45cc() const;
+  uint16_t VRegC_4rcc() const;
+
+
+  // VRegH
+  bool HasVRegH() const;
+  int32_t VRegH() const;
+  uint16_t VRegH_45cc() const;
+  uint16_t VRegH_4rcc() const;
 
   // Fills the given array with the 'arg' array of the instruction.
   bool HasVarArgs35c() const;
@@ -540,6 +568,10 @@ class Instruction {
   int GetVerifyTypeArgumentC() const {
     return (kInstructionVerifyFlags[Opcode()] & (kVerifyRegC | kVerifyRegCField |
         kVerifyRegCNewArray | kVerifyRegCType | kVerifyRegCWide | kVerifyRegCString));
+  }
+
+  int GetVerifyTypeArgumentH() const {
+    return (kInstructionVerifyFlags[Opcode()] & kVerifyRegHProto);
   }
 
   int GetVerifyExtraFlags() const {

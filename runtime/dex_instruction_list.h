@@ -269,8 +269,9 @@
   V(0xF7, LIBERATE_VARIABLE, "liberate-variable", k22c, kIndexStringRef, kExperimental, kVerifyRegA | kVerifyRegB | kVerifyRegCString) \
   V(0xF8, BOX_LAMBDA, "box-lambda", k22x, kIndexNone, kContinue | kExperimental, kVerifyRegA | kVerifyRegB) \
   V(0xF9, UNBOX_LAMBDA, "unbox-lambda", k22c, kIndexTypeRef, kContinue | kThrow | kExperimental, kVerifyRegA | kVerifyRegB | kVerifyRegCType) \
-  V(0xFA, UNUSED_FA, "unused-fa", k10x, kIndexUnknown, 0, kVerifyError) \
-  V(0xFB, UNUSED_FB, "unused-fb", k10x, kIndexUnknown, 0, kVerifyError) \
+  /* TODO(narayan): The following two entires are placeholders. */ \
+  V(0xFA, INVOKE_POLYMORPHIC, "invoke-polymorphic", k45cc, kIndexUnknown, 0, kVerifyError) \
+  V(0xFB, INVOKE_POLYMORPHIC_RANGE, "invoke-polymorphic/range", k4rcc, kIndexUnknown, 0, kVerifyError) \
   V(0xFC, UNUSED_FC, "unused-fc", k10x, kIndexUnknown, 0, kVerifyError) \
   V(0xFD, UNUSED_FD, "unused-fd", k10x, kIndexUnknown, 0, kVerifyError) \
   V(0xFE, UNUSED_FE, "unused-fe", k10x, kIndexUnknown, 0, kVerifyError) \
