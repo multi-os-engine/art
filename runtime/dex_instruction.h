@@ -111,7 +111,7 @@ class Instruction {
     k31t,  // op vAA, +BBBBBBBB
     k31i,  // op vAA, #+BBBBBBBB
     k31c,  // op vAA, thing@BBBBBBBB
-    k35c,  // op {vC, vD, vE, vF, vG}, thing@BBBB (B: count, A: vG)
+    k35c,  // op {vC, vD, vE, vF, vG}, thing@BBBB (AA: count)
     k3rc,  // op {vCCCC .. v(CCCC+AA-1)}, meth@BBBB
     k51l,  // op vAA, #+BBBBBBBBBBBBBBBB
   };
