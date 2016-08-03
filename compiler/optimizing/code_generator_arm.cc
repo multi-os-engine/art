@@ -431,7 +431,8 @@ class ReadBarrierMarkSlowPathARM : public SlowPathCode {
            instruction_->IsLoadString() ||
            instruction_->IsInstanceOf() ||
            instruction_->IsCheckCast() ||
-           (instruction_->IsInvokeVirtual()) && instruction_->GetLocations()->Intrinsified())
+           (instruction_->IsInvokeVirtual() && instruction_->GetLocations()->Intrinsified()) ||
+           (instruction_->IsInvokeStaticOrDirect() && instruction_->GetLocations()->Intrinsified()))
         << "Unexpected instruction in read barrier marking slow path: "
         << instruction_->DebugName();
 
@@ -470,6 +471,11 @@ class ReadBarrierMarkSlowPathARM : public SlowPathCode {
 
   DISALLOW_COPY_AND_ASSIGN(ReadBarrierMarkSlowPathARM);
 };
+
+SlowPathCode* CodeGeneratorARM::MakeReadBarrierMarkSlowPathARM(HInstruction* instruction,
+                                                               Location obj) {
+  return new (GetGraph()->GetArena()) ReadBarrierMarkSlowPathARM(instruction, obj);
+}
 
 // Slow path generating a read barrier for a heap reference.
 class ReadBarrierForHeapReferenceSlowPathARM : public SlowPathCode {
@@ -6434,7 +6440,8 @@ void CodeGeneratorARM::GenerateReferenceLoadWithBakerReadBarrier(HInstruction* i
   // Introduce a dependency on the lock_word including the rb_state,
   // which shall prevent load-load reordering without using
   // a memory barrier (which would be more expensive).
-  // obj is unchanged by this operation, but its value now depends on temp_reg.
+  // `obj` is unchanged by this operation, but its value now depends
+  // on `temp_reg`.
   __ add(obj, obj, ShifterOperand(temp_reg, LSR, 32));
 
   // The actual reference load.

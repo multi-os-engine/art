@@ -598,6 +598,12 @@ class CodeGeneratorARM64 : public CodeGenerator {
                                                  bool needs_null_check,
                                                  bool use_load_acquire);
 
+  // Factory creating a ReadBarrierMarkSlowPathARM64 instance, used
+  // by IntrinsicCodeGeneratorARM64. This helper has been introduced
+  // to keep ReadBarrierMarkSlowPathARM64 internal, as are all the
+  // other slow paths.
+  SlowPathCodeARM64* MakeReadBarrierMarkSlowPathARM64(HInstruction* instruction, Location obj);
+
   // Generate a read barrier for a heap reference within `instruction`
   // using a slow path.
   //

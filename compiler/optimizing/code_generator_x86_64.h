@@ -447,6 +447,12 @@ class CodeGeneratorX86_64 : public CodeGenerator {
                                                  Location temp,
                                                  bool needs_null_check);
 
+  // Factory creating a ReadBarrierMarkSlowPathX86_64 instance, used
+  // by IntrinsicCodeGeneratorX86_64. This helper has been introduced
+  // to keep ReadBarrierMarkSlowPathX86_64 internal, as are all the
+  // other slow paths.
+  SlowPathCode* MakeReadBarrierMarkSlowPathX86_64(HInstruction* instruction, Location obj);
+
   // Generate a read barrier for a heap reference within `instruction`
   // using a slow path.
   //

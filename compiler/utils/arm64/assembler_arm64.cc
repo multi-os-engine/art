@@ -810,6 +810,12 @@ void Arm64Assembler::UnpoisonHeapReference(Register reg) {
   ___ Neg(reg, Operand(reg));
 }
 
+void Arm64Assembler::MaybePoisonHeapReference(Register reg) {
+  if (kPoisonHeapReferences) {
+    PoisonHeapReference(reg);
+  }
+}
+
 void Arm64Assembler::MaybeUnpoisonHeapReference(Register reg) {
   if (kPoisonHeapReferences) {
     UnpoisonHeapReference(reg);

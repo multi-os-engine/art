@@ -487,7 +487,8 @@ class ReadBarrierMarkSlowPathX86_64 : public SlowPathCode {
            instruction_->IsLoadString() ||
            instruction_->IsInstanceOf() ||
            instruction_->IsCheckCast() ||
-           (instruction_->IsInvokeVirtual()) && instruction_->GetLocations()->Intrinsified())
+           (instruction_->IsInvokeVirtual() && instruction_->GetLocations()->Intrinsified()) ||
+           (instruction_->IsInvokeStaticOrDirect() && instruction_->GetLocations()->Intrinsified()))
         << "Unexpected instruction in read barrier marking slow path: "
         << instruction_->DebugName();
 
@@ -524,6 +525,11 @@ class ReadBarrierMarkSlowPathX86_64 : public SlowPathCode {
 
   DISALLOW_COPY_AND_ASSIGN(ReadBarrierMarkSlowPathX86_64);
 };
+
+SlowPathCode* CodeGeneratorX86_64::MakeReadBarrierMarkSlowPathX86_64(HInstruction* instruction,
+                                                                     Location obj) {
+  return new (GetGraph()->GetArena()) ReadBarrierMarkSlowPathX86_64(instruction, obj);
+}
 
 // Slow path generating a read barrier for a heap reference.
 class ReadBarrierForHeapReferenceSlowPathX86_64 : public SlowPathCode {
