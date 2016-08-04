@@ -1028,11 +1028,33 @@ ENTRY art_quick_set64_instance
 END art_quick_set64_instance
 
     /*
-     * Entry from managed code to resolve a string, this stub will allocate a String and deliver an
-     * exception on error. On success the String is returned. R0 holds the string index. The fast
-     * path check for hit in strings cache has already been performed.
+     * Entry from managed code to resolve a string, this stub will
+     * check the dex cache for a matching string (the fast path), and if not found,
+     * it will allocate a String and deliver an exception on error.
+     * On success the String is returned. R0 holds the string index.
      */
-ONE_ARG_DOWNCALL art_quick_resolve_string, artResolveStringFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
+ENTRY art_quick_resolve_string
+    ldr    r1, [sp, #0]                   @ load referrer
+    ldr    r1, [r1, #ART_METHOD_DECLARING_CLASS_OFFSET]   @ load declaring class
+    ldr    r1, [r1, #DECLARING_CLASS_DEX_CACHE_STRINGS_OFFSET]    @ load string dex cache
+    movw   r2, #RESOLVED_STRING_DEX_CACHE_SIZE
+    and    r2, r0, r2
+    mov    r2, r2, LSL #RESOLVE_STRING_DEX_CACHE_TWO_MULTIPLE
+    add    r1, r2, r1
+    ldrexd r2, r3, [r1]                   @ load index into r3 and pointer into r2
+    cmp    r0, r3
+    bne    .Lart_quick_resolve_string_slow_path
+    mov    r0, r2
+    bx     lr
+
+.Lart_quick_resolve_string_slow_path:
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r2  @ save callee saves in case of GC
+    mov    r1, r9                     @ pass Thread::Current
+    mov    r3, sp
+    bl     artResolveStringFromCode     @ (uint32_t type_idx, Method* method, Thread*)
+    RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
+    RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
+END art_quick_resolve_string
 
 // Generate the allocation entrypoints for each allocator.
 GENERATE_ALLOC_ENTRYPOINTS_FOR_EACH_ALLOCATOR

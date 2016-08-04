@@ -23,7 +23,9 @@
 #include "jit/jit.h"
 #include "lock_word.h"
 #include "mirror/class.h"
+#include "mirror/dex_cache.h"
 #include "mirror/string.h"
+#include "utils/dex_cache_arrays_layout.h"
 #include "runtime.h"
 #include "thread.h"
 #endif
@@ -233,7 +235,25 @@ ADD_TEST_EQ(MIRROR_STRING_COUNT_OFFSET, art::mirror::String::CountOffset().Int32
 #define MIRROR_STRING_VALUE_OFFSET (8 + MIRROR_OBJECT_HEADER_SIZE)
 ADD_TEST_EQ(MIRROR_STRING_VALUE_OFFSET, art::mirror::String::ValueOffset().Int32Value())
 
+// Offsets for string dex cache access
 
+// Size of string dex cache, which is declared in dex_cache.h.
+// Must be a power of 2 (assembly efficiency for mod).
+#define RESOLVED_STRING_DEX_CACHE_SIZE 0x3FF
+ADD_TEST_EQ(static_cast<size_t>(RESOLVED_STRING_DEX_CACHE_SIZE),
+            art::mirror::DexCache::kDexCacheStringCacheSize - 1)
+
+// The power of 2 of 8 (num bytes of uint64_t). Allows us to use bit shifts.
+#define RESOLVE_STRING_DEX_CACHE_TWO_MULTIPLE 3
+
+// Offsets within java.lang.reflect.ArtMethod.
+#define DECLARING_CLASS_DEX_CACHE_STRINGS_OFFSET 48
+ADD_TEST_EQ(DECLARING_CLASS_DEX_CACHE_STRINGS_OFFSET,
+            art::mirror::Class::DexCacheStringsOffset().Int32Value())
+
+#define ART_METHOD_DECLARING_CLASS_OFFSET 0
+ADD_TEST_EQ(ART_METHOD_DECLARING_CLASS_OFFSET,
+            art::ArtMethod::DeclaringClassOffset().Int32Value())
 
 #if defined(__cplusplus)
 }  // End of CheckAsmSupportOffsets.

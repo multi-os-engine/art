@@ -19,6 +19,7 @@
 
 #include "base/enums.h"
 #include "base/iteration_range.h"
+#include "dex_cache.h"
 #include "dex_file.h"
 #include "class_flags.h"
 #include "gc_root.h"
@@ -54,6 +55,8 @@ class Constructor;
 class DexCache;
 class IfTable;
 class Method;
+
+using StringDexCacheType = std::atomic<uint64_t>;
 
 // C++ mirror of java.lang.Class
 class MANAGED Class FINAL : public Object {
@@ -1219,8 +1222,8 @@ class MANAGED Class FINAL : public Object {
   bool GetSlowPathEnabled() SHARED_REQUIRES(Locks::mutator_lock_);
   void SetSlowPath(bool enabled) SHARED_REQUIRES(Locks::mutator_lock_);
 
-  GcRoot<String>* GetDexCacheStrings() SHARED_REQUIRES(Locks::mutator_lock_);
-  void SetDexCacheStrings(GcRoot<String>* new_dex_cache_strings)
+  StringDexCacheType* GetDexCacheStrings() SHARED_REQUIRES(Locks::mutator_lock_);
+  void SetDexCacheStrings(StringDexCacheType* new_dex_cache_strings)
       SHARED_REQUIRES(Locks::mutator_lock_);
   static MemberOffset DexCacheStringsOffset() {
     return OFFSET_OF_OBJECT_MEMBER(Class, dex_cache_strings_);
