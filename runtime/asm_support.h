@@ -24,6 +24,8 @@
 #include "lock_word.h"
 #include "mirror/class.h"
 #include "mirror/string.h"
+#include "mirror/dex_cache.h"
+#include "utils/dex_cache_arrays_layout.h"
 #include "runtime.h"
 #include "thread.h"
 #endif
@@ -226,6 +228,135 @@ ADD_TEST_EQ(MIRROR_STRING_COUNT_OFFSET, art::mirror::String::CountOffset().Int32
 #define MIRROR_STRING_VALUE_OFFSET (8 + MIRROR_OBJECT_HEADER_SIZE)
 ADD_TEST_EQ(MIRROR_STRING_VALUE_OFFSET, art::mirror::String::ValueOffset().Int32Value())
 
+// Offsets for string dex cache access
+
+// Size of string dex cache, which is declared in dex_cache.h.
+// Must be a power of 2 (assembly efficiency for mod).
+#define RESOLVED_STRING_DEX_CACHE_SIZE 0x3FF
+ADD_TEST_EQ(static_cast<size_t>(RESOLVED_STRING_DEX_CACHE_SIZE),
+            art::mirror::DEX_CACHE_SIZE - 1)
+
+// The power of 2 of 8 (num bytes of uint64_t). Allows us to use bit shifts.
+#define RESOLVE_STRING_DEX_CACHE_TWO_MULTIPLE 3
+
+// Offsets within java.lang.reflect.ArtMethod.
+#define DECLARING_CLASS_DEX_CACHE_STRINGS_OFFSET 48
+ADD_TEST_EQ(DECLARING_CLASS_DEX_CACHE_STRINGS_OFFSET,
+            art::mirror::Class::DexCacheStringsOffset().Int32Value())
+
+
+#define ART_METHOD_DECLARING_CLASS_OFFSET 0
+ADD_TEST_EQ(ART_METHOD_DECLARING_CLASS_OFFSET,
+            art::ArtMethod::DeclaringClassOffset().Int32Value())
+
+#define ART_METHOD_DEX_CACHE_METHODS_OFFSET_32 20
+//ADD_TEST_EQ(ART_METHOD_DEX_CACHE_METHODS_OFFSET_32,
+//            art::ArtMethod::DexCacheResolvedMethodsOffset(art::ConvertToPointerSize(4)).Int32Value())
+
+#define ART_METHOD_DEX_CACHE_METHODS_OFFSET_64 24
+//ADD_TEST_EQ(ART_METHOD_DEX_CACHE_METHODS_OFFSET_64,
+//            art::ArtMethod::DexCacheResolvedMethodsOffset(art::ConverToPointerSize(8)).Int32Value())
+
+#define ART_METHOD_DEX_CACHE_TYPES_OFFSET_32 24
+//ADD_TEST_EQ(ART_METHOD_DEX_CACHE_TYPES_OFFSET_32,
+//            art::ArtMethod::DexCacheResolvedTypesOffset(art::ConverToPointerSize(4)).Int32Value())
+
+#define ART_METHOD_DEX_CACHE_TYPES_OFFSET_64 32
+//ADD_TEST_EQ(ART_METHOD_DEX_CACHE_TYPES_OFFSET_64,
+//            art::ArtMethod::DexCacheResolvedTypesOffset(art::ConverToPointerSize(8)).Int32Value())
+
+#define ART_METHOD_JNI_OFFSET_32 28
+//ADD_TEST_EQ(ART_METHOD_JNI_OFFSET_32,
+//            art::ArtMethod::EntryPointFromJniOffset(art::ConverToPointerSize(4)).Int32Value())
+
+#define ART_METHOD_JNI_OFFSET_64 40
+//ADD_TEST_EQ(ART_METHOD_JNI_OFFSET_64,
+//            art::ArtMethod::EntryPointFromJniOffset(art::ConverToPointerSize(8)).Int32Value())
+
+#define ART_METHOD_QUICK_CODE_OFFSET_32 32
+//ADD_TEST_EQ(ART_METHOD_QUICK_CODE_OFFSET_32,
+//            art::ArtMethod::EntryPointFromQuickCompiledCodeOffset(art::ConverToPointerSize(4)).Int32Value())
+
+#define ART_METHOD_QUICK_CODE_OFFSET_64 48
+//ADD_TEST_EQ(ART_METHOD_QUICK_CODE_OFFSET_64,
+//            art::ArtMethod::EntryPointFromQuickCompiledCodeOffset(art::ConverToPointerSize(8)).Int32Value())
+
+#define LOCK_WORD_STATE_SHIFT 30
+ADD_TEST_EQ(LOCK_WORD_STATE_SHIFT, static_cast<int32_t>(art::LockWord::kStateShift))
+
+//#define LOCK_WORD_STATE_MASK 0xC0000000
+//ADD_TEST_EQ(LOCK_WORD_STATE_MASK, static_cast<uint32_t>(art::LockWord::kStateMaskShifted))
+
+#define LOCK_WORD_READ_BARRIER_STATE_SHIFT 28
+ADD_TEST_EQ(LOCK_WORD_READ_BARRIER_STATE_SHIFT,
+            static_cast<int32_t>(art::LockWord::kReadBarrierStateShift))
+
+#define LOCK_WORD_READ_BARRIER_STATE_MASK 0x30000000
+ADD_TEST_EQ(LOCK_WORD_READ_BARRIER_STATE_MASK,
+            static_cast<int32_t>(art::LockWord::kReadBarrierStateMaskShifted))
+
+//#define LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED 0xCFFFFFFF
+//ADD_TEST_EQ(LOCK_WORD_READ_BARRIER_STATE_MASK_TOGGLED,
+//            static_cast<uint32_t>(art::LockWord::kReadBarrierStateMaskShiftedToggled))
+
+#define LOCK_WORD_THIN_LOCK_COUNT_ONE 65536
+ADD_TEST_EQ(LOCK_WORD_THIN_LOCK_COUNT_ONE, static_cast<int32_t>(art::LockWord::kThinLockCountOne))
+
+//#define OBJECT_ALIGNMENT_MASK 7
+//ADD_TEST_EQ(static_cast<size_t>(OBJECT_ALIGNMENT_MASK), art::kObjectAlignment - 1)
+
+//#define OBJECT_ALIGNMENT_MASK_TOGGLED 0xFFFFFFF8
+//ADD_TEST_EQ(static_cast<uint32_t>(OBJECT_ALIGNMENT_MASK_TOGGLED),
+//            ~static_cast<uint32_t>(art::kObjectAlignment - 1))
+
+#define ROSALLOC_MAX_THREAD_LOCAL_BRACKET_SIZE 128
+ADD_TEST_EQ(ROSALLOC_MAX_THREAD_LOCAL_BRACKET_SIZE,
+            static_cast<int32_t>(art::gc::allocator::RosAlloc::kMaxThreadLocalBracketSize))
+
+#define ROSALLOC_BRACKET_QUANTUM_SIZE_SHIFT 3
+ADD_TEST_EQ(ROSALLOC_BRACKET_QUANTUM_SIZE_SHIFT,
+            static_cast<int32_t>(art::gc::allocator::RosAlloc::kThreadLocalBracketQuantumSizeShift))
+
+#define ROSALLOC_BRACKET_QUANTUM_SIZE_MASK 7
+ADD_TEST_EQ(ROSALLOC_BRACKET_QUANTUM_SIZE_MASK,
+            static_cast<int32_t>(art::gc::allocator::RosAlloc::kThreadLocalBracketQuantumSize - 1))
+
+#define ROSALLOC_BRACKET_QUANTUM_SIZE_MASK_TOGGLED32 0xfffffff8
+ADD_TEST_EQ(static_cast<uint32_t>(ROSALLOC_BRACKET_QUANTUM_SIZE_MASK_TOGGLED32),
+            ~static_cast<uint32_t>(
+                art::gc::allocator::RosAlloc::kThreadLocalBracketQuantumSize - 1))
+
+#define ROSALLOC_BRACKET_QUANTUM_SIZE_MASK_TOGGLED64 0xfffffffffffffff8
+ADD_TEST_EQ(static_cast<uint64_t>(ROSALLOC_BRACKET_QUANTUM_SIZE_MASK_TOGGLED64),
+            ~static_cast<uint64_t>(
+                art::gc::allocator::RosAlloc::kThreadLocalBracketQuantumSize - 1))
+
+#define ROSALLOC_RUN_FREE_LIST_OFFSET 8
+ADD_TEST_EQ(ROSALLOC_RUN_FREE_LIST_OFFSET,
+            static_cast<int32_t>(art::gc::allocator::RosAlloc::RunFreeListOffset()))
+
+#define ROSALLOC_RUN_FREE_LIST_HEAD_OFFSET 0
+ADD_TEST_EQ(ROSALLOC_RUN_FREE_LIST_HEAD_OFFSET,
+            static_cast<int32_t>(art::gc::allocator::RosAlloc::RunFreeListHeadOffset()))
+
+#define ROSALLOC_RUN_FREE_LIST_SIZE_OFFSET 16
+ADD_TEST_EQ(ROSALLOC_RUN_FREE_LIST_SIZE_OFFSET,
+            static_cast<int32_t>(art::gc::allocator::RosAlloc::RunFreeListSizeOffset()))
+
+#define ROSALLOC_SLOT_NEXT_OFFSET 0
+ADD_TEST_EQ(ROSALLOC_SLOT_NEXT_OFFSET,
+            static_cast<int32_t>(art::gc::allocator::RosAlloc::RunSlotNextOffset()))
+// Assert this so that we can avoid zeroing the next field by installing the class pointer.
+ADD_TEST_EQ(ROSALLOC_SLOT_NEXT_OFFSET, MIRROR_OBJECT_CLASS_OFFSET)
+
+#define THREAD_SUSPEND_REQUEST 1
+ADD_TEST_EQ(THREAD_SUSPEND_REQUEST, static_cast<int32_t>(art::kSuspendRequest))
+
+#define THREAD_CHECKPOINT_REQUEST 2
+ADD_TEST_EQ(THREAD_CHECKPOINT_REQUEST, static_cast<int32_t>(art::kCheckpointRequest))
+
+#define JIT_CHECK_OSR (-1)
+ADD_TEST_EQ(JIT_CHECK_OSR, static_cast<int32_t>(art::jit::kJitCheckForOSR))
 
 
 #if defined(__cplusplus)

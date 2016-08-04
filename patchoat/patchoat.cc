@@ -592,8 +592,8 @@ void PatchOat::PatchDexFileArrays(mirror::ObjectArray<mirror::Object>* img_roots
     // 64-bit values here, clearing the top 32 bits for 32-bit targets. The zero-extension is
     // done by casting to the unsigned type uintptr_t before casting to int64_t, i.e.
     //     static_cast<int64_t>(reinterpret_cast<uintptr_t>(image_begin_ + offset))).
-    GcRoot<mirror::String>* orig_strings = orig_dex_cache->GetStrings();
-    GcRoot<mirror::String>* relocated_strings = RelocatedAddressOfPointer(orig_strings);
+    std::atomic<uint64_t>* orig_strings = orig_dex_cache->GetStrings();
+    std::atomic<uint64_t>* relocated_strings = RelocatedAddressOfPointer(orig_strings);
     copy_dex_cache->SetField64<false>(
         mirror::DexCache::StringsOffset(),
         static_cast<int64_t>(reinterpret_cast<uintptr_t>(relocated_strings)));

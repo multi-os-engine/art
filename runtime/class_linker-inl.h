@@ -27,6 +27,8 @@
 #include "mirror/object_array.h"
 #include "handle_scope-inl.h"
 
+#include <atomic>
+
 namespace art {
 
 inline mirror::Class* ClassLinker::FindSystemClass(Thread* self, const char* descriptor) {
@@ -61,11 +63,14 @@ inline mirror::Class* ClassLinker::FindArrayClass(Thread* self, mirror::Class** 
 }
 
 inline mirror::String* ClassLinker::ResolveString(uint32_t string_idx, ArtMethod* referrer) {
+  mirror::String* resolved_string = nullptr;
   mirror::Class* declaring_class = referrer->GetDeclaringClass();
   // MethodVerifier refuses methods with string_idx out of bounds.
-  DCHECK_LT(string_idx, declaring_class->GetDexCache()->NumStrings());
-  mirror::String* resolved_string = declaring_class->GetDexCacheStrings()[string_idx].Read();
-  if (UNLIKELY(resolved_string == nullptr)) {
+  DCHECK_LT(string_idx, declaring_class->GetDexFile().NumStringIds());
+  uint64_t read_string = declaring_class->GetDexCacheStrings()[string_idx % declaring_class->GetDexCache()->NumStrings()].load(std::memory_order_relaxed);
+  uint32_t index = (read_string & 0xFFFFFFFF00000000ULL) >> 32;
+  resolved_string = (mirror::String*)(read_string & 0xFFFFFFFF);
+  if (UNLIKELY(resolved_string == nullptr || index != string_idx)) {
     StackHandleScope<1> hs(Thread::Current());
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
     const DexFile& dex_file = *dex_cache->GetDexFile();
