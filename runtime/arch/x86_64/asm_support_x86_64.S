@@ -31,7 +31,7 @@
     // Clang/llvm does not support .altmacro. However, the clang/llvm preprocessor doesn't
     // separate the backslash and parameter by a space. Everything just works.
     #define RAW_VAR(name) \name
-    #define VAR(name) SYMBOL(\name)
+    #define VAR(name) \name
     #define PLT_VAR(name) \name@PLT
     #define REG_VAR(name) %\name
     #define CALL_MACRO(name) \name
