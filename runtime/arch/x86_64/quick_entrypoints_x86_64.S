@@ -1426,7 +1426,9 @@ DEFINE_FUNCTION art_quick_memcpy
     ret
 END_FUNCTION art_quick_memcpy
 
-DEFINE_FUNCTION art_quick_test_suspend
+// FIXME: Avoid the SYMBOL() here as the DEFINE_FUNCTION macro already uses SYMBOL() internally.
+// Currently, the fault handler requires the two underscores on Mac.
+DEFINE_FUNCTION SYMBOL(art_quick_test_suspend)
     SETUP_SAVE_EVERYTHING_CALLEE_SAVE_FRAME     // save everything for GC
     // Outgoing argument set up
     movq %gs:THREAD_SELF_OFFSET, %rdi           // pass Thread::Current()
