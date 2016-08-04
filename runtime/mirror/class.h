@@ -1213,8 +1213,8 @@ class MANAGED Class FINAL : public Object {
   bool GetSlowPathEnabled() SHARED_REQUIRES(Locks::mutator_lock_);
   void SetSlowPath(bool enabled) SHARED_REQUIRES(Locks::mutator_lock_);
 
-  GcRoot<String>* GetDexCacheStrings() SHARED_REQUIRES(Locks::mutator_lock_);
-  void SetDexCacheStrings(GcRoot<String>* new_dex_cache_strings)
+  std::atomic<uint64_t>* GetDexCacheStrings() SHARED_REQUIRES(Locks::mutator_lock_);
+  void SetDexCacheStrings(std::atomic<uint64_t>* new_dex_cache_strings)
       SHARED_REQUIRES(Locks::mutator_lock_);
   static MemberOffset DexCacheStringsOffset() {
     return OFFSET_OF_OBJECT_MEMBER(Class, dex_cache_strings_);

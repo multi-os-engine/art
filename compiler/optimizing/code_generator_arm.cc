@@ -5477,11 +5477,14 @@ HLoadString::LoadKind CodeGeneratorARM::GetSupportedLoadStringKind(
   if (kEmitCompilerReadBarrier) {
     switch (desired_string_load_kind) {
       case HLoadString::LoadKind::kBootImageLinkTimeAddress:
+//        return HLoadString::LoadKind::kDexCacheViaMethod;
       case HLoadString::LoadKind::kBootImageLinkTimePcRelative:
+//        return HLoadString::LoadKind::kDexCacheViaMethod;
       case HLoadString::LoadKind::kBootImageAddress:
         // TODO: Implement for read barrier.
         return HLoadString::LoadKind::kDexCacheViaMethod;
       default:
+//        return HLoadString::LoadKind::kDexCacheViaMethod;
         break;
     }
   }
@@ -5533,12 +5536,14 @@ void InstructionCodeGeneratorARM::VisitLoadString(HLoadString* load) {
 
   switch (load->GetLoadKind()) {
     case HLoadString::LoadKind::kBootImageLinkTimeAddress: {
+      LOG(INFO) << "kBootImageLinkTimePcRelative, ";
       DCHECK(!kEmitCompilerReadBarrier);
       __ LoadLiteral(out, codegen_->DeduplicateBootImageStringLiteral(load->GetDexFile(),
                                                                       load->GetStringIndex()));
       return;  // No dex cache slow path.
     }
     case HLoadString::LoadKind::kBootImageLinkTimePcRelative: {
+      LOG(INFO) << "kBootImageLinkTimePcRelative, " << load << "\n";
       DCHECK(!kEmitCompilerReadBarrier);
       CodeGeneratorARM::PcRelativePatchInfo* labels =
           codegen_->NewPcRelativeStringPatch(load->GetDexFile(), load->GetStringIndex());
@@ -5557,55 +5562,14 @@ void InstructionCodeGeneratorARM::VisitLoadString(HLoadString* load) {
       __ LoadLiteral(out, codegen_->DeduplicateBootImageAddressLiteral(address));
       return;  // No dex cache slow path.
     }
-    case HLoadString::LoadKind::kDexCacheAddress: {
-      DCHECK_NE(load->GetAddress(), 0u);
-      uint32_t address = dchecked_integral_cast<uint32_t>(load->GetAddress());
-      // 16-bit LDR immediate has a 5-bit offset multiplied by the size and that gives
-      // a 128B range. To try and reduce the number of literals if we load multiple strings,
-      // simply split the dex cache address to a 128B aligned base loaded from a literal
-      // and the remaining offset embedded in the load.
-      static_assert(sizeof(GcRoot<mirror::String>) == 4u, "Expected GC root to be 4 bytes.");
-      DCHECK_ALIGNED(load->GetAddress(), 4u);
-      constexpr size_t offset_bits = /* encoded bits */ 5 + /* scale */ 2;
-      uint32_t base_address = address & ~MaxInt<uint32_t>(offset_bits);
-      uint32_t offset = address & MaxInt<uint32_t>(offset_bits);
-      __ LoadLiteral(out, codegen_->DeduplicateDexCacheAddressLiteral(base_address));
-      // /* GcRoot<mirror::String> */ out = *(base_address + offset)
-      GenerateGcRootFieldLoad(load, out_loc, out, offset);
-      break;
-    }
-    case HLoadString::LoadKind::kDexCachePcRelative: {
-      Register base_reg = locations->InAt(0).AsRegister<Register>();
-      HArmDexCacheArraysBase* base = load->InputAt(0)->AsArmDexCacheArraysBase();
-      int32_t offset = load->GetDexCacheElementOffset() - base->GetElementOffset();
-      // /* GcRoot<mirror::String> */ out = *(dex_cache_arrays_base + offset)
-      GenerateGcRootFieldLoad(load, out_loc, base_reg, offset);
-      break;
-    }
-    case HLoadString::LoadKind::kDexCacheViaMethod: {
-      Register current_method = locations->InAt(0).AsRegister<Register>();
-
-      // /* GcRoot<mirror::Class> */ out = current_method->declaring_class_
-      GenerateGcRootFieldLoad(
-          load, out_loc, current_method, ArtMethod::DeclaringClassOffset().Int32Value());
-      // /* GcRoot<mirror::String>[] */ out = out->dex_cache_strings_
-      __ LoadFromOffset(kLoadWord, out, out, mirror::Class::DexCacheStringsOffset().Int32Value());
-      // /* GcRoot<mirror::String> */ out = out[string_index]
-      GenerateGcRootFieldLoad(
-          load, out_loc, out, CodeGenerator::GetCacheOffset(load->GetStringIndex()));
-      break;
-    }
     default:
-      LOG(FATAL) << "Unexpected load kind: " << load->GetLoadKind();
-      UNREACHABLE();
+      break;
   }
 
-  if (!load->IsInDexCache()) {
-    SlowPathCode* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathARM(load);
-    codegen_->AddSlowPath(slow_path);
-    __ CompareAndBranchIfZero(out, slow_path->GetEntryLabel());
-    __ Bind(slow_path->GetExitLabel());
-  }
+  SlowPathCode* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathARM(load);
+  codegen_->AddSlowPath(slow_path);
+  __ b(slow_path->GetEntryLabel(), AL);
+  __ Bind(slow_path->GetExitLabel());
 }
 
 static int32_t GetExceptionTlsOffset() {
