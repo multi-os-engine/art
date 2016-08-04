@@ -80,7 +80,7 @@ class DexCacheArraysLayout {
 
   size_t StringOffset(uint32_t string_idx) const;
 
-  size_t StringsSize(size_t num_elements) const;
+  size_t StringsSize() const;
 
   size_t StringsAlignment() const;
 
