@@ -897,12 +897,12 @@ inline uint32_t Class::NumDirectInterfaces() {
   }
 }
 
-inline void Class::SetDexCacheStrings(GcRoot<String>* new_dex_cache_strings) {
+inline void Class::SetDexCacheStrings(std::atomic<uint64_t>* new_dex_cache_strings) {
   SetFieldPtr<false>(DexCacheStringsOffset(), new_dex_cache_strings);
 }
 
-inline GcRoot<String>* Class::GetDexCacheStrings() {
-  return GetFieldPtr<GcRoot<String>*>(DexCacheStringsOffset());
+inline std::atomic<uint64_t>* Class::GetDexCacheStrings() {
+  return (std::atomic<uint64_t>*) GetFieldPtr64<uint64_t*>(DexCacheStringsOffset());
 }
 
 template<ReadBarrierOption kReadBarrierOption, class Visitor>
@@ -1056,8 +1056,8 @@ inline void Class::FixupNativePointers(mirror::Class* dest,
     dest->SetMethodsPtrInternal(new_methods);
   }
   // Update dex cache strings.
-  GcRoot<mirror::String>* strings = GetDexCacheStrings();
-  GcRoot<mirror::String>* new_strings = visitor(strings);
+  std::atomic<uint64_t>* strings = GetDexCacheStrings();
+  std::atomic<uint64_t>* new_strings = visitor(strings);
   if (strings != new_strings) {
     dest->SetDexCacheStrings(new_strings);
   }
