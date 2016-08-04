@@ -1108,7 +1108,39 @@ DEFINE_FUNCTION art_quick_alloc_object_region_tlab
     ALLOC_OBJECT_TLAB_SLOW_PATH artAllocObjectFromCodeRegionTLAB
 END_FUNCTION art_quick_alloc_object_region_tlab
 
-ONE_ARG_DOWNCALL art_quick_resolve_string, artResolveStringFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
+DEFINE_FUNCTION art_quick_resolve_string
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME ebx, ebx
+    movl FRAME_SIZE_REFS_ONLY_CALLEE_SAVE(%esp), %ecx           // get referrer
+    movl ART_METHOD_DECLARING_CLASS_OFFSET(%ecx), %ecx          // get declaring class
+    movl DECLARING_CLASS_DEX_CACHE_STRINGS_OFFSET(%ecx), %ecx   // get string dex cache
+    movl LITERAL(RESOLVED_STRING_DEX_CACHE_SIZE), %edx
+    andl %eax, %edx
+    shl LITERAL(RESOLVE_STRING_DEX_CACHE_TWO_MULTIPLE), %edx
+    addl %ecx, %edx
+    movl %eax, %ecx
+    cmpxchg8b (%edx)         // load index into %edx and pointer into %eax
+    cmp %edx, %ecx
+    jne .Lart_quick_resolve_string_slow_path
+    RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
+    ret
+
+.Lart_quick_resolve_string_slow_path:
+    movl %ecx, %eax
+    // Outgoing argument set up
+    subl LITERAL(8), %esp                  // push padding
+    CFI_ADJUST_CFA_OFFSET(8)
+    pushl %fs:THREAD_SELF_OFFSET                 // pass Thread::Current()
+    CFI_ADJUST_CFA_OFFSET(4)
+    PUSH eax                                     // pass arg1
+    call SYMBOL(artResolveStringFromCode)
+    addl LITERAL(16), %esp                 // pop arguments
+    CFI_ADJUST_CFA_OFFSET(-16)
+    RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
+    RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
+
+END_FUNCTION art_quick_resolve_string
+
+
 ONE_ARG_DOWNCALL art_quick_initialize_static_storage, artInitializeStaticStorageFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 ONE_ARG_DOWNCALL art_quick_initialize_type, artInitializeTypeFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 ONE_ARG_DOWNCALL art_quick_initialize_type_and_verify_access, artInitializeTypeAndVerifyAccessFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
