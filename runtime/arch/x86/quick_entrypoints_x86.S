@@ -885,6 +885,7 @@ END_MACRO
 
 // Generate the allocation entrypoints for each allocator.
 GENERATE_ALLOC_ENTRYPOINTS_FOR_EACH_ALLOCATOR
+GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY(_region_tlab, RegionTLAB)
 
 // A hand-written override for GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_rosalloc, RosAlloc).
 DEFINE_FUNCTION art_quick_alloc_object_rosalloc

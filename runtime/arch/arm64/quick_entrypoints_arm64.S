@@ -1895,6 +1895,70 @@ ENTRY art_quick_alloc_object_rosalloc
     RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 END art_quick_alloc_object_rosalloc
 
+// The common fast path code for art_quick_alloc_array_region_tlab.
+.macro ALLOC_ARRAY_TLAB_FAST_PATH slowPathLabel, xClass, wClass, xCount, wCount, xTemp0, wTemp0, xTemp1, wTemp1, xTemp2, wTemp2
+    // Check null class
+    cbz    \wClass, \slowPathLabel
+    ldr    \wTemp0, [\xClass, #MIRROR_CLASS_STATUS_OFFSET]    // Check class status.
+    cmp    \wTemp0, #MIRROR_CLASS_STATUS_INITIALIZED
+    bne    \slowPathLabel
+                                                              // Add a fake dependence from the
+                                                              // following access flag and size
+                                                              // loads to the status load.
+                                                              // This is to prevent those loads
+                                                              // from being reordered above the
+                                                              // status load and reading wrong
+                                                              // values (an alternative is to use
+                                                              // a load-acquire for the status).
+    eor    \xTemp0, \xTemp0, \xTemp0
+    add    \xClass, \xClass, \xTemp0
+    // Arrays are never finalizable, no need to check.
+    ldr    \wTemp0, [\xClass, #MIRROR_CLASS_COMPONENT_TYPE_OFFSET] // Load component type
+    ldr    \wTemp0, [\xTemp0, #MIRROR_CLASS_OBJECT_PRIMITIVE_TYPE_OFFSET]
+    lsr    \xTemp0, \xTemp0, #16                              // Component size shift is in high 16
+                                                              // bits.
+    lsl    \xTemp1, \xCount, \xTemp0                          // Calculate data size
+    add    \xTemp1, \xTemp1, #MIRROR_INT_ARRAY_DATA_OFFSET    // Add int array offset
+    add    \xTemp0, \xTemp0, #1                               // Add 4 to the length only if the
+                                                              // component size shift is 3
+                                                              // (for alignment).
+    and    \xTemp0, \xTemp0, #4
+    add    \xTemp1, \xTemp1, \xTemp0
+    add    \xTemp1, \xTemp1, #OBJECT_ALIGNMENT_MASK           // Align size
+    and    \xTemp1, \xTemp1, #OBJECT_ALIGNMENT_MASK_TOGGLED
+    ldr    \xTemp0, [xSELF, #THREAD_LOCAL_POS_OFFSET]         // Check tlab for space.
+    mov    \xTemp2, \xTemp0
+    add    \xTemp0, \xTemp0, \xTemp1
+    ldr    \xTemp1, [xSELF, #THREAD_LOCAL_END_OFFSET]
+
+    cmp    \xTemp0, \xTemp1
+    bhi    \slowPathLabel
+
+    // "Point of no slow path". Won't go to the slow path from here on. OK to clobber x0 and x1.
+                                                              // Round up the object size by the
+                                                              // object alignment. (addr + 7) & ~7.
+
+                                                              // Move old thread_local_pos to x0
+                                                              // for the return value.
+    mov    x0, \xTemp2
+    str    \xTemp0, [xSELF, #THREAD_LOCAL_POS_OFFSET]         // Store new thread_local_pos.
+    ldr    \xTemp0, [xSELF, #THREAD_LOCAL_OBJECTS_OFFSET]     // Increment thread_local_objects.
+    add    \xTemp0, \xTemp0, #1
+    str    \xTemp0, [xSELF, #THREAD_LOCAL_OBJECTS_OFFSET]
+    POISON_HEAP_REF \wClass
+    str    \wClass, [x0, #MIRROR_OBJECT_CLASS_OFFSET]         // Store the class pointer.
+    str    \wCount, [x0, #MIRROR_ARRAY_LENGTH_OFFSET]         // Store the array length.
+                                                              // Fence. This is "ish" not "ishst" so
+                                                              // that the code after this allocation
+                                                              // site will see the right values in
+                                                              // the fields of the class.
+                                                              // Alternatively we could use "ishst"
+                                                              // if we use load-acquire for the
+                                                              // class status load.)
+    dmb    ish
+    ret
+.endm
+
 // The common fast path code for art_quick_alloc_object_tlab and art_quick_alloc_object_region_tlab.
 //
 // x0: type_idx/return value, x1: ArtMethod*, x2: Class*, xSELF(x19): Thread::Current
@@ -2021,6 +2085,62 @@ ENTRY art_quick_alloc_object_region_tlab
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 END art_quick_alloc_object_region_tlab
+
+// A hand-written override for GENERATE_ALLOC_ENTRYPOINTS_ALLOC_ARRAY(_region_tlab, RegionTLAB)
+    .extern artAllocArrayFromCodeRegionTLAB
+ENTRY art_quick_alloc_array_region_tlab
+    // Fast path array allocation for region tlab allocation.
+    // x0: uint32_t type_idx
+    // x1: int32_t component_count
+    // x2: ArtMethod* method
+    // x3: Thread* self
+    // x2-x7: free.
+#if !defined(USE_READ_BARRIER)
+    mvn    x0, xzr                                            // Read barrier must be enabled here.
+    ret                                                       // Return -1.
+#endif
+    ldr    x3, [x2, #ART_METHOD_DEX_CACHE_TYPES_OFFSET_64]    // Load dex cache resolved types array
+                                                              // Load the class (x2)
+    ldr    w3, [x3, x0, lsl #COMPRESSED_REFERENCE_SIZE_SHIFT]
+
+    // Most common case: GC is not marking.
+    ldr    w4, [xSELF, #THREAD_IS_GC_MARKING_OFFSET]
+    cbnz   x4, .Lart_quick_alloc_array_region_tlab_marking
+.Lart_quick_alloc_array_region_tlab_do_allocation:
+//    ALLOC_OBJECT_TLAB_FAST_PATH .Lart_quick_alloc_object_region_tlab_slow_path
+ALLOC_ARRAY_TLAB_FAST_PATH .Lart_quick_alloc_array_region_tlab_slow_path, x3, w3, x1, w1, x4, w4, x5, w5, x6, w6
+// b .Lart_quick_alloc_array_region_tlab_slow_path
+.Lart_quick_alloc_array_region_tlab_marking:
+    // GC is marking, check the lock word of the class for the mark bit.
+    // If the class is null, go slow path. The check is required to read the lock word.
+    cbz    w3, .Lart_quick_alloc_array_region_tlab_slow_path
+    // Class is not null, check mark bit in lock word.
+    ldr    w4, [x3, #MIRROR_OBJECT_LOCK_WORD_OFFSET]
+    // If the bit is not zero, do the allocation.
+    tbnz   w4, #LOCK_WORD_MARK_BIT_SHIFT, .Lart_quick_alloc_array_region_tlab_do_allocation
+    b .Lart_quick_alloc_array_region_tlab_slow_path
+                                                              // The read barrier slow path. Mark
+                                                              // the class.
+    stp    x0, x1, [sp, #-32]!                                // Save registers (x0, x1, x2, lr).
+    stp    x2, xLR, [sp, #16]
+    mov    x0, x3                                             // Pass the class as the first param.
+    bl     artReadBarrierMark
+    mov    x3, x0                                             // Get the (marked) class back.
+    ldp    x0, x1, [sp, #0]                                   // Restore registers.
+    ldp    x2, xLR, [sp, #16]
+    add    sp, sp, #32
+    b      .Lart_quick_alloc_array_region_tlab_do_allocation
+.Lart_quick_alloc_array_region_tlab_slow_path:
+    // x0: uint32_t type_idx
+    // x1: int32_t component_count
+    // x2: ArtMethod* method
+    // x3: Thread* self
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME // save callee saves in case of GC
+    mov    x3, xSELF                  // pass Thread::Current
+    bl     artAllocArrayFromCodeRegionTLAB
+    RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
+    RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
+END art_quick_alloc_array_region_tlab
 
     /*
      * Called by managed code when the thread has been asked to suspend.
