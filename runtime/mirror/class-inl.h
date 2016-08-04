@@ -26,7 +26,7 @@
 #include "base/length_prefixed_array.h"
 #include "class_loader.h"
 #include "common_throws.h"
-#include "dex_cache.h"
+//#include "dex_cache.h"
 #include "dex_file.h"
 #include "gc/heap-inl.h"
 #include "iftable.h"
@@ -897,12 +897,12 @@ inline uint32_t Class::NumDirectInterfaces() {
   }
 }
 
-inline void Class::SetDexCacheStrings(GcRoot<String>* new_dex_cache_strings) {
+inline void Class::SetDexCacheStrings(StringDexCacheType* new_dex_cache_strings) {
   SetFieldPtr<false>(DexCacheStringsOffset(), new_dex_cache_strings);
 }
 
-inline GcRoot<String>* Class::GetDexCacheStrings() {
-  return GetFieldPtr<GcRoot<String>*>(DexCacheStringsOffset());
+inline StringDexCacheType* Class::GetDexCacheStrings() {
+  return reinterpret_cast<StringDexCacheType*>(GetFieldPtr64<uint64_t*>(DexCacheStringsOffset()));
 }
 
 template<ReadBarrierOption kReadBarrierOption, class Visitor>
@@ -1056,8 +1056,8 @@ inline void Class::FixupNativePointers(mirror::Class* dest,
     dest->SetMethodsPtrInternal(new_methods);
   }
   // Update dex cache strings.
-  GcRoot<mirror::String>* strings = GetDexCacheStrings();
-  GcRoot<mirror::String>* new_strings = visitor(strings);
+  StringDexCacheType* strings = GetDexCacheStrings();
+  StringDexCacheType* new_strings = visitor(strings);
   if (strings != new_strings) {
     dest->SetDexCacheStrings(new_strings);
   }

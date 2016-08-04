@@ -49,3 +49,4 @@ else
 fi
 
 zip $TEST_NAME.jar classes.dex
+
