@@ -23,6 +23,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <atomic>
 
 #include "art_field-inl.h"
 #include "art_method-inl.h"
@@ -43,6 +44,7 @@
 #include "lambda/leaking_allocator.h"
 #include "lambda/shorty_field_type.h"
 #include "mirror/class-inl.h"
+#include "mirror/dex_cache.h"
 #include "mirror/method.h"
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
@@ -349,7 +351,7 @@ static inline const char* GetStringDataByDexStringIndexOrThrow(ShadowFrame& shad
   mirror::Class* declaring_class = method->GetDeclaringClass();
   if (!do_access_check) {
     // MethodVerifier refuses methods with string_idx out of bounds.
-    DCHECK_LT(string_idx, declaring_class->GetDexCache()->NumStrings());
+    DCHECK_LT(string_idx, dex_file->GetHeader().string_ids_size_);
   } else {
     // Access checks enabled: perform string index bounds ourselves.
     if (string_idx >= dex_file->GetHeader().string_ids_size_) {
@@ -752,15 +754,20 @@ static inline String* ResolveString(Thread* self, ShadowFrame& shadow_frame, uin
   ArtMethod* method = shadow_frame.GetMethod();
   mirror::Class* declaring_class = method->GetDeclaringClass();
   // MethodVerifier refuses methods with string_idx out of bounds.
-  DCHECK_LT(string_idx, declaring_class->GetDexCache()->NumStrings());
-  mirror::String* s = declaring_class->GetDexCacheStrings()[string_idx].Read();
-  if (UNLIKELY(s == nullptr)) {
+  DCHECK_LT(string_idx % declaring_class->GetDexCache()->NumStrings(),
+            declaring_class->GetDexFile().NumStringIds());
+  uint64_t s = declaring_class->GetDexCacheStrings()
+      [string_idx % mirror::DexCache::kDexCacheStringCacheSize].load(
+          std::memory_order_relaxed);
+  uint32_t index = (s & 0xFFFFFFFF00000000ULL) >> 32;
+  mirror::String* string_ptr = reinterpret_cast<mirror::String*>(s & 0xFFFFFFFF);
+  if (UNLIKELY(string_ptr == nullptr || index != string_idx)) {
     StackHandleScope<1> hs(self);
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
-    s = Runtime::Current()->GetClassLinker()->ResolveString(*method->GetDexFile(), string_idx,
-                                                            dex_cache);
+    string_ptr = Runtime::Current()->GetClassLinker()->ResolveString(*method->GetDexFile(),
+                                                                     string_idx, dex_cache);
   }
-  return s;
+  return string_ptr;
 }
 
 // Handles div-int, div-int/2addr, div-int/li16 and div-int/lit8 instructions.

@@ -23,6 +23,7 @@
 #include "base/logging.h"
 #include "gc_root.h"
 #include "globals.h"
+#include "mirror/dex_cache.h"
 #include "primitive.h"
 
 namespace art {
@@ -36,7 +37,7 @@ inline DexCacheArraysLayout::DexCacheArraysLayout(PointerSize pointer_size,
       strings_offset_(
           RoundUp(methods_offset_ + MethodsSize(header.method_ids_size_), StringsAlignment())),
       fields_offset_(
-          RoundUp(strings_offset_ + StringsSize(header.string_ids_size_), FieldsAlignment())),
+          RoundUp(strings_offset_ + StringsSize(), FieldsAlignment())),
       size_(
           RoundUp(fields_offset_ + FieldsSize(header.field_ids_size_), Alignment())) {
 }
@@ -48,9 +49,8 @@ inline DexCacheArraysLayout::DexCacheArraysLayout(PointerSize pointer_size, cons
 inline size_t DexCacheArraysLayout::Alignment() const {
   // GcRoot<> alignment is 4, i.e. lower than or equal to the pointer alignment.
   static_assert(alignof(GcRoot<mirror::Class>) == 4, "Expecting alignof(GcRoot<>) == 4");
-  static_assert(alignof(GcRoot<mirror::String>) == 4, "Expecting alignof(GcRoot<>) == 4");
-  // Pointer alignment is the same as pointer size.
-  return static_cast<size_t>(pointer_size_);
+  static_assert(alignof(uint64_t) == 8, "Expecting alignof(uint64_t) == 8");
+  return sizeof(uint64_t);
 }
 
 template <typename T>
@@ -87,15 +87,17 @@ inline size_t DexCacheArraysLayout::MethodsAlignment() const {
 }
 
 inline size_t DexCacheArraysLayout::StringOffset(uint32_t string_idx) const {
-  return strings_offset_ + ElementOffset(GcRootAsPointerSize<mirror::String>(), string_idx);
+  return strings_offset_ + ElementOffset(ConvertToPointerSize(sizeof(uint64_t)),
+                                         string_idx % StringsSize());
 }
 
-inline size_t DexCacheArraysLayout::StringsSize(size_t num_elements) const {
-  return ArraySize(GcRootAsPointerSize<mirror::String>(), num_elements);
+inline size_t DexCacheArraysLayout::StringsSize() const {
+  return ArraySize(ConvertToPointerSize(sizeof(uint64_t)),
+                   mirror::DexCache::kDexCacheStringCacheSize);
 }
 
 inline size_t DexCacheArraysLayout::StringsAlignment() const {
-  return alignof(GcRoot<mirror::String>);
+  return alignof(uint64_t);
 }
 
 inline size_t DexCacheArraysLayout::FieldOffset(uint32_t field_idx) const {
