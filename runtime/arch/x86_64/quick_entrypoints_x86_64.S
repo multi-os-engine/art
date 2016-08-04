@@ -1104,7 +1104,31 @@ DEFINE_FUNCTION art_quick_alloc_object_region_tlab
     ALLOC_OBJECT_TLAB_SLOW_PATH artAllocObjectFromCodeRegionTLAB
 END_FUNCTION art_quick_alloc_object_region_tlab
 
-ONE_ARG_DOWNCALL art_quick_resolve_string, artResolveStringFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
+DEFINE_FUNCTION art_quick_resolve_string
+    movq 8(%rsp), %rcx                      // get referrer
+    movl ART_METHOD_DECLARING_CLASS_OFFSET(%rcx), %ecx         // get declaring class
+    movq DECLARING_CLASS_DEX_CACHE_STRINGS_OFFSET(%ecx), %rcx   // get string dex cache
+    movq LITERAL(RESOLVED_STRING_DEX_CACHE_SIZE), %rdx
+    andq %rdi, %rdx
+    shlq LITERAL(RESOLVE_STRING_DEX_CACHE_TWO_MULTIPLE), %rdx
+    addq %rcx, %rdx
+    movq %rax, %rcx
+    cmpxchg8b (%rdx)         // load index into %rdx and pointer into %rax
+    cmp %rdx, %rdi
+    jne .Lart_quick_resolve_string_slow_path
+    ret
+
+.Lart_quick_resolve_string_slow_path:
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME
+    movq %rcx, %rax
+    // Outgoing argument set up
+    movq %gs:THREAD_SELF_OFFSET, %rsi    // pass Thread::Current()
+
+    call artResolveStringFromCode           // artResolveStringFromCode(arg0, referrer, Thread*)
+    RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME     // restore frame up to return address
+    RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
+END_FUNCTION art_quick_resolve_string
+
 ONE_ARG_DOWNCALL art_quick_initialize_static_storage, artInitializeStaticStorageFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 ONE_ARG_DOWNCALL art_quick_initialize_type, artInitializeTypeFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 ONE_ARG_DOWNCALL art_quick_initialize_type_and_verify_access, artInitializeTypeAndVerifyAccessFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER

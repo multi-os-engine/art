@@ -1066,9 +1066,9 @@ static bool RelocateInPlace(ImageHeader& image_header,
     for (int32_t i = 0, count = dex_caches->GetLength(); i < count; ++i) {
       mirror::DexCache* dex_cache = dex_caches->Get<kVerifyNone, kWithoutReadBarrier>(i);
       // Fix up dex cache pointers.
-      GcRoot<mirror::String>* strings = dex_cache->GetStrings();
+      std::atomic<uint64_t>* strings = dex_cache->GetStrings();
       if (strings != nullptr) {
-        GcRoot<mirror::String>* new_strings = fixup_adapter.ForwardObject(strings);
+        std::atomic<uint64_t>* new_strings = fixup_adapter.ForwardObject(strings);
         if (strings != new_strings) {
           dex_cache->SetStrings(new_strings);
         }
