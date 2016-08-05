@@ -653,6 +653,7 @@ class LocationSummary : public ArenaObject<kArenaAllocLocationSummary> {
   // Whether these are locations for an intrinsified call.
   bool intrinsified_;
 
+  friend class RegisterAllocatorTest;
   ART_FRIEND_TEST(RegisterAllocatorTest, ExpectedInRegisterHint);
   ART_FRIEND_TEST(RegisterAllocatorTest, SameAsFirstInputHint);
   DISALLOW_COPY_AND_ASSIGN(LocationSummary);
