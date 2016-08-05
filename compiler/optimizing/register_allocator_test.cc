@@ -36,18 +36,31 @@ namespace art {
 
 class RegisterAllocatorTest : public CommonCompilerTest {};
 
+using Strategy = RegisterAllocator::Strategy;
+
+// This array should contain all register allocation strategies that should be tested.
+static Strategy strategies[] = {
+    Strategy::kRegisterAllocatorLinearScan,
+    Strategy::kRegisterAllocatorGraphColor
+};
+
 static bool Check(const uint16_t* data) {
-  ArenaPool pool;
-  ArenaAllocator allocator(&pool);
-  HGraph* graph = CreateCFG(&allocator, data);
-  std::unique_ptr<const X86InstructionSetFeatures> features_x86(
-      X86InstructionSetFeatures::FromCppDefines());
-  x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
-  SsaLivenessAnalysis liveness(graph, &codegen);
-  liveness.Analyze();
-  RegisterAllocator* register_allocator = RegisterAllocator::Create(&allocator, &codegen, liveness);
-  register_allocator->AllocateRegisters();
-  return register_allocator->Validate(false);
+  bool successful = true;
+  for (Strategy strategy : strategies) {
+    ArenaPool pool;
+    ArenaAllocator allocator(&pool);
+    HGraph* graph = CreateCFG(&allocator, data);
+    std::unique_ptr<const X86InstructionSetFeatures> features_x86(
+        X86InstructionSetFeatures::FromCppDefines());
+    x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
+    SsaLivenessAnalysis liveness(graph, &codegen);
+    liveness.Analyze();
+    RegisterAllocator* register_allocator =
+        RegisterAllocator::Create(&allocator, &codegen, liveness, strategy);
+    register_allocator->AllocateRegisters();
+    successful &= register_allocator->Validate(false);
+  }
+  return successful;
 }
 
 /**
@@ -288,30 +301,33 @@ TEST_F(RegisterAllocatorTest, Loop3) {
     Instruction::MOVE | 1 << 12 | 0 << 8,
     Instruction::GOTO | 0xF900);
 
-  ArenaPool pool;
-  ArenaAllocator allocator(&pool);
-  HGraph* graph = CreateCFG(&allocator, data);
-  std::unique_ptr<const X86InstructionSetFeatures> features_x86(
-      X86InstructionSetFeatures::FromCppDefines());
-  x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
-  SsaLivenessAnalysis liveness(graph, &codegen);
-  liveness.Analyze();
-  RegisterAllocator* register_allocator = RegisterAllocator::Create(&allocator, &codegen, liveness);
-  register_allocator->AllocateRegisters();
-  ASSERT_TRUE(register_allocator->Validate(false));
+  for (Strategy strategy : strategies) {
+    ArenaPool pool;
+    ArenaAllocator allocator(&pool);
+    HGraph* graph = CreateCFG(&allocator, data);
+    std::unique_ptr<const X86InstructionSetFeatures> features_x86(
+        X86InstructionSetFeatures::FromCppDefines());
+    x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
+    SsaLivenessAnalysis liveness(graph, &codegen);
+    liveness.Analyze();
+    RegisterAllocator* register_allocator =
+        RegisterAllocator::Create(&allocator, &codegen, liveness, strategy);
+    register_allocator->AllocateRegisters();
+    ASSERT_TRUE(register_allocator->Validate(false));
 
-  HBasicBlock* loop_header = graph->GetBlocks()[2];
-  HPhi* phi = loop_header->GetFirstPhi()->AsPhi();
+    HBasicBlock* loop_header = graph->GetBlocks()[2];
+    HPhi* phi = loop_header->GetFirstPhi()->AsPhi();
 
-  LiveInterval* phi_interval = phi->GetLiveInterval();
-  LiveInterval* loop_update = phi->InputAt(1)->GetLiveInterval();
-  ASSERT_TRUE(phi_interval->HasRegister());
-  ASSERT_TRUE(loop_update->HasRegister());
-  ASSERT_NE(phi_interval->GetRegister(), loop_update->GetRegister());
+    LiveInterval* phi_interval = phi->GetLiveInterval();
+    LiveInterval* loop_update = phi->InputAt(1)->GetLiveInterval();
+    ASSERT_TRUE(phi_interval->HasRegister());
+    ASSERT_TRUE(loop_update->HasRegister());
+    ASSERT_NE(phi_interval->GetRegister(), loop_update->GetRegister());
 
-  HBasicBlock* return_block = graph->GetBlocks()[3];
-  HReturn* ret = return_block->GetLastInstruction()->AsReturn();
-  ASSERT_EQ(phi_interval->GetRegister(), ret->InputAt(0)->GetLiveInterval()->GetRegister());
+    HBasicBlock* return_block = graph->GetBlocks()[3];
+    HReturn* ret = return_block->GetLastInstruction()->AsReturn();
+    ASSERT_EQ(phi_interval->GetRegister(), ret->InputAt(0)->GetLiveInterval()->GetRegister());
+  }
 }
 
 TEST_F(RegisterAllocatorTest, FirstRegisterUse) {
@@ -376,18 +392,21 @@ TEST_F(RegisterAllocatorTest, DeadPhi) {
     Instruction::GOTO | 0xFD00,
     Instruction::RETURN_VOID);
 
-  ArenaPool pool;
-  ArenaAllocator allocator(&pool);
-  HGraph* graph = CreateCFG(&allocator, data);
-  SsaDeadPhiElimination(graph).Run();
-  std::unique_ptr<const X86InstructionSetFeatures> features_x86(
-      X86InstructionSetFeatures::FromCppDefines());
-  x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
-  SsaLivenessAnalysis liveness(graph, &codegen);
-  liveness.Analyze();
-  RegisterAllocator* register_allocator = RegisterAllocator::Create(&allocator, &codegen, liveness);
-  register_allocator->AllocateRegisters();
-  ASSERT_TRUE(register_allocator->Validate(false));
+  for (Strategy strategy : strategies) {
+    ArenaPool pool;
+    ArenaAllocator allocator(&pool);
+    HGraph* graph = CreateCFG(&allocator, data);
+    SsaDeadPhiElimination(graph).Run();
+    std::unique_ptr<const X86InstructionSetFeatures> features_x86(
+        X86InstructionSetFeatures::FromCppDefines());
+    x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
+    SsaLivenessAnalysis liveness(graph, &codegen);
+    liveness.Analyze();
+    RegisterAllocator* register_allocator =
+        RegisterAllocator::Create(&allocator, &codegen, liveness, strategy);
+    register_allocator->AllocateRegisters();
+    ASSERT_TRUE(register_allocator->Validate(false));
+  }
 }
 
 /**
@@ -508,15 +527,15 @@ static HGraph* BuildIfElseWithPhi(ArenaAllocator* allocator,
                                               graph->GetDexFile(),
                                               dex_cache,
                                               0);
-*input2 = new (allocator) HInstanceFieldGet(parameter,
-                                            Primitive::kPrimInt,
-                                            MemberOffset(42),
-                                            false,
-                                            kUnknownFieldIndex,
-                                            kUnknownClassDefIndex,
-                                            graph->GetDexFile(),
-                                            dex_cache,
-                                            0);
+  *input2 = new (allocator) HInstanceFieldGet(parameter,
+                                              Primitive::kPrimInt,
+                                              MemberOffset(42),
+                                              false,
+                                              kUnknownFieldIndex,
+                                              kUnknownClassDefIndex,
+                                              graph->GetDexFile(),
+                                              dex_cache,
+                                              0);
   then->AddInstruction(*input1);
   else_->AddInstruction(*input2);
   join->AddInstruction(new (allocator) HExit());
@@ -534,82 +553,90 @@ TEST_F(RegisterAllocatorTest, PhiHint) {
   HPhi *phi;
   HInstruction *input1, *input2;
 
-  {
-    HGraph* graph = BuildIfElseWithPhi(&allocator, &phi, &input1, &input2);
-    std::unique_ptr<const X86InstructionSetFeatures> features_x86(
-        X86InstructionSetFeatures::FromCppDefines());
-    x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
-    SsaLivenessAnalysis liveness(graph, &codegen);
-    liveness.Analyze();
+  for (Strategy strategy : strategies) {
+    if (strategy == Strategy::kRegisterAllocatorGraphColor) {
+      // TODO: We do not test the graph coloring allocator here, because it appears
+      //       that this test creates a slightly malformed CFG.
+      continue;
+    }
 
-    // Check that the register allocator is deterministic.
-    RegisterAllocator* register_allocator =
-        RegisterAllocator::Create(&allocator, &codegen, liveness);
-    register_allocator->AllocateRegisters();
+    {
+      HGraph* graph = BuildIfElseWithPhi(&allocator, &phi, &input1, &input2);
+      std::unique_ptr<const X86InstructionSetFeatures> features_x86(
+          X86InstructionSetFeatures::FromCppDefines());
+      x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
+      SsaLivenessAnalysis liveness(graph, &codegen);
+      liveness.Analyze();
 
-    ASSERT_EQ(input1->GetLiveInterval()->GetRegister(), 0);
-    ASSERT_EQ(input2->GetLiveInterval()->GetRegister(), 0);
-    ASSERT_EQ(phi->GetLiveInterval()->GetRegister(), 0);
-  }
+      // Check that the register allocator is deterministic.
+      RegisterAllocator* register_allocator =
+          RegisterAllocator::Create(&allocator, &codegen, liveness, strategy);
+      register_allocator->AllocateRegisters();
 
-  {
-    HGraph* graph = BuildIfElseWithPhi(&allocator, &phi, &input1, &input2);
-    std::unique_ptr<const X86InstructionSetFeatures> features_x86(
-        X86InstructionSetFeatures::FromCppDefines());
-    x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
-    SsaLivenessAnalysis liveness(graph, &codegen);
-    liveness.Analyze();
+      ASSERT_EQ(input1->GetLiveInterval()->GetRegister(), 0);
+      ASSERT_EQ(input2->GetLiveInterval()->GetRegister(), 0);
+      ASSERT_EQ(phi->GetLiveInterval()->GetRegister(), 0);
+    }
 
-    // Set the phi to a specific register, and check that the inputs get allocated
-    // the same register.
-    phi->GetLocations()->UpdateOut(Location::RegisterLocation(2));
-    RegisterAllocator* register_allocator =
-        RegisterAllocator::Create(&allocator, &codegen, liveness);
-    register_allocator->AllocateRegisters();
+    {
+      HGraph* graph = BuildIfElseWithPhi(&allocator, &phi, &input1, &input2);
+      std::unique_ptr<const X86InstructionSetFeatures> features_x86(
+          X86InstructionSetFeatures::FromCppDefines());
+      x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
+      SsaLivenessAnalysis liveness(graph, &codegen);
+      liveness.Analyze();
 
-    ASSERT_EQ(input1->GetLiveInterval()->GetRegister(), 2);
-    ASSERT_EQ(input2->GetLiveInterval()->GetRegister(), 2);
-    ASSERT_EQ(phi->GetLiveInterval()->GetRegister(), 2);
-  }
+      // Set the phi to a specific register, and check that the inputs get allocated
+      // the same register.
+      phi->GetLocations()->UpdateOut(Location::RegisterLocation(2));
+      RegisterAllocator* register_allocator =
+          RegisterAllocator::Create(&allocator, &codegen, liveness, strategy);
+      register_allocator->AllocateRegisters();
 
-  {
-    HGraph* graph = BuildIfElseWithPhi(&allocator, &phi, &input1, &input2);
-    std::unique_ptr<const X86InstructionSetFeatures> features_x86(
-        X86InstructionSetFeatures::FromCppDefines());
-    x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
-    SsaLivenessAnalysis liveness(graph, &codegen);
-    liveness.Analyze();
+      ASSERT_EQ(input1->GetLiveInterval()->GetRegister(), 2);
+      ASSERT_EQ(input2->GetLiveInterval()->GetRegister(), 2);
+      ASSERT_EQ(phi->GetLiveInterval()->GetRegister(), 2);
+    }
 
-    // Set input1 to a specific register, and check that the phi and other input get allocated
-    // the same register.
-    input1->GetLocations()->UpdateOut(Location::RegisterLocation(2));
-    RegisterAllocator* register_allocator =
-        RegisterAllocator::Create(&allocator, &codegen, liveness);
-    register_allocator->AllocateRegisters();
+    {
+      HGraph* graph = BuildIfElseWithPhi(&allocator, &phi, &input1, &input2);
+      std::unique_ptr<const X86InstructionSetFeatures> features_x86(
+          X86InstructionSetFeatures::FromCppDefines());
+      x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
+      SsaLivenessAnalysis liveness(graph, &codegen);
+      liveness.Analyze();
 
-    ASSERT_EQ(input1->GetLiveInterval()->GetRegister(), 2);
-    ASSERT_EQ(input2->GetLiveInterval()->GetRegister(), 2);
-    ASSERT_EQ(phi->GetLiveInterval()->GetRegister(), 2);
-  }
+      // Set input1 to a specific register, and check that the phi and other input get allocated
+      // the same register.
+      input1->GetLocations()->UpdateOut(Location::RegisterLocation(2));
+      RegisterAllocator* register_allocator =
+          RegisterAllocator::Create(&allocator, &codegen, liveness, strategy);
+      register_allocator->AllocateRegisters();
 
-  {
-    HGraph* graph = BuildIfElseWithPhi(&allocator, &phi, &input1, &input2);
-    std::unique_ptr<const X86InstructionSetFeatures> features_x86(
-        X86InstructionSetFeatures::FromCppDefines());
-    x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
-    SsaLivenessAnalysis liveness(graph, &codegen);
-    liveness.Analyze();
+      ASSERT_EQ(input1->GetLiveInterval()->GetRegister(), 2);
+      ASSERT_EQ(input2->GetLiveInterval()->GetRegister(), 2);
+      ASSERT_EQ(phi->GetLiveInterval()->GetRegister(), 2);
+    }
 
-    // Set input2 to a specific register, and check that the phi and other input get allocated
-    // the same register.
-    input2->GetLocations()->UpdateOut(Location::RegisterLocation(2));
-    RegisterAllocator* register_allocator =
-        RegisterAllocator::Create(&allocator, &codegen, liveness);
-    register_allocator->AllocateRegisters();
+    {
+      HGraph* graph = BuildIfElseWithPhi(&allocator, &phi, &input1, &input2);
+      std::unique_ptr<const X86InstructionSetFeatures> features_x86(
+          X86InstructionSetFeatures::FromCppDefines());
+      x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
+      SsaLivenessAnalysis liveness(graph, &codegen);
+      liveness.Analyze();
 
-    ASSERT_EQ(input1->GetLiveInterval()->GetRegister(), 2);
-    ASSERT_EQ(input2->GetLiveInterval()->GetRegister(), 2);
-    ASSERT_EQ(phi->GetLiveInterval()->GetRegister(), 2);
+      // Set input2 to a specific register, and check that the phi and other input get allocated
+      // the same register.
+      input2->GetLocations()->UpdateOut(Location::RegisterLocation(2));
+      RegisterAllocator* register_allocator =
+          RegisterAllocator::Create(&allocator, &codegen, liveness, strategy);
+      register_allocator->AllocateRegisters();
+
+      ASSERT_EQ(input1->GetLiveInterval()->GetRegister(), 2);
+      ASSERT_EQ(input2->GetLiveInterval()->GetRegister(), 2);
+      ASSERT_EQ(phi->GetLiveInterval()->GetRegister(), 2);
+    }
   }
 }
 
@@ -656,39 +683,47 @@ TEST_F(RegisterAllocatorTest, ExpectedInRegisterHint) {
   ArenaAllocator allocator(&pool);
   HInstruction *field, *ret;
 
-  {
-    HGraph* graph = BuildFieldReturn(&allocator, &field, &ret);
-    std::unique_ptr<const X86InstructionSetFeatures> features_x86(
-        X86InstructionSetFeatures::FromCppDefines());
-    x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
-    SsaLivenessAnalysis liveness(graph, &codegen);
-    liveness.Analyze();
+  for (Strategy strategy : strategies) {
+    if (strategy == Strategy::kRegisterAllocatorGraphColor) {
+      // TODO: This test should be enabled for graph coloring register allocation when
+      //       iterative move coalescing is merged.
+      continue;
+    }
 
-    RegisterAllocator* register_allocator =
-        RegisterAllocator::Create(&allocator, &codegen, liveness);
-    register_allocator->AllocateRegisters();
+    {
+      HGraph* graph = BuildFieldReturn(&allocator, &field, &ret);
+      std::unique_ptr<const X86InstructionSetFeatures> features_x86(
+          X86InstructionSetFeatures::FromCppDefines());
+      x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
+      SsaLivenessAnalysis liveness(graph, &codegen);
+      liveness.Analyze();
 
-    // Sanity check that in normal conditions, the register should be hinted to 0 (EAX).
-    ASSERT_EQ(field->GetLiveInterval()->GetRegister(), 0);
-  }
+      RegisterAllocator* register_allocator =
+          RegisterAllocator::Create(&allocator, &codegen, liveness, strategy);
+      register_allocator->AllocateRegisters();
 
-  {
-    HGraph* graph = BuildFieldReturn(&allocator, &field, &ret);
-    std::unique_ptr<const X86InstructionSetFeatures> features_x86(
-        X86InstructionSetFeatures::FromCppDefines());
-    x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
-    SsaLivenessAnalysis liveness(graph, &codegen);
-    liveness.Analyze();
+      // Sanity check that in normal conditions, the register should be hinted to 0 (EAX).
+      ASSERT_EQ(field->GetLiveInterval()->GetRegister(), 0);
+    }
 
-    // Check that the field gets put in the register expected by its use.
-    // Don't use SetInAt because we are overriding an already allocated location.
-    ret->GetLocations()->inputs_[0] = Location::RegisterLocation(2);
+    {
+      HGraph* graph = BuildFieldReturn(&allocator, &field, &ret);
+      std::unique_ptr<const X86InstructionSetFeatures> features_x86(
+          X86InstructionSetFeatures::FromCppDefines());
+      x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
+      SsaLivenessAnalysis liveness(graph, &codegen);
+      liveness.Analyze();
 
-    RegisterAllocator* register_allocator =
-        RegisterAllocator::Create(&allocator, &codegen, liveness);
-    register_allocator->AllocateRegisters();
+      // Check that the field gets put in the register expected by its use.
+      // Don't use SetInAt because we are overriding an already allocated location.
+      ret->GetLocations()->inputs_[0] = Location::RegisterLocation(2);
 
-    ASSERT_EQ(field->GetLiveInterval()->GetRegister(), 2);
+      RegisterAllocator* register_allocator =
+          RegisterAllocator::Create(&allocator, &codegen, liveness, strategy);
+      register_allocator->AllocateRegisters();
+
+      ASSERT_EQ(field->GetLiveInterval()->GetRegister(), 2);
+    }
   }
 }
 
@@ -726,43 +761,51 @@ TEST_F(RegisterAllocatorTest, SameAsFirstInputHint) {
   ArenaAllocator allocator(&pool);
   HInstruction *first_sub, *second_sub;
 
-  {
-    HGraph* graph = BuildTwoSubs(&allocator, &first_sub, &second_sub);
-    std::unique_ptr<const X86InstructionSetFeatures> features_x86(
-        X86InstructionSetFeatures::FromCppDefines());
-    x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
-    SsaLivenessAnalysis liveness(graph, &codegen);
-    liveness.Analyze();
+  for (Strategy strategy : strategies) {
+    if (strategy == Strategy::kRegisterAllocatorGraphColor) {
+      // TODO: This test should be enabled for graph coloring register allocation when
+      //       iterative move coalescing is merged.
+      continue;
+    }
 
-    RegisterAllocator* register_allocator =
-        RegisterAllocator::Create(&allocator, &codegen, liveness);
-    register_allocator->AllocateRegisters();
+    {
+      HGraph* graph = BuildTwoSubs(&allocator, &first_sub, &second_sub);
+      std::unique_ptr<const X86InstructionSetFeatures> features_x86(
+          X86InstructionSetFeatures::FromCppDefines());
+      x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
+      SsaLivenessAnalysis liveness(graph, &codegen);
+      liveness.Analyze();
 
-    // Sanity check that in normal conditions, the registers are the same.
-    ASSERT_EQ(first_sub->GetLiveInterval()->GetRegister(), 1);
-    ASSERT_EQ(second_sub->GetLiveInterval()->GetRegister(), 1);
-  }
+      RegisterAllocator* register_allocator =
+          RegisterAllocator::Create(&allocator, &codegen, liveness, strategy);
+      register_allocator->AllocateRegisters();
 
-  {
-    HGraph* graph = BuildTwoSubs(&allocator, &first_sub, &second_sub);
-    std::unique_ptr<const X86InstructionSetFeatures> features_x86(
-        X86InstructionSetFeatures::FromCppDefines());
-    x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
-    SsaLivenessAnalysis liveness(graph, &codegen);
-    liveness.Analyze();
+      // Sanity check that in normal conditions, the registers are the same.
+      ASSERT_EQ(first_sub->GetLiveInterval()->GetRegister(), 1);
+      ASSERT_EQ(second_sub->GetLiveInterval()->GetRegister(), 1);
+    }
 
-    // check that both adds get the same register.
-    // Don't use UpdateOutput because output is already allocated.
-    first_sub->InputAt(0)->GetLocations()->output_ = Location::RegisterLocation(2);
-    ASSERT_EQ(first_sub->GetLocations()->Out().GetPolicy(), Location::kSameAsFirstInput);
-    ASSERT_EQ(second_sub->GetLocations()->Out().GetPolicy(), Location::kSameAsFirstInput);
+    {
+      HGraph* graph = BuildTwoSubs(&allocator, &first_sub, &second_sub);
+      std::unique_ptr<const X86InstructionSetFeatures> features_x86(
+          X86InstructionSetFeatures::FromCppDefines());
+      x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
+      SsaLivenessAnalysis liveness(graph, &codegen);
+      liveness.Analyze();
 
-    RegisterAllocator* register_allocator =
-        RegisterAllocator::Create(&allocator, &codegen, liveness);
-    register_allocator->AllocateRegisters();
+      // check that both adds get the same register.
+      // Don't use UpdateOutput because output is already allocated.
+      first_sub->InputAt(0)->GetLocations()->output_ = Location::RegisterLocation(2);
+      ASSERT_EQ(first_sub->GetLocations()->Out().GetPolicy(), Location::kSameAsFirstInput);
+      ASSERT_EQ(second_sub->GetLocations()->Out().GetPolicy(), Location::kSameAsFirstInput);
 
-    ASSERT_EQ(first_sub->GetLiveInterval()->GetRegister(), 2);
-    ASSERT_EQ(second_sub->GetLiveInterval()->GetRegister(), 2);
+      RegisterAllocator* register_allocator =
+          RegisterAllocator::Create(&allocator, &codegen, liveness, strategy);
+      register_allocator->AllocateRegisters();
+
+      ASSERT_EQ(first_sub->GetLiveInterval()->GetRegister(), 2);
+      ASSERT_EQ(second_sub->GetLiveInterval()->GetRegister(), 2);
+    }
   }
 }
 
@@ -797,7 +840,13 @@ TEST_F(RegisterAllocatorTest, ExpectedExactInRegisterAndSameOutputHint) {
   ArenaAllocator allocator(&pool);
   HInstruction *div;
 
-  {
+  for (Strategy strategy : strategies) {
+    if (strategy == Strategy::kRegisterAllocatorGraphColor) {
+      // TODO: This test should be enabled for graph coloring register allocation when
+      //       iterative move coalescing is merged.
+      continue;
+    }
+
     HGraph* graph = BuildDiv(&allocator, &div);
     std::unique_ptr<const X86InstructionSetFeatures> features_x86(
         X86InstructionSetFeatures::FromCppDefines());
@@ -806,7 +855,7 @@ TEST_F(RegisterAllocatorTest, ExpectedExactInRegisterAndSameOutputHint) {
     liveness.Analyze();
 
     RegisterAllocator* register_allocator =
-        RegisterAllocator::Create(&allocator, &codegen, liveness);
+        RegisterAllocator::Create(&allocator, &codegen, liveness, strategy);
     register_allocator->AllocateRegisters();
 
     // div on x86 requires its first input in eax and the output be the same as the first input.
