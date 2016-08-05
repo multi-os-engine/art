@@ -413,33 +413,28 @@ MethodVerifier::FailureData MethodVerifier::VerifyMethod(Thread* self,
   } else {
     // Bad method data.
     CHECK_NE(verifier.failures_.size(), 0U);
+    CHECK(verifier.have_pending_hard_failure_);
 
-    if (UNLIKELY(verifier.have_pending_experimental_failure_)) {
-      // Failed due to being forced into interpreter. This is ok because
-      // we just want to skip verification.
-      result.kind = kSoftFailure;
-    } else {
-      CHECK(verifier.have_pending_hard_failure_);
-      if (VLOG_IS_ON(verifier)) {
-        log_level = LogSeverity::VERBOSE;
-      }
-      if (log_level > LogSeverity::VERBOSE) {
-        verifier.DumpFailures(LOG(log_level) << "Verification error in "
-                                             << PrettyMethod(method_idx, *dex_file) << "\n");
-      }
-      if (hard_failure_msg != nullptr) {
-        CHECK(!verifier.failure_messages_.empty());
-        *hard_failure_msg =
-            verifier.failure_messages_[verifier.failure_messages_.size() - 1]->str();
-      }
-      result.kind = kHardFailure;
-
-      if (callbacks != nullptr) {
-        // Let the interested party know that we failed the class.
-        ClassReference ref(dex_file, dex_file->GetIndexForClassDef(*class_def));
-        callbacks->ClassRejected(ref);
-      }
+    if (VLOG_IS_ON(verifier)) {
+      log_level = LogSeverity::VERBOSE;
     }
+    if (log_level > LogSeverity::VERBOSE) {
+      verifier.DumpFailures(LOG(log_level) << "Verification error in "
+                                           << PrettyMethod(method_idx, *dex_file) << "\n");
+    }
+    if (hard_failure_msg != nullptr) {
+      CHECK(!verifier.failure_messages_.empty());
+      *hard_failure_msg =
+          verifier.failure_messages_[verifier.failure_messages_.size() - 1]->str();
+    }
+    result.kind = kHardFailure;
+
+    if (callbacks != nullptr) {
+      // Let the interested party know that we failed the class.
+      ClassReference ref(dex_file, dex_file->GetIndexForClassDef(*class_def));
+      callbacks->ClassRejected(ref);
+    }
+
     if (VLOG_IS_ON(verifier)) {
       std::cout << "\n" << verifier.info_messages_.str();
       verifier.Dump(std::cout);
@@ -529,7 +524,6 @@ MethodVerifier::MethodVerifier(Thread* self,
       monitor_enter_dex_pcs_(nullptr),
       have_pending_hard_failure_(false),
       have_pending_runtime_throw_failure_(false),
-      have_pending_experimental_failure_(false),
       have_any_pending_runtime_throw_failure_(false),
       new_instance_count_(0),
       monitor_enter_count_(0),
@@ -1098,17 +1092,6 @@ bool MethodVerifier::VerifyInstructions() {
 }
 
 bool MethodVerifier::VerifyInstruction(const Instruction* inst, uint32_t code_offset) {
-  if (UNLIKELY(inst->IsExperimental())) {
-    // Experimental instructions don't yet have verifier support implementation.
-    // While it is possible to use them by themselves, when we try to use stable instructions
-    // with a virtual register that was created by an experimental instruction,
-    // the data flow analysis will fail.
-    Fail(VERIFY_ERROR_FORCE_INTERPRETER)
-        << "experimental instruction is not supported by verifier; skipping verification";
-    have_pending_experimental_failure_ = true;
-    return false;
-  }
-
   bool result = true;
   switch (inst->GetVerifyTypeArgumentA()) {
     case Instruction::kVerifyRegA:
@@ -1156,9 +1139,6 @@ bool MethodVerifier::VerifyInstruction(const Instruction* inst, uint32_t code_of
       break;
     case Instruction::kVerifyRegCWide:
       result = result && CheckWideRegisterIndex(inst->VRegC());
-      break;
-    case Instruction::kVerifyRegCString:
-      result = result && CheckStringIndex(inst->VRegC());
       break;
   }
   switch (inst->GetVerifyExtraFlags()) {
@@ -3331,67 +3311,10 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       }
       break;
     }
-    case Instruction::INVOKE_LAMBDA: {
-      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
-      // If the code would've normally hard-failed, then the interpreter will throw the
-      // appropriate verification errors at runtime.
-      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement invoke-lambda verification
-      break;
-    }
-    case Instruction::CAPTURE_VARIABLE: {
-      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
-      // If the code would've normally hard-failed, then the interpreter will throw the
-      // appropriate verification errors at runtime.
-      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement capture-variable verification
-      break;
-    }
-    case Instruction::CREATE_LAMBDA: {
-      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
-      // If the code would've normally hard-failed, then the interpreter will throw the
-      // appropriate verification errors at runtime.
-      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement create-lambda verification
-      break;
-    }
-    case Instruction::LIBERATE_VARIABLE: {
-      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
-      // If the code would've normally hard-failed, then the interpreter will throw the
-      // appropriate verification errors at runtime.
-      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement liberate-variable verification
-      break;
-    }
-
-    case Instruction::UNUSED_F4: {
-      DCHECK(false);  // TODO(iam): Implement opcodes for lambdas
-      // Conservatively fail verification on release builds.
-      Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "Unexpected opcode " << inst->DumpString(dex_file_);
-      break;
-    }
-
-    case Instruction::BOX_LAMBDA: {
-      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
-      // If the code would've normally hard-failed, then the interpreter will throw the
-      // appropriate verification errors at runtime.
-      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement box-lambda verification
-
-      // Partial verification. Sets the resulting type to always be an object, which
-      // is good enough for some other verification to occur without hard-failing.
-      const uint32_t vreg_target_object = inst->VRegA_22x();  // box-lambda vA, vB
-      const RegType& reg_type = reg_types_.JavaLangObject(need_precise_constants_);
-      work_line_->SetRegisterType<LockOp::kClear>(this, vreg_target_object, reg_type);
-      break;
-    }
-
-     case Instruction::UNBOX_LAMBDA: {
-      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
-      // If the code would've normally hard-failed, then the interpreter will throw the
-      // appropriate verification errors at runtime.
-      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement unbox-lambda verification
-      break;
-    }
 
     /* These should never appear during verification. */
     case Instruction::UNUSED_3E ... Instruction::UNUSED_43:
-    case Instruction::UNUSED_FA ... Instruction::UNUSED_FF:
+    case Instruction::UNUSED_F3 ... Instruction::UNUSED_FF:
     case Instruction::UNUSED_79:
     case Instruction::UNUSED_7A:
       Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "Unexpected opcode " << inst->DumpString(dex_file_);

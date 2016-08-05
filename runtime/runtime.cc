@@ -78,7 +78,6 @@
 #include "jit/jit.h"
 #include "jni_internal.h"
 #include "linear_alloc.h"
-#include "lambda/box_table.h"
 #include "mirror/array.h"
 #include "mirror/class-inl.h"
 #include "mirror/class_loader.h"
@@ -207,7 +206,6 @@ Runtime::Runtime()
       is_native_bridge_loaded_(false),
       is_native_debuggable_(false),
       zygote_max_failed_boots_(0),
-      experimental_flags_(ExperimentalFlags::kNone),
       oat_file_manager_(nullptr),
       is_low_memory_mode_(false),
       safe_mode_(false),
@@ -442,7 +440,6 @@ void Runtime::SweepSystemWeaks(IsMarkedVisitor* visitor) {
   GetMonitorList()->SweepMonitorList(visitor);
   GetJavaVM()->SweepJniWeakGlobals(visitor);
   GetHeap()->SweepAllocationRecords(visitor);
-  GetLambdaBoxTable()->SweepWeakBoxedLambdas(visitor);
 }
 
 bool Runtime::ParseOptions(const RuntimeOptions& raw_options,
@@ -958,7 +955,6 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   }
 
   zygote_max_failed_boots_ = runtime_options.GetOrDefault(Opt::ZygoteMaxFailedBoots);
-  experimental_flags_ = runtime_options.GetOrDefault(Opt::Experimental);
   is_low_memory_mode_ = runtime_options.Exists(Opt::LowMemoryMode);
 
   XGcOption xgc_option = runtime_options.GetOrDefault(Opt::GcOption);
@@ -1014,9 +1010,6 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
     jit_options_->SetUseJitCompilation(false);
     jit_options_->SetSaveProfilingInfo(false);
   }
-
-  // Allocate a global table of boxed lambda objects <-> closures.
-  lambda_box_table_ = MakeUnique<lambda::BoxTable>();
 
   // Use MemMap arena pool for jit, malloc otherwise. Malloc arenas are faster to allocate but
   // can't be trimmed as easily.
@@ -1638,7 +1631,6 @@ void Runtime::DisallowNewSystemWeaks() {
   intern_table_->ChangeWeakRootState(gc::kWeakRootStateNoReadsOrWrites);
   java_vm_->DisallowNewWeakGlobals();
   heap_->DisallowNewAllocationRecords();
-  lambda_box_table_->DisallowNewWeakBoxedLambdas();
 }
 
 void Runtime::AllowNewSystemWeaks() {
@@ -1647,7 +1639,6 @@ void Runtime::AllowNewSystemWeaks() {
   intern_table_->ChangeWeakRootState(gc::kWeakRootStateNormal);  // TODO: Do this in the sweeping.
   java_vm_->AllowNewWeakGlobals();
   heap_->AllowNewAllocationRecords();
-  lambda_box_table_->AllowNewWeakBoxedLambdas();
 }
 
 void Runtime::BroadcastForNewSystemWeaks() {
@@ -1658,7 +1649,6 @@ void Runtime::BroadcastForNewSystemWeaks() {
   intern_table_->BroadcastForNewInterns();
   java_vm_->BroadcastForNewWeakGlobals();
   heap_->BroadcastForNewAllocationRecords();
-  lambda_box_table_->BroadcastForNewWeakBoxedLambdas();
 }
 
 void Runtime::SetInstructionSet(InstructionSet instruction_set) {

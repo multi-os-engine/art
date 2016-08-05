@@ -99,19 +99,6 @@ namespace art {
     return ::testing::AssertionFailure() << "key was not in the map";
   }
 
-  template <typename TMap, typename TKey, typename T>
-  ::testing::AssertionResult IsExpectedDefaultKeyValue(const T& expected,
-                                                       const TMap& map,
-                                                       const TKey& key) {
-    const T& actual = map.GetOrDefault(key);
-    if (!UsuallyEquals(expected, actual)) {
-      return ::testing::AssertionFailure()
-          << "expected " << detail::ToStringAny(expected) << " but got "
-          << detail::ToStringAny(actual);
-     }
-    return ::testing::AssertionSuccess();
-  }
-
 class CmdlineParserTest : public ::testing::Test {
  public:
   CmdlineParserTest() = default;
@@ -156,22 +143,12 @@ class CmdlineParserTest : public ::testing::Test {
 
 #define EXPECT_KEY_EXISTS(map, key) EXPECT_TRUE((map).Exists(key))
 #define EXPECT_KEY_VALUE(map, key, expected) EXPECT_TRUE(IsExpectedKeyValue(expected, map, key))
-#define EXPECT_DEFAULT_KEY_VALUE(map, key, expected) EXPECT_TRUE(IsExpectedDefaultKeyValue(expected, map, key))
 
-#define _EXPECT_SINGLE_PARSE_EMPTY_SUCCESS(argv)              \
+#define EXPECT_SINGLE_PARSE_EMPTY_SUCCESS(argv)               \
   do {                                                        \
     EXPECT_TRUE(IsResultSuccessful(parser_->Parse(argv)));    \
     EXPECT_EQ(0u, parser_->GetArgumentsMap().Size());         \
-
-#define EXPECT_SINGLE_PARSE_EMPTY_SUCCESS(argv)               \
-  _EXPECT_SINGLE_PARSE_EMPTY_SUCCESS(argv);                   \
   } while (false)
-
-#define EXPECT_SINGLE_PARSE_DEFAULT_VALUE(expected, argv, key)\
-  _EXPECT_SINGLE_PARSE_EMPTY_SUCCESS(argv);                   \
-    RuntimeArgumentMap args = parser_->ReleaseArgumentsMap(); \
-    EXPECT_DEFAULT_KEY_VALUE(args, key, expected);            \
-  } while (false)                                             // NOLINT [readability/namespace] [5]
 
 #define _EXPECT_SINGLE_PARSE_EXISTS(argv, key)                \
   do {                                                        \
@@ -489,24 +466,6 @@ TEST_F(CmdlineParserTest, ProfileSaverOptions) {
                             "-Xps-max-notification-before-wake:7",
                             M::ProfileSaverOpts);
 }  // TEST_F
-
-/* -Xexperimental:_ */
-TEST_F(CmdlineParserTest, TestExperimentalFlags) {
-  // Default
-  EXPECT_SINGLE_PARSE_DEFAULT_VALUE(ExperimentalFlags::kNone,
-                                    "",
-                                    M::Experimental);
-
-  // Disabled explicitly
-  EXPECT_SINGLE_PARSE_VALUE(ExperimentalFlags::kNone,
-                            "-Xexperimental:none",
-                            M::Experimental);
-
-  // Enabled explicitly
-  EXPECT_SINGLE_PARSE_VALUE(ExperimentalFlags::kLambdas,
-                            "-Xexperimental:lambdas",
-                            M::Experimental);
-}
 
 // -Xverify:_
 TEST_F(CmdlineParserTest, TestVerify) {
