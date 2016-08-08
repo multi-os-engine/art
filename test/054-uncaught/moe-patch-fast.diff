@@ -1,0 +1,33 @@
+diff --git a/test/054-uncaught/expected.txt b/test/054-uncaught/expected.txt
+index 7d7f03c..9c86b85 100644
+--- a/test/054-uncaught/expected.txt
++++ b/test/054-uncaught/expected.txt
+@@ -1,20 +1,20 @@
+ Test 1
+ Uncaught exception DEFAULT!
+ java.lang.NullPointerException: Hi diddly-ho, neighborino.
+-	at Main.catchTheUncaught(Main.java:63)
+-	at Main$Helper.run(Main.java:74)
++	at aosp_054_uncaught.Main.catchTheUncaught(Main.java:63)
++	at aosp_054_uncaught.Main$Helper.run(Main.java:74)
+ Test 2
+ Uncaught exception THREAD!
+ java.lang.NullPointerException: Hi diddly-ho, neighborino.
+-	at Main.catchTheUncaught(Main.java:63)
+-	at Main$Helper.run(Main.java:74)
++	at aosp_054_uncaught.Main.catchTheUncaught(Main.java:63)
++	at aosp_054_uncaught.Main$Helper.run(Main.java:74)
+ Test 3
+ Uncaught exception THREAD!
+ java.lang.NullPointerException: Hi diddly-ho, neighborino.
+-	at Main.catchTheUncaught(Main.java:63)
+-	at Main$Helper.run(Main.java:74)
++	at aosp_054_uncaught.Main.catchTheUncaught(Main.java:63)
++	at aosp_054_uncaught.Main$Helper.run(Main.java:74)
+ Test 1
+ Uncaught exception DEFAULT!
+ java.lang.NullPointerException: Hi diddly-ho, neighborino.
+-	at Main.catchTheUncaught(Main.java:63)
+-	at Main.main(Main.java:26)
++	at aosp_054_uncaught.Main.catchTheUncaught(Main.java:63)
++	at aosp_054_uncaught.Main.main(Main.java:26)

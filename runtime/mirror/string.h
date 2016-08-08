@@ -32,6 +32,9 @@ class StubTest_ReadBarrierForRoot_Test;
 namespace mirror {
 
 // C++ mirror of java.lang.String
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED String FINAL : public Object {
  public:
   // Size of java.lang.String.class.
@@ -188,6 +191,9 @@ class MANAGED String FINAL : public Object {
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(String);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

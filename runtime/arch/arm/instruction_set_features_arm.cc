@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +28,10 @@
 #include "base/stringprintf.h"
 #include "utils.h"  // For Trim.
 
+#ifndef MOE
 #if defined(__arm__)
 extern "C" bool artCheckForArmSdivInstruction();
+#endif
 #endif
 
 namespace art {
@@ -183,6 +186,7 @@ const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromHwcap() {
   return new ArmInstructionSetFeatures(smp, has_div, has_lpae);
 }
 
+#ifndef MOE
 // A signal handler called by a fault for an illegal instruction.  We record the fact in r0
 // and then increment the PC in the signal context to return to the next instruction.  We know the
 // instruction is an sdiv (4 bytes long).
@@ -197,26 +201,33 @@ static void bad_divide_inst_handle(int signo ATTRIBUTE_UNUSED, siginfo_t* si ATT
   UNUSED(data);
 #endif
 }
+#endif
 
 const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromAssembly() {
   const bool smp = true;
 
+#ifndef MOE
   // See if have a sdiv instruction.  Register a signal handler and try to execute an sdiv
   // instruction.  If we get a SIGILL then it's not supported.
   struct sigaction sa, osa;
   sa.sa_flags = SA_ONSTACK | SA_RESTART | SA_SIGINFO;
   sa.sa_sigaction = bad_divide_inst_handle;
   sigaction(SIGILL, &sa, &osa);
+#endif
 
   bool has_div = false;
+#ifndef MOE
 #if defined(__arm__)
+#ifndef MOE
   if (artCheckForArmSdivInstruction()) {
     has_div = true;
   }
 #endif
+#endif
 
   // Restore the signal handler.
   sigaction(SIGILL, &osa, nullptr);
+#endif
 
   // Use compile time features to "detect" LPAE support.
   // TODO: write an assembly LPAE support test.

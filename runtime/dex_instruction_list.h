@@ -17,6 +17,10 @@
 #ifndef ART_RUNTIME_DEX_INSTRUCTION_LIST_H_
 #define ART_RUNTIME_DEX_INSTRUCTION_LIST_H_
 
+#ifdef MOE_WINDOWS
+#undef CONST
+#endif
+
 #define DEX_INSTRUCTION_LIST(V) \
   V(0x00, NOP, "nop", k10x, false, kIndexNone, kContinue, kVerifyNone) \
   V(0x01, MOVE, "move", k12x, true, kIndexNone, kContinue, kVerifyRegA | kVerifyRegB) \

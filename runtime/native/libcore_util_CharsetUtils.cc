@@ -107,7 +107,7 @@ class NativeUnsafeByteSequence {
   void operator=(const NativeUnsafeByteSequence&);
 };
 
-static void CharsetUtils_asciiBytesToChars(JNIEnv* env, jclass, jbyteArray javaBytes, jint offset,
+static JNICALL void CharsetUtils_asciiBytesToChars(JNIEnv* env, jclass, jbyteArray javaBytes, jint offset,
                                            jint length, jcharArray javaChars) {
   ScopedByteArrayRO bytes(env, javaBytes);
   if (bytes.get() == nullptr) {
@@ -127,7 +127,7 @@ static void CharsetUtils_asciiBytesToChars(JNIEnv* env, jclass, jbyteArray javaB
   }
 }
 
-static void CharsetUtils_isoLatin1BytesToChars(JNIEnv* env, jclass, jbyteArray javaBytes,
+static JNICALL void CharsetUtils_isoLatin1BytesToChars(JNIEnv* env, jclass, jbyteArray javaBytes,
                                                jint offset, jint length, jcharArray javaChars) {
   ScopedByteArrayRO bytes(env, javaBytes);
   if (bytes.get() == nullptr) {
@@ -178,17 +178,17 @@ static jbyteArray charsToBytes(JNIEnv* env, jstring java_string, jint offset, ji
   return javaBytes;
 }
 
-static jbyteArray CharsetUtils_toAsciiBytes(JNIEnv* env, jclass, jstring java_string, jint offset,
+static JNICALL jbyteArray CharsetUtils_toAsciiBytes(JNIEnv* env, jclass, jstring java_string, jint offset,
                                             jint length) {
     return charsToBytes(env, java_string, offset, length, 0x7f);
 }
 
-static jbyteArray CharsetUtils_toIsoLatin1Bytes(JNIEnv* env, jclass, jstring java_string,
+static JNICALL jbyteArray CharsetUtils_toIsoLatin1Bytes(JNIEnv* env, jclass, jstring java_string,
                                                 jint offset, jint length) {
     return charsToBytes(env, java_string, offset, length, 0xff);
 }
 
-static jbyteArray CharsetUtils_toUtf8Bytes(JNIEnv* env, jclass, jstring java_string, jint offset,
+static JNICALL jbyteArray CharsetUtils_toUtf8Bytes(JNIEnv* env, jclass, jstring java_string, jint offset,
                                            jint length) {
   ScopedObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());

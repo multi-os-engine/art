@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +22,10 @@
 #include "gc/accounting/space_bitmap-inl.h"
 #include "runtime.h"
 #include "thread-inl.h"
+
+#ifdef MOE
+#include "moe_entry.h"
+#endif
 
 namespace art {
 namespace gc {
@@ -78,11 +83,21 @@ DiscontinuousSpace::DiscontinuousSpace(const std::string& name,
     Space(name, gc_retention_policy) {
   // TODO: Fix this if we ever support objects not in the low 32 bit.
   const size_t capacity = static_cast<size_t>(std::numeric_limits<uint32_t>::max());
+#ifndef MOE
   live_bitmap_.reset(accounting::LargeObjectBitmap::Create("large live objects", nullptr,
                                                            capacity));
+#else
+  live_bitmap_.reset(accounting::LargeObjectBitmap::Create("large live objects", reinterpret_cast<uint8_t*>(MOE_MAP_BEGIN),
+                                                           capacity));
+#endif
   CHECK(live_bitmap_.get() != nullptr);
+#ifndef MOE
   mark_bitmap_.reset(accounting::LargeObjectBitmap::Create("large marked objects", nullptr,
                                                            capacity));
+#else
+  mark_bitmap_.reset(accounting::LargeObjectBitmap::Create("large marked objects", reinterpret_cast<uint8_t*>(MOE_MAP_BEGIN),
+                                                           capacity));
+#endif
   CHECK(mark_bitmap_.get() != nullptr);
 }
 

@@ -60,7 +60,9 @@ class VerifiedMethod {
 
   // Returns the dequicken field / method for a quick invoke / field get. Returns null if there is
   // no entry for that dex pc.
+#ifndef MOE
   const DexFileReference* GetDequickenIndex(uint32_t dex_pc) const;
+#endif
 
   // Returns true if the cast can statically be verified to be redundant
   // by using the check-cast elision peephole optimization in the verifier.
@@ -103,8 +105,10 @@ class VerifiedMethod {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Generate dequickening map into dequicken_map_. Returns false if there is an error.
+#ifndef MOE
   bool GenerateDequickenMap(verifier::MethodVerifier* method_verifier)
       SHARED_REQUIRES(Locks::mutator_lock_);
+#endif
 
   // Generate safe case set into safe_cast_set_.
   void GenerateSafeCastSet(verifier::MethodVerifier* method_verifier)
@@ -113,7 +117,9 @@ class VerifiedMethod {
   DevirtualizationMap devirt_map_;
   // Dequicken map is required for compiling quickened byte codes. The quicken maps from
   // dex PC to dex method index or dex field index based on the instruction.
+#ifndef MOE
   DequickenMap dequicken_map_;
+#endif
   SafeCastSet safe_cast_set_;
 
   const uint32_t encountered_error_types_;

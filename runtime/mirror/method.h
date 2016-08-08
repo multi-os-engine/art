@@ -26,6 +26,9 @@ namespace mirror {
 class Class;
 
 // C++ mirror of java.lang.reflect.Method.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED Method : public AbstractMethod {
  public:
   template <bool kTransactionActive = false>
@@ -56,8 +59,14 @@ class MANAGED Method : public AbstractMethod {
 
   DISALLOW_COPY_AND_ASSIGN(Method);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 // C++ mirror of java.lang.reflect.Constructor.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED Constructor: public AbstractMethod {
  public:
   template <bool kTransactionActive = false>
@@ -88,6 +97,9 @@ class MANAGED Constructor: public AbstractMethod {
 
   DISALLOW_COPY_AND_ASSIGN(Constructor);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

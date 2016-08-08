@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -138,6 +139,7 @@ void ThreadList::DumpForSigQuit(std::ostream& os) {
   DumpUnattachedThreads(os, dump_native_stack);
 }
 
+#ifndef MOE
 static void DumpUnattachedThread(std::ostream& os, pid_t tid, bool dump_native_stack)
     NO_THREAD_SAFETY_ANALYSIS {
   // TODO: No thread safety analysis as DumpState with a null thread won't access fields, should
@@ -149,8 +151,10 @@ static void DumpUnattachedThread(std::ostream& os, pid_t tid, bool dump_native_s
   }
   os << "\n";
 }
+#endif
 
 void ThreadList::DumpUnattachedThreads(std::ostream& os, bool dump_native_stack) {
+#ifndef MOE
   DIR* d = opendir("/proc/self/task");
   if (!d) {
     return;
@@ -173,6 +177,7 @@ void ThreadList::DumpUnattachedThreads(std::ostream& os, bool dump_native_stack)
     }
   }
   closedir(d);
+#endif
 }
 
 // Dump checkpoint timeout in milliseconds. Larger amount on the target, since the device could be

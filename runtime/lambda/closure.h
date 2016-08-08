@@ -38,7 +38,12 @@ class ClosureBuilder;   // forward declaration
 //
 // The closure itself is logically immutable, although in practice any object references
 // it (recursively) contains can be moved and updated by the GC.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+struct __declspec(align(sizeof(ArtLambdaMethod*))) Closure {
+#else
 struct PACKED(sizeof(ArtLambdaMethod*)) Closure {
+#endif 
   // Get the size of the Closure in bytes.
   // This is necessary in order to allocate a large enough area to copy the Closure into.
   // Do *not* copy the closure with memcpy, since references also need to get moved.
@@ -177,6 +182,9 @@ struct PACKED(sizeof(ArtLambdaMethod*)) Closure {
   friend class ClosureBuilder;
   friend class ClosureTest;
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace lambda
 }  // namespace art

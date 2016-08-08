@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,6 +152,7 @@ ArtMethod* StackVisitor::GetMethod() const {
 uint32_t StackVisitor::GetDexPc(bool abort_on_failure) const {
   if (cur_shadow_frame_ != nullptr) {
     return cur_shadow_frame_->GetDexPC();
+#ifndef MOE
   } else if (cur_quick_frame_ != nullptr) {
     if (IsInInlinedFrame()) {
       size_t depth_in_stack_map = current_inlining_depth_ - 1;
@@ -164,6 +166,7 @@ uint32_t StackVisitor::GetDexPc(bool abort_on_failure) const {
       return cur_oat_quick_method_header_->ToDexPc(
           GetMethod(), cur_quick_frame_pc_, abort_on_failure);
     }
+#endif
   } else {
     return 0;
   }
@@ -199,11 +202,21 @@ mirror::Object* StackVisitor::GetThisObject() const {
       return nullptr;
     } else {
       uint16_t reg = code_item->registers_size_ - code_item->ins_size_;
+#ifndef MOE
       uint32_t value = 0;
+#else
+      uintptr_t value = 0;
+#endif
       bool success = GetVReg(m, reg, kReferenceVReg, &value);
       // We currently always guarantee the `this` object is live throughout the method.
       CHECK(success) << "Failed to read the this object in " << PrettyMethod(m);
+#ifndef MOE
       return reinterpret_cast<mirror::Object*>(value);
+#else
+      mirror::ObjectReference<false, mirror::Object>* value_ref =
+          reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&value);
+      return value_ref->AsMirrorPtr();
+#endif
     }
   }
 }
@@ -215,7 +228,11 @@ size_t StackVisitor::GetNativePcOffset() const {
 
 bool StackVisitor::GetVRegFromDebuggerShadowFrame(uint16_t vreg,
                                                   VRegKind kind,
+#ifndef MOE
                                                   uint32_t* val) const {
+#else
+                                                  uintptr_t* val) const {
+#endif
   size_t frame_id = const_cast<StackVisitor*>(this)->GetFrameId();
   ShadowFrame* shadow_frame = thread_->FindDebuggerShadowFrame(frame_id);
   if (shadow_frame != nullptr) {
@@ -236,7 +253,11 @@ bool StackVisitor::GetVRegFromDebuggerShadowFrame(uint16_t vreg,
   return false;
 }
 
+#ifndef MOE
 bool StackVisitor::GetVReg(ArtMethod* m, uint16_t vreg, VRegKind kind, uint32_t* val) const {
+#else
+bool StackVisitor::GetVReg(ArtMethod* m, uint16_t vreg, VRegKind kind, uintptr_t* val) const {
+#endif
   if (cur_quick_frame_ != nullptr) {
     DCHECK(context_ != nullptr);  // You can't reliably read registers without a context.
     DCHECK(m == GetMethod());
@@ -244,13 +265,22 @@ bool StackVisitor::GetVReg(ArtMethod* m, uint16_t vreg, VRegKind kind, uint32_t*
     if (GetVRegFromDebuggerShadowFrame(vreg, kind, val)) {
       return true;
     }
+#ifndef MOE
     DCHECK(cur_oat_quick_method_header_->IsOptimized());
     return GetVRegFromOptimizedCode(m, vreg, kind, val);
+#else
+    LOG(FATAL) << "Quick and Optimizing is not supported anymore!";
+    return false;
+#endif
   } else {
     DCHECK(cur_shadow_frame_ != nullptr);
     if (kind == kReferenceVReg) {
+#ifndef MOE
       *val = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(
           cur_shadow_frame_->GetVRegReference(vreg)));
+#else
+      *val = reinterpret_cast<uintptr_t>(cur_shadow_frame_->GetVRegReference(vreg));
+#endif
     } else {
       *val = cur_shadow_frame_->GetVReg(vreg);
     }
@@ -350,8 +380,13 @@ bool StackVisitor::GetVRegPairFromDebuggerShadowFrame(uint16_t vreg,
                                                       VRegKind kind_lo,
                                                       VRegKind kind_hi,
                                                       uint64_t* val) const {
+#ifndef MOE
   uint32_t low_32bits;
   uint32_t high_32bits;
+#else
+  uintptr_t low_32bits;
+  uintptr_t high_32bits;
+#endif
   bool success = GetVRegFromDebuggerShadowFrame(vreg, kind_lo, &low_32bits);
   success &= GetVRegFromDebuggerShadowFrame(vreg + 1, kind_hi, &high_32bits);
   if (success) {
@@ -420,7 +455,11 @@ bool StackVisitor::GetRegisterPairIfAccessible(uint32_t reg_lo, uint32_t reg_hi,
 
 bool StackVisitor::SetVReg(ArtMethod* m,
                            uint16_t vreg,
+#ifndef MOE
                            uint32_t new_value,
+#else
+                           uintptr_t new_value,
+#endif
                            VRegKind kind) {
   const DexFile::CodeItem* code_item = m->GetCodeItem();
   if (code_item == nullptr) {
@@ -637,10 +676,12 @@ static void AssertPcIsWithinQuickCode(ArtMethod* method, uintptr_t pc)
 
   // If we are the JIT then we may have just compiled the method after the
   // IsQuickToInterpreterBridge check.
+#ifndef MOE
   Runtime* runtime = Runtime::Current();
   if (runtime->UseJitCompilation() && runtime->GetJit()->GetCodeCache()->ContainsPc(code)) {
     return;
   }
+#endif
 
   uint32_t code_size = OatQuickMethodHeader::FromEntryPoint(code)->code_size_;
   uintptr_t code_start = reinterpret_cast<uintptr_t>(code);
@@ -663,6 +704,7 @@ void StackVisitor::SanityCheckFrame() const {
     } else {
       CHECK(declaring_class == nullptr);
     }
+#ifndef MOE
     Runtime* const runtime = Runtime::Current();
     LinearAlloc* const linear_alloc = runtime->GetLinearAlloc();
     if (!linear_alloc->Contains(method)) {
@@ -690,6 +732,7 @@ void StackVisitor::SanityCheckFrame() const {
         CHECK(in_image) << PrettyMethod(method) << " not in linear alloc or image";
       }
     }
+#endif
     if (cur_quick_frame_ != nullptr) {
       AssertPcIsWithinQuickCode(method, cur_quick_frame_pc_);
       // Frame sanity.
@@ -784,6 +827,7 @@ void StackVisitor::WalkStack(bool include_transitions) {
     cur_oat_quick_method_header_ = nullptr;
 
     if (cur_quick_frame_ != nullptr) {  // Handle quick stack frames.
+#ifndef MOE
       // Can't be both a shadow and a quick fragment.
       DCHECK(current_fragment->GetTopShadowFrame() == nullptr);
       ArtMethod* method = *cur_quick_frame_;
@@ -881,6 +925,7 @@ void StackVisitor::WalkStack(bool include_transitions) {
         cur_depth_++;
         method = *cur_quick_frame_;
       }
+#endif
     } else if (cur_shadow_frame_ != nullptr) {
       do {
         SanityCheckFrame();

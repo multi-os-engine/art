@@ -129,10 +129,22 @@ inline void ObjectArray<T>::AssignableMemmove(int32_t dst_pos, ObjectArray<T>* s
     }
   }
   // Perform the memmove using int memmove then perform the write barrier.
+#ifndef MOE
   static_assert(sizeof(HeapReference<T>) == sizeof(uint32_t),
                 "art::mirror::HeapReference<T> and uint32_t have different sizes.");
   IntArray* dstAsIntArray = reinterpret_cast<IntArray*>(this);
   IntArray* srcAsIntArray = reinterpret_cast<IntArray*>(src);
+#else
+  static_assert(sizeof(HeapReference<T>) == sizeof(void*),
+                "art::mirror::HeapReference<T> and uint32_t have different sizes.");
+# ifdef __LP64__
+  LongArray* dstAsIntArray = reinterpret_cast<LongArray*>(this);
+  LongArray* srcAsIntArray = reinterpret_cast<LongArray*>(src);
+# else
+  IntArray* dstAsIntArray = reinterpret_cast<IntArray*>(this);
+  IntArray* srcAsIntArray = reinterpret_cast<IntArray*>(src);
+# endif
+#endif
   if (kUseReadBarrier) {
     // TODO: Optimize this later?
     const bool copy_forward = (src != this) || (dst_pos < src_pos) || (dst_pos - src_pos >= count);
@@ -173,10 +185,22 @@ inline void ObjectArray<T>::AssignableMemcpy(int32_t dst_pos, ObjectArray<T>* sr
     }
   }
   // Perform the memmove using int memcpy then perform the write barrier.
+#ifndef MOE
   static_assert(sizeof(HeapReference<T>) == sizeof(uint32_t),
                 "art::mirror::HeapReference<T> and uint32_t have different sizes.");
   IntArray* dstAsIntArray = reinterpret_cast<IntArray*>(this);
   IntArray* srcAsIntArray = reinterpret_cast<IntArray*>(src);
+#else
+  static_assert(sizeof(HeapReference<T>) == sizeof(void*),
+                "art::mirror::HeapReference<T> and uint32_t have different sizes.");
+# ifdef __LP64__
+  LongArray* dstAsIntArray = reinterpret_cast<LongArray*>(this);
+  LongArray* srcAsIntArray = reinterpret_cast<LongArray*>(src);
+# else
+  IntArray* dstAsIntArray = reinterpret_cast<IntArray*>(this);
+  IntArray* srcAsIntArray = reinterpret_cast<IntArray*>(src);
+# endif
+#endif
   if (kUseReadBarrier) {
     // TODO: Optimize this later?
     for (int i = 0; i < count; ++i) {

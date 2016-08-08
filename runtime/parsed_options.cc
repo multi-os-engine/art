@@ -75,7 +75,11 @@ std::unique_ptr<RuntimeParser> ParsedOptions::MakeParser(bool ignore_unrecognize
           .WithType<std::string>()
           .IntoKey(M::BootClassPath)
       .Define("-Xbootclasspath-locations:_")
+#ifndef MOE_WINDOWS
           .WithType<ParseStringList<':'>>()  // std::vector<std::string>, split by :
+#else
+          .WithType<ParseStringList<';'>>()  // std::vector<std::string>, split by :
+#endif
           .IntoKey(M::BootClassPathLocations)
       .Define({"-classpath _", "-cp _"})
           .WithType<std::string>()
@@ -560,7 +564,11 @@ bool ParsedOptions::DoParse(const RuntimeOptions& options,
     auto&& boot_class_path = args.GetOrDefault(M::BootClassPath);
     auto&& boot_class_path_locations = args.GetOrDefault(M::BootClassPathLocations);
     if (args.Exists(M::BootClassPathLocations)) {
+#ifndef MOE_WINDOWS
       size_t boot_class_path_count = ParseStringList<':'>::Split(boot_class_path).Size();
+#else
+      size_t boot_class_path_count = ParseStringList<';'>::Split(boot_class_path).Size();
+#endif
 
       if (boot_class_path_count != boot_class_path_locations.Size()) {
         Usage("The number of boot class path files does not match"
@@ -574,11 +582,13 @@ bool ParsedOptions::DoParse(const RuntimeOptions& options,
     }
   }
 
+#ifndef MOE
   if (!args.Exists(M::CompilerCallbacksPtr) && !args.Exists(M::Image)) {
     std::string image = GetAndroidRoot();
     image += "/framework/boot.art";
     args.Set(M::Image, image);
   }
+#endif
 
   // 0 means no growth limit, and growth limit should be always <= heap size
   if (args.GetOrDefault(M::HeapGrowthLimit) <= 0u ||

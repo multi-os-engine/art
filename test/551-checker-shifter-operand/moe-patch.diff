@@ -1,0 +1,42 @@
+diff --git a/test/551-checker-shifter-operand/build b/test/551-checker-shifter-operand/build
+old mode 100644
+new mode 100755
+index 18e8c59..4ddddfb
+--- a/test/551-checker-shifter-operand/build
++++ b/test/551-checker-shifter-operand/build
+@@ -54,12 +54,6 @@ fi
+ 
+ DX_FLAGS=""
+ SKIP_DX_MERGER="false"
+-EXPERIMENTAL=""
+-
+-# Setup experimental flag mappings in a bash associative array.
+-declare -A JACK_EXPERIMENTAL_ARGS
+-JACK_EXPERIMENTAL_ARGS["default-methods"]="-D jack.java.source.version=1.8"
+-JACK_EXPERIMENTAL_ARGS["lambdas"]="-D jack.java.source.version=1.8"
+ 
+ while true; do
+   if [ "x$1" = "x--dx-option" ]; then
+@@ -87,10 +81,6 @@ while true; do
+   elif [ "x$1" = "x--no-smali" ]; then
+     HAS_SMALI=false
+     shift
+-  elif [ "x$1" = "x--experimental" ]; then
+-    shift
+-    EXPERIMENTAL="${EXPERIMENTAL} $1"
+-    shift
+   elif expr "x$1" : "x--" >/dev/null 2>&1; then
+     echo "unknown $0 option: $1" 1>&2
+     exit 1
+@@ -99,11 +89,6 @@ while true; do
+   fi
+ done
+ 
+-# Add args from the experimental mappings.
+-for experiment in ${EXPERIMENTAL}; do
+-  JACK_ARGS="${JACK_ARGS} ${JACK_EXPERIMENTAL_ARGS[${experiment}]}"
+-done
+-
+ if [ -e classes.dex ]; then
+   zip $TEST_NAME.jar classes.dex
+   exit 0

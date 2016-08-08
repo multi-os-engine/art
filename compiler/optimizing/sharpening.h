@@ -33,11 +33,19 @@ class HInvokeStaticOrDirect;
 class HSharpening : public HOptimization {
  public:
   HSharpening(HGraph* graph,
+#ifndef MOE
               CodeGenerator* codegen,
+#else
+              HGraph* outer_graph,
+#endif
               const DexCompilationUnit& compilation_unit,
               CompilerDriver* compiler_driver)
       : HOptimization(graph, kSharpeningPassName),
+#ifndef MOE
         codegen_(codegen),
+#else
+        outer_graph_(outer_graph),
+#endif
         compilation_unit_(compilation_unit),
         compiler_driver_(compiler_driver) { }
 
@@ -49,7 +57,11 @@ class HSharpening : public HOptimization {
   void ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke);
   void ProcessLoadString(HLoadString* load_string);
 
+#ifndef MOE
   CodeGenerator* codegen_;
+#else
+  HGraph* outer_graph_;
+#endif
   const DexCompilationUnit& compilation_unit_;
   CompilerDriver* compiler_driver_;
 };

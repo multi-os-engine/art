@@ -40,6 +40,9 @@ struct FinalizerReferenceOffsets;
 namespace mirror {
 
 // C++ mirror of java.lang.ref.Reference
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED Reference : public Object {
  public:
   // Size of java.lang.ref.Reference.class.
@@ -120,6 +123,10 @@ class MANAGED Reference : public Object {
     return GetFieldObjectReferenceAddr<kDefaultVerifyFlags>(ReferentOffset());
   }
 
+#if defined(MOE) && defined(__LP64__)
+  uint32_t reference_padding_ ATTRIBUTE_UNUSED;
+#endif
+
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
   HeapReference<Reference> pending_next_;
   HeapReference<Object> queue_;
@@ -133,8 +140,14 @@ class MANAGED Reference : public Object {
   friend class gc::ReferenceQueue;
   DISALLOW_IMPLICIT_CONSTRUCTORS(Reference);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 // C++ mirror of java.lang.ref.FinalizerReference
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED FinalizerReference : public Reference {
  public:
   static MemberOffset ZombieOffset() {
@@ -157,6 +170,9 @@ class MANAGED FinalizerReference : public Reference {
   friend struct art::FinalizerReferenceOffsets;  // for verifying offset information
   DISALLOW_IMPLICIT_CONSTRUCTORS(FinalizerReference);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

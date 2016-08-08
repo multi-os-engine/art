@@ -48,7 +48,7 @@ constexpr bool kMemoryToolAddsRedzones = true;
 constexpr size_t kMemoryToolStackGuardSizeScale = 2;
 
 #else
-
+#ifndef MOE
 #include <valgrind.h>
 #include <memcheck/memcheck.h>
 #define MEMORY_TOOL_MAKE_NOACCESS(p, s) VALGRIND_MAKE_MEM_NOACCESS(p, s)
@@ -61,6 +61,18 @@ constexpr bool kMemoryToolIsValgrind = true;
 constexpr bool kMemoryToolDetectsLeaks = true;
 constexpr bool kMemoryToolAddsRedzones = true;
 constexpr size_t kMemoryToolStackGuardSizeScale = 1;
+#else
+#define MEMORY_TOOL_MAKE_NOACCESS(p, s)
+#define MEMORY_TOOL_MAKE_UNDEFINED(p, s)
+#define MEMORY_TOOL_MAKE_DEFINED(p, s)
+#define ATTRIBUTE_NO_SANITIZE_ADDRESS
+#define RUNNING_ON_MEMORY_TOOL false
+constexpr bool kMemoryToolIsAvailable = false;
+constexpr bool kMemoryToolIsValgrind = false;
+constexpr bool kMemoryToolDetectsLeaks = false;
+constexpr bool kMemoryToolAddsRedzones = false;
+constexpr size_t kMemoryToolStackGuardSizeScale = 0;
+#endif
 
 #endif
 

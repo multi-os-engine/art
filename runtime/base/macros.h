@@ -143,7 +143,11 @@ char (&ArraySizeHelper(T (&array)[N]))[N];
 #define OFFSETOF_MEMBERPTR(t, f) \
   (reinterpret_cast<uintptr_t>(&(reinterpret_cast<t*>(16)->*f)) - static_cast<uintptr_t>(16)) // NOLINT
 
+#ifndef MOE_WINDOWS
 #define PACKED(x) __attribute__ ((__aligned__(x), __packed__))
+#else
+#define PACKED(x) __declspec(align(x)) // This is to be used alongside with #pragma pack
+#endif
 
 #define LIKELY(x)       __builtin_expect((x), true)
 #define UNLIKELY(x)     __builtin_expect((x), false)
@@ -191,7 +195,11 @@ template<typename... T> void UNUSED(const T&...) {}
 // Define that a position within code is unreachable, for example:
 //   int foo () { LOG(FATAL) << "Don't call me"; UNREACHABLE(); }
 // without the UNREACHABLE a return statement would be necessary.
+#ifndef MOE_WINDOWS
 #define UNREACHABLE  __builtin_unreachable
+#else
+#define UNREACHABLE()  __assume(0)
+#endif
 
 // Add the C++11 noreturn attribute.
 #define NO_RETURN [[ noreturn ]]  // NOLINT[whitespace/braces] [5]

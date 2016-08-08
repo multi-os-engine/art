@@ -89,6 +89,9 @@ class CompilerDriver {
                  VerificationResults* verification_results,
                  DexFileToMethodInlinerMap* method_inliner_map,
                  Compiler::Kind compiler_kind,
+#ifdef MOE
+                 const std::string& platform_name,
+#endif
                  InstructionSet instruction_set,
                  const InstructionSetFeatures* instruction_set_features,
                  bool boot_image,
@@ -101,7 +104,11 @@ class CompilerDriver {
                  bool dump_passes,
                  CumulativeLogger* timer,
                  int swap_fd,
+#ifdef MOE
+                 const std::string& native_file);
+#else
                  const ProfileCompilationInfo* profile_compilation_info);
+#endif
 
   ~CompilerDriver();
 
@@ -116,6 +123,18 @@ class CompilerDriver {
         ? ArrayRef<const DexFile* const>(*dex_files_for_oat_file_)
         : ArrayRef<const DexFile* const>();
   }
+
+#ifdef MOE
+  void WriteNativeFiles() {
+    compiler_->WriteNativeFiles();
+  }
+#endif
+
+#ifdef MOE
+  uint16_t GetDexFileIdx() {
+    return dex_file_idx_;
+  }
+#endif
 
   void CompileAll(jobject class_loader,
                   const std::vector<const DexFile*>& dex_files,
@@ -162,11 +181,13 @@ class CompilerDriver {
   }
 
   // Generate the trampolines that are invoked by unresolved direct methods.
+#ifndef MOE
   std::unique_ptr<const std::vector<uint8_t>> CreateJniDlsymLookup() const;
   std::unique_ptr<const std::vector<uint8_t>> CreateQuickGenericJniTrampoline() const;
   std::unique_ptr<const std::vector<uint8_t>> CreateQuickImtConflictTrampoline() const;
   std::unique_ptr<const std::vector<uint8_t>> CreateQuickResolutionTrampoline() const;
   std::unique_ptr<const std::vector<uint8_t>> CreateQuickToInterpreterBridge() const;
+#endif
 
   CompiledClass* GetCompiledClass(ClassReference ref) const
       REQUIRES(!compiled_classes_lock_);
@@ -431,7 +452,9 @@ class CompilerDriver {
 
   // Checks whether profile guided compilation is enabled and if the method should be compiled
   // according to the profile file.
+#ifndef MOE
   bool ShouldCompileBasedOnProfile(const MethodReference& method_ref) const;
+#endif
 
   // Checks whether profile guided verification is enabled and if the method should be verified
   // according to the profile file.
@@ -696,10 +719,16 @@ class CompilerDriver {
   // List of dex files that will be stored in the oat file.
   const std::vector<const DexFile*>* dex_files_for_oat_file_;
 
+#ifdef MOE
+  uint16_t dex_file_idx_;
+#endif
+
   CompiledMethodStorage compiled_method_storage_;
 
   // Info for profile guided compilation.
+#ifndef MOE
   const ProfileCompilationInfo* const profile_compilation_info_;
+#endif
 
   size_t max_arena_alloc_;
   friend class CompileClassVisitor;

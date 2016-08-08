@@ -719,7 +719,11 @@ void ProfileSampleResults::Clear() {
 }
 
 uint32_t ProfileSampleResults::Hash(ArtMethod* method) {
+#ifndef MOE
   return (PointerToLowMemUInt32(method) >> 3) % kHashSize;
+#else
+  return (reinterpret_cast<uintptr_t>(method) >> 3) % kHashSize;
+#endif
 }
 
 // Read a single line into the given string.  Returns true if everything OK, false

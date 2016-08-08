@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,10 +55,12 @@
 #include "dex_file-inl.h"
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
+#ifndef MOE
 #include "elf_file.h"
 #include "elf_writer.h"
 #include "elf_writer_quick.h"
-#include "gc/space/image_space.h"
+kInvalidFd
+#endif
 #include "gc/space/space-inl.h"
 #include "image_writer.h"
 #include "interpreter/unstarted_runtime.h"
@@ -360,6 +363,13 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("  --multi-image: specify that separate oat and image files be generated for each "
              "input dex file.");
   UsageError("");
+#ifdef MOE
+  UsageError("  --native-output=<file-name>: specify a file name for native product.");
+  UsageError("");
+  UsageError("  --platform=<platform-name>: specify a file name for native product.");
+  UsageError("      Example: --platform=Windows or --platform=Darwin");
+  UsageError("");
+#endif
   UsageError("  --force-determinism: force the compiler to emit a deterministic output.");
   UsageError("      This option is incompatible with read barriers (e.g., if dex2oat has been");
   UsageError("      built with the environment variable `ART_USE_READ_BARRIER` set to `true`).");
@@ -498,10 +508,12 @@ class Dex2Oat FINAL {
       compiler_kind_(Compiler::kOptimizing),
       instruction_set_(kRuntimeISA),
       // Take the default set of instruction features from the build.
+#ifndef MOE
       image_file_location_oat_checksum_(0),
       image_file_location_oat_data_begin_(0),
       image_patch_delta_(0),
       key_value_store_(nullptr),
+#endif
       verification_results_(nullptr),
       method_inliner_map_(),
       runtime_(nullptr),
@@ -509,7 +521,11 @@ class Dex2Oat FINAL {
       start_ns_(NanoTime()),
       oat_fd_(-1),
       zip_fd_(-1),
+#ifndef MOE
       image_base_(0U),
+#else
+      image_base_(0x10000000U),
+#endif
       image_classes_zip_filename_(nullptr),
       image_classes_filename_(nullptr),
       image_storage_mode_(ImageHeader::kStorageModeUncompressed),
@@ -522,10 +538,12 @@ class Dex2Oat FINAL {
       multi_image_(false),
       is_host_(false),
       class_loader_(nullptr),
+#ifndef MOE
       elf_writers_(),
       oat_writers_(),
       rodata_(),
       image_writer_(nullptr),
+#endif
       driver_(nullptr),
       opened_dex_files_maps_(),
       opened_dex_files_(),
@@ -535,8 +553,10 @@ class Dex2Oat FINAL {
       dump_timing_(false),
       dump_slow_timing_(kIsDebugBuild),
       swap_fd_(kInvalidFd),
+#ifndef MOE
       app_image_fd_(kInvalidFd),
       profile_file_fd_(kInvalidFd),
+#endif
       timings_(timings),
       force_determinism_(false)
       {}
@@ -550,7 +570,9 @@ class Dex2Oat FINAL {
       // We want to just exit on non-debug builds, not bringing the runtime down
       // in an orderly fashion. So release the following fields.
       driver_.release();
+#ifndef MOE
       image_writer_.release();
+#endif
       for (std::unique_ptr<const DexFile>& dex_file : opened_dex_files_) {
         dex_file.release();
       }
@@ -562,7 +584,9 @@ class Dex2Oat FINAL {
       }
       runtime_.release();
       verification_results_.release();
+#ifndef MOE
       key_value_store_.release();
+#endif
     }
   }
 
@@ -679,7 +703,9 @@ class Dex2Oat FINAL {
 
   void ProcessOptions(ParserOptions* parser_options) {
     boot_image_ = !image_filenames_.empty();
+#ifndef MOE
     app_image_ = app_image_fd_ != -1 || !app_image_file_name_.empty();
+#endif
 
     if (IsAppImage() && IsBootImage()) {
       Usage("Can't have both --image and (--app-image-fd or --app-image-file)");
@@ -691,9 +717,15 @@ class Dex2Oat FINAL {
       compiler_options_->debuggable_ = true;
     }
 
+#ifndef MOE
     if (oat_filenames_.empty() && oat_fd_ == -1) {
       Usage("Output must be supplied with either --oat-file or --oat-fd");
     }
+#else
+    if (oat_filenames_.empty() && native_file_name_.empty() && oat_fd_ == -1) {
+      Usage("Output must be supplied with either --oat-file, --oat-fd or --native-output");
+    }
+#endif
 
     if (!oat_filenames_.empty() && oat_fd_ != -1) {
       Usage("--oat-file should not be used with --oat-fd");
@@ -716,10 +748,16 @@ class Dex2Oat FINAL {
       Usage("--oat-file arguments do not match --oat-symbols arguments");
     }
 
+#ifndef MOE
     if (!image_filenames_.empty() && image_filenames_.size() != oat_filenames_.size()) {
+#else
+    if (native_file_name_.empty() && !image_filenames_.empty() &&
+        image_filenames_.size() != oat_filenames_.size()) {
+#endif
       Usage("--oat-file arguments do not match --image arguments");
     }
 
+#ifndef MOE
     if (android_root_.empty()) {
       const char* android_root_env_var = getenv("ANDROID_ROOT");
       if (android_root_env_var == nullptr) {
@@ -732,6 +770,7 @@ class Dex2Oat FINAL {
       parser_options->boot_image_filename += android_root_;
       parser_options->boot_image_filename += "/framework/boot.art";
     }
+#endif
     if (!parser_options->boot_image_filename.empty()) {
       boot_image_filename_ = parser_options->boot_image_filename;
     }
@@ -773,7 +812,11 @@ class Dex2Oat FINAL {
     }
 
     if (dex_locations_.empty()) {
+#ifndef MOE
       for (const char* dex_file_name : dex_filenames_) {
+#else
+      for (const std::string& dex_file_name : dex_filenames_) {
+#endif
         dex_locations_.push_back(dex_file_name);
       }
     } else if (dex_locations_.size() != dex_filenames_.size()) {
@@ -796,11 +839,13 @@ class Dex2Oat FINAL {
       }
     }
 
+#ifndef MOE
     const bool have_profile_file = !profile_file_.empty();
     const bool have_profile_fd = profile_file_fd_ != kInvalidFd;
     if (have_profile_file && have_profile_fd) {
       Usage("Profile file should not be specified with both --profile-file-fd and --profile-file");
     }
+#endif
 
     if (!parser_options->oat_symbols.empty()) {
       oat_unstripped_ = std::move(parser_options->oat_symbols);
@@ -857,8 +902,10 @@ class Dex2Oat FINAL {
       case kX86_64:
       case kMips:
       case kMips64:
+#ifdef MOE_DEX2OAT_ENABLE_IMPLICIT_EXCEPTION
         compiler_options_->implicit_null_checks_ = true;
         compiler_options_->implicit_so_checks_ = true;
+#endif
         break;
 
       default:
@@ -876,11 +923,13 @@ class Dex2Oat FINAL {
     }
 
     // For now, if we're on the host and compile the boot image, *always* use multiple image files.
+#ifndef MOE
     if (!kIsTargetBuild && IsBootImage()) {
       if (image_filenames_.size() == 1) {
         multi_image_ = true;
       }
     }
+#endif
 
     // Done with usage checks, enable watchdog if requested
     if (parser_options->watch_dog_enabled) {
@@ -888,7 +937,9 @@ class Dex2Oat FINAL {
     }
 
     // Fill some values into the key-value store for the oat header.
+#ifndef MOE
     key_value_store_.reset(new SafeMap<std::string, std::string>());
+#endif
 
     // Automatically force determinism for the boot image in a host build if the default GC is CMS
     // or MS and read barriers are not enabled, as the former switches the GC to a non-concurrent
@@ -1016,9 +1067,12 @@ class Dex2Oat FINAL {
       }
       oss << argv[i];
     }
+#ifndef MOE
     key_value_store_->Put(OatHeader::kDex2OatCmdLineKey, oss.str());
+#endif
     oss.str("");  // Reset.
     oss << kRuntimeISA;
+#ifndef MOE
     key_value_store_->Put(OatHeader::kDex2OatHostKey, oss.str());
     key_value_store_->Put(
         OatHeader::kPicKey,
@@ -1034,6 +1088,7 @@ class Dex2Oat FINAL {
     key_value_store_->Put(OatHeader::kHasPatchInfoKey,
         compiler_options_->GetIncludePatchInformation() ? OatHeader::kTrueValue
                                                         : OatHeader::kFalseValue);
+#endif
   }
 
   // Parse the arguments from the command line. In case of an unrecognized option or impossible
@@ -1063,7 +1118,29 @@ class Dex2Oat FINAL {
         LOG(INFO) << "dex2oat: option[" << i << "]=" << argv[i];
       }
       if (option.starts_with("--dex-file=")) {
+#ifndef MOE
         dex_filenames_.push_back(option.substr(strlen("--dex-file=")).data());
+#else
+        std::vector<char> buff(option.size() - sizeof("--dex-file=") + 1);
+        const char* start = option.data() + sizeof("--dex-file=") - 1;
+        const char* end = start;
+        while (true) {
+#ifndef MOE_WINDOWS
+          if ((!*end || *end == ':') && (end - start) > 0) {
+#else
+          if ((!*end || *end == ';') && (end - start) > 0) {
+#endif
+            memcpy(buff.data(), start, end - start);
+            buff[end-start] = 0;
+            start = end + 1;
+            dex_filenames_.push_back(buff.data());
+          }
+          if (!*end) {
+            break;
+          }
+          end++;
+        }
+#endif
       } else if (option.starts_with("--dex-location=")) {
         dex_locations_.push_back(option.substr(strlen("--dex-location=")).data());
       } else if (option.starts_with("--zip-fd=")) {
@@ -1114,10 +1191,12 @@ class Dex2Oat FINAL {
         ParseInstructionSetFeatures(option, parser_options.get());
       } else if (option.starts_with("--compiler-backend=")) {
         ParseCompilerBackend(option, parser_options.get());
+#ifndef MOE
       } else if (option.starts_with("--profile-file=")) {
         profile_file_ = option.substr(strlen("--profile-file=")).ToString();
       } else if (option.starts_with("--profile-file-fd=")) {
         ParseUintOption(option, "--profile-file-fd", &profile_file_fd_, Usage);
+#endif
       } else if (option == "--host") {
         is_host_ = true;
       } else if (option == "--runtime-arg") {
@@ -1138,10 +1217,17 @@ class Dex2Oat FINAL {
         swap_file_name_ = option.substr(strlen("--swap-file=")).data();
       } else if (option.starts_with("--swap-fd=")) {
         ParseUintOption(option, "--swap-fd", &swap_fd_, Usage);
+#ifndef MOE
       } else if (option.starts_with("--app-image-file=")) {
         app_image_file_name_ = option.substr(strlen("--app-image-file=")).data();
       } else if (option.starts_with("--app-image-fd=")) {
         ParseUintOption(option, "--app-image-fd", &app_image_fd_, Usage);
+#else
+      } else if (option.starts_with("--native-output=")) {
+        native_file_name_ = option.substr(strlen("--native-output=")).data();
+      } else if (option.starts_with("--platform=")) {
+        platform_name_ = option.substr(strlen("--platform=")).data();
+#endif
       } else if (option.starts_with("--verbose-methods=")) {
         // TODO: rather than switch off compiler logging, make all VLOG(compiler) messages
         //       conditional on having verbost methods.
@@ -1247,14 +1333,23 @@ class Dex2Oat FINAL {
     return true;
   }
 
+#ifdef MOE
+  bool HasNativeTarget() {
+    return !native_file_name_.empty();
+  }
+#endif
+    
   void EraseOatFiles() {
+#ifdef MOE
+    DCHECK(native_file_name_.empty());
+#endif
     for (size_t i = 0; i < oat_files_.size(); ++i) {
       DCHECK(oat_files_[i].get() != nullptr);
       oat_files_[i]->Erase();
       oat_files_[i].reset();
     }
   }
-
+    
   void Shutdown() {
     ScopedObjectAccess soa(Thread::Current());
     for (jobject dex_cache : dex_caches_) {
@@ -1263,6 +1358,7 @@ class Dex2Oat FINAL {
     dex_caches_.clear();
   }
 
+#ifndef MOE
   void LoadClassProfileDescriptors() {
     if (profile_compilation_info_ != nullptr && app_image_) {
       Runtime* runtime = Runtime::Current();
@@ -1295,6 +1391,7 @@ class Dex2Oat FINAL {
       }
     }
   }
+#endif
 
   // Set up the environment for compilation. Includes starting the runtime and loading/opening the
   // boot class path.
@@ -1319,16 +1416,17 @@ class Dex2Oat FINAL {
       return false;
     }
 
+#ifndef MOE
     CreateOatWriters();
     if (!AddDexFileSources()) {
       return false;
     }
-
     if (IsBootImage() && image_filenames_.size() > 1) {
       // If we're compiling the boot image, store the boot classpath into the Key-Value store.
       // We need this for the multi-image case.
       key_value_store_->Put(OatHeader::kBootClassPathKey, GetMultiImageBootClassPath());
     }
+#endif
 
     if (!IsBootImage()) {
       // When compiling an app, create the runtime early to retrieve
@@ -1337,6 +1435,7 @@ class Dex2Oat FINAL {
         return false;
       }
 
+#ifndef MOE
       if (CompilerFilter::DependsOnImageChecksum(compiler_options_->GetCompilerFilter())) {
         TimingLogger::ScopedTiming t3("Loading image checksum", timings_);
         std::vector<gc::space::ImageSpace*> image_spaces =
@@ -1359,8 +1458,10 @@ class Dex2Oat FINAL {
         image_file_location_oat_data_begin_ = 0u;
         image_patch_delta_ = 0;
       }
+#endif
 
       // Open dex files for class path.
+#ifndef MOE
       const std::vector<std::string> class_path_locations =
           GetClassPathLocations(runtime_->GetClassPathString());
       OpenClassPathFiles(class_path_locations,
@@ -1379,10 +1480,12 @@ class Dex2Oat FINAL {
         encoded_class_path = OatFile::EncodeDexFileDependencies(class_path_files);
       }
       key_value_store_->Put(OatHeader::kClassPathKey, encoded_class_path);
+#endif
     }
 
     // Now that we have finalized key_value_store_, start writing the oat file.
     {
+#ifndef MOE
       TimingLogger::ScopedTiming t_dex("Writing and opening dex files", timings_);
       rodata_.reserve(oat_writers_.size());
       for (size_t i = 0, size = oat_writers_.size(); i != size; ++i) {
@@ -1411,9 +1514,18 @@ class Dex2Oat FINAL {
           DCHECK(opened_dex_files.empty());
         }
       }
+#endif
     }
 
+#ifndef MOE
     dex_files_ = MakeNonOwningPointerVector(opened_dex_files_);
+#else
+    std::vector<const DexFile*> runtime_dex_files =
+        runtime_->GetClassLinker()->GetBootClassPath();    
+    for (const DexFile* dex_file : runtime_dex_files) {
+      dex_files_.push_back(dex_file);
+    }
+#endif
     if (IsBootImage()) {
       // For boot image, pass opened dex files to the Runtime::Create().
       // Note: Runtime acquires ownership of these dex files.
@@ -1469,9 +1581,11 @@ class Dex2Oat FINAL {
   }
 
   // If we need to keep the oat file open for the image writer.
+#ifndef MOE
   bool ShouldKeepOatFileOpen() const {
     return IsImage() && oat_fd_ != kInvalidFd;
   }
+#endif
 
   // Create and invoke the compiler driver. This will compile all the dex files.
   void Compile() {
@@ -1520,15 +1634,15 @@ class Dex2Oat FINAL {
           }
         }
       }
-      if (!no_inline_from_dex_files_.empty()) {
-        compiler_options_->no_inline_from_ = &no_inline_from_dex_files_;
-      }
     }
 
     driver_.reset(new CompilerDriver(compiler_options_.get(),
                                      verification_results_.get(),
                                      &method_inliner_map_,
                                      compiler_kind_,
+#ifdef MOE
+                                     platform_name_,
+#endif
                                      instruction_set_,
                                      instruction_set_features_.get(),
                                      IsBootImage(),
@@ -1541,10 +1655,21 @@ class Dex2Oat FINAL {
                                      dump_passes_,
                                      compiler_phases_timings_.get(),
                                      swap_fd_,
+#ifndef MOE
                                      profile_compilation_info_.get()));
+#else
+                                     native_file_name_));
+#endif
+
     driver_->SetDexFilesForOatFile(dex_files_);
     driver_->CompileAll(class_loader_, dex_files_, timings_);
   }
+
+#ifdef MOE
+  void WriteNativeFiles() {
+    driver_->WriteNativeFiles();
+  }
+#endif
 
   // Notes on the interleaving of creating the images and oat files to
   // ensure the references between the two are correct.
@@ -1611,6 +1736,7 @@ class Dex2Oat FINAL {
   // ImageWriter, if necessary.
   // Note: Flushing (and closing) the file is the caller's responsibility, except for the failure
   //       case (when the file will be explicitly erased).
+#ifndef MOE
   bool WriteOatFiles() {
     TimingLogger::ScopedTiming t("dex2oat Oat", timings_);
 
@@ -1750,8 +1876,10 @@ class Dex2Oat FINAL {
 
     return true;
   }
+#endif
 
   // If we are compiling an image, invoke the image creation routine. Else just skip.
+#ifndef MOE
   bool HandleImage() {
     if (IsImage()) {
       TimingLogger::ScopedTiming t("dex2oat ImageWriter", timings_);
@@ -1762,6 +1890,7 @@ class Dex2Oat FINAL {
     }
     return true;
   }
+#endif
 
   // Create a copy from stripped to unstripped.
   bool CopyStrippedToUnstripped() {
@@ -1865,6 +1994,7 @@ class Dex2Oat FINAL {
     return CompilerFilter::DependsOnProfile(compiler_options_->GetCompilerFilter());
   }
 
+#ifndef MOE
   bool LoadProfile() {
     DCHECK(UseProfileGuidedCompilation());
 
@@ -1894,6 +2024,7 @@ class Dex2Oat FINAL {
 
     return success;
   }
+#endif
 
  private:
   template <typename T>
@@ -1949,6 +2080,7 @@ class Dex2Oat FINAL {
     return bootcp_oss.str();
   }
 
+#ifndef MOE
   std::vector<std::string> GetClassPathLocations(const std::string& class_path) {
     // This function is used only for apps and for an app we have exactly one oat file.
     DCHECK(!IsBootImage());
@@ -1959,7 +2091,11 @@ class Dex2Oat FINAL {
     }
 
     std::vector<std::string> parsed;
+#ifndef MOE_WINDOWS
     Split(class_path, ':', &parsed);
+#else
+    Split(class_path, ';', &parsed);
+#endif
     auto kept_it = std::remove_if(parsed.begin(),
                                   parsed.end(),
                                   [dex_files_canonical_locations](const std::string& location) {
@@ -1969,9 +2105,11 @@ class Dex2Oat FINAL {
     parsed.erase(kept_it, parsed.end());
     return parsed;
   }
+#endif
 
   // Opens requested class path files and appends them to opened_dex_files. If the dex files have
   // been stripped, this opens them from their oat files and appends them to opened_oat_files.
+#ifndef MOE
   static void OpenClassPathFiles(const std::vector<std::string>& class_path_locations,
                                  std::vector<std::unique_ptr<const DexFile>>* opened_dex_files,
                                  std::vector<std::unique_ptr<OatFile>>* opened_oat_files,
@@ -2004,6 +2142,7 @@ class Dex2Oat FINAL {
       }
     }
   }
+#endif
 
   bool PrepareImageClasses() {
     // If --image-classes was specified, calculate the full list of classes to include in the image.
@@ -2079,7 +2218,11 @@ class Dex2Oat FINAL {
     DCHECK_EQ(dex_filenames_.size(), dex_locations_.size());
     size_t kept = 0u;
     for (size_t i = 0, size = dex_filenames_.size(); i != size; ++i) {
+#ifndef MOE
       if (!OS::FileExists(dex_filenames_[i])) {
+#else
+      if (!OS::FileExists(dex_filenames_[i].c_str())) {
+#endif
         LOG(WARNING) << "Skipping non-existent dex file '" << dex_filenames_[i] << "'";
       } else {
         dex_filenames_[kept] = dex_filenames_[i];
@@ -2091,6 +2234,7 @@ class Dex2Oat FINAL {
     dex_locations_.resize(kept);
   }
 
+#ifndef MOE
   bool AddDexFileSources() {
     TimingLogger::ScopedTiming t2("AddDexFileSources", timings_);
     if (zip_fd_ != -1) {
@@ -2133,6 +2277,7 @@ class Dex2Oat FINAL {
       oat_writers_.emplace_back(new OatWriter(IsBootImage(), timings_));
     }
   }
+#endif
 
   void SaveDexInput() {
     for (size_t i = 0; i < dex_files_.size(); ++i) {
@@ -2157,10 +2302,18 @@ class Dex2Oat FINAL {
     RuntimeOptions raw_options;
     if (boot_image_filename_.empty()) {
       std::string boot_class_path = "-Xbootclasspath:";
+#ifndef MOE_WINDOWS
       boot_class_path += Join(dex_filenames_, ':');
+#else
+      boot_class_path += Join(dex_filenames_, ';');
+#endif
       raw_options.push_back(std::make_pair(boot_class_path, nullptr));
       std::string boot_class_path_locations = "-Xbootclasspath-locations:";
+#ifndef MOE_WINDOWS
       boot_class_path_locations += Join(dex_locations_, ':');
+#else
+      boot_class_path_locations += Join(dex_locations_, ';');
+#endif
       raw_options.push_back(std::make_pair(boot_class_path_locations, nullptr));
     } else {
       std::string boot_image_option = "-Ximage:";
@@ -2178,7 +2331,11 @@ class Dex2Oat FINAL {
     // Only allow no boot image for the runtime if we're compiling one. When we compile an app,
     // we don't want fallback mode, it will abort as we do not push a boot classpath (it might
     // have been stripped in preopting, anyways).
+#ifndef MOE
     if (!IsBootImage()) {
+#else
+    if (!IsBootImage() && !HasNativeTarget()) {
+#endif
       raw_options.push_back(std::make_pair("-Xno-dex-file-fallback", nullptr));
     }
     // Disable libsigchain. We don't don't need it during compilation and it prevents us
@@ -2243,6 +2400,7 @@ class Dex2Oat FINAL {
   }
 
   // Let the ImageWriter write the image files. If we do not compile PIC, also fix up the oat files.
+#ifndef MOE
   bool CreateImageFile()
       REQUIRES(!Locks::mutator_lock_) {
     CHECK(image_writer_ != nullptr);
@@ -2290,6 +2448,7 @@ class Dex2Oat FINAL {
 
     return true;
   }
+#endif
 
   // Reads the class names (java.lang.Object) and returns a set of descriptors (Ljava/lang/Object;)
   static std::unordered_set<std::string>* ReadImageClassesFromFile(
@@ -2412,10 +2571,12 @@ class Dex2Oat FINAL {
   InstructionSet instruction_set_;
   std::unique_ptr<const InstructionSetFeatures> instruction_set_features_;
 
+#ifndef MOE
   uint32_t image_file_location_oat_checksum_;
   uintptr_t image_file_location_oat_data_begin_;
   int32_t image_patch_delta_;
   std::unique_ptr<SafeMap<std::string, std::string> > key_value_store_;
+#endif
 
   std::unique_ptr<VerificationResults> verification_results_;
 
@@ -2435,8 +2596,13 @@ class Dex2Oat FINAL {
   std::vector<const char*> oat_filenames_;
   std::vector<const char*> oat_unstripped_;
   int oat_fd_;
+#ifndef MOE
   std::vector<const char*> dex_filenames_;
   std::vector<const char*> dex_locations_;
+#else
+  std::vector<std::string> dex_filenames_;
+  std::vector<std::string> dex_locations_;
+#endif
   int zip_fd_;
   std::string zip_location_;
   std::string boot_image_filename_;
@@ -2464,10 +2630,12 @@ class Dex2Oat FINAL {
   std::vector<jobject> dex_caches_;
   jobject class_loader_;
 
+#ifndef MOE
   std::vector<std::unique_ptr<ElfWriter>> elf_writers_;
   std::vector<std::unique_ptr<OatWriter>> oat_writers_;
   std::vector<OutputStream*> rodata_;
   std::unique_ptr<ImageWriter> image_writer_;
+#endif
   std::unique_ptr<CompilerDriver> driver_;
 
   std::vector<std::unique_ptr<MemMap>> opened_dex_files_maps_;
@@ -2483,11 +2651,16 @@ class Dex2Oat FINAL {
   bool dump_slow_timing_;
   std::string swap_file_name_;
   int swap_fd_;
+#ifndef MOE
   std::string app_image_file_name_;
   int app_image_fd_;
   std::string profile_file_;
   int profile_file_fd_;
   std::unique_ptr<ProfileCompilationInfo> profile_compilation_info_;
+#else
+  std::string native_file_name_;
+  std::string platform_name_;
+#endif
   TimingLogger* timings_;
   std::unique_ptr<CumulativeLogger> compiler_phases_timings_;
   std::vector<std::vector<const DexFile*>> dex_files_per_oat_file_;
@@ -2522,6 +2695,18 @@ static void b13564922() {
 #endif
 }
 
+#ifdef MOE
+static int CompileNative(Dex2Oat& dex2oat) {
+  dex2oat.Compile();
+  
+  dex2oat.WriteNativeFiles();
+  
+  dex2oat.DumpTiming();
+  return EXIT_SUCCESS;
+}
+#endif
+  
+#ifndef MOE
 static int CompileImage(Dex2Oat& dex2oat) {
   dex2oat.LoadClassProfileDescriptors();
   dex2oat.Compile();
@@ -2602,6 +2787,7 @@ static int CompileApp(Dex2Oat& dex2oat) {
   dex2oat.DumpTiming();
   return EXIT_SUCCESS;
 }
+#endif
 
 static int dex2oat(int argc, char** argv) {
   b13564922();
@@ -2619,12 +2805,14 @@ static int dex2oat(int argc, char** argv) {
 
   // If needed, process profile information for profile guided compilation.
   // This operation involves I/O.
+#ifndef MOE
   if (dex2oat->UseProfileGuidedCompilation()) {
     if (!dex2oat->LoadProfile()) {
       LOG(ERROR) << "Failed to process profile file";
       return EXIT_FAILURE;
     }
   }
+#endif
 
   // Check early that the result of compilation can be written
   if (!dex2oat->OpenFile()) {
@@ -2644,16 +2832,28 @@ static int dex2oat(int argc, char** argv) {
   }
 
   if (!dex2oat->Setup()) {
+#ifndef MOE
     dex2oat->EraseOatFiles();
+#else
+    if (!dex2oat->HasNativeTarget()) {
+      dex2oat->EraseOatFiles();
+    }
+#endif
     return EXIT_FAILURE;
   }
 
   bool result;
+#ifdef MOE
+  if (dex2oat->HasNativeTarget()) {
+    result = CompileNative(*dex2oat);
+  }
+#else
   if (dex2oat->IsImage()) {
     result = CompileImage(*dex2oat);
   } else {
     result = CompileApp(*dex2oat);
   }
+#endif
 
   dex2oat->Shutdown();
   return result;

@@ -20,6 +20,9 @@
 namespace art {
 
 // Assignable test for code, won't throw.  Null and equality tests already performed
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" uint32_t artIsAssignableFromCode(mirror::Class* klass, mirror::Class* ref_class)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   DCHECK(klass != nullptr);

@@ -24,7 +24,7 @@
 
 namespace art {
 
-static void DdmServer_nativeSendChunk(JNIEnv* env, jclass, jint type,
+static JNICALL void DdmServer_nativeSendChunk(JNIEnv* env, jclass, jint type,
                                       jbyteArray javaData, jint offset, jint length) {
   ScopedFastNativeObjectAccess soa(env);
   ScopedByteArrayRO data(env, javaData);

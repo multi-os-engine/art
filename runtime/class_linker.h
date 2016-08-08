@@ -60,7 +60,13 @@ class InternTable;
 template<class T> class ObjectLock;
 class Runtime;
 class ScopedObjectAccessAlreadyRunnable;
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 template<size_t kNumReferences> class PACKED(4) StackHandleScope;
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 enum VisitRootFlags : uint8_t;
 
@@ -150,11 +156,13 @@ class ClassLinker {
       REQUIRES(!dex_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+#ifndef MOE
   bool OpenImageDexFiles(gc::space::ImageSpace* space,
                          std::vector<std::unique_ptr<const DexFile>>* out_dex_files,
                          std::string* error_msg)
       REQUIRES(!dex_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
+#endif
 
   // Finds a class by its descriptor, loading it if necessary.
   // If class_loader is null, searches boot_class_path_.
@@ -461,11 +469,13 @@ class ClassLinker {
                    LogSeverity log_level = LogSeverity::NONE)
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!dex_lock_);
+#ifndef MOE
   bool VerifyClassUsingOatFile(const DexFile& dex_file,
                                mirror::Class* klass,
                                mirror::Class::Status& oat_file_class_status)
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!dex_lock_);
+#endif
   void ResolveClassExceptionHandlerTypes(Handle<mirror::Class> klass)
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!dex_lock_);
@@ -496,8 +506,10 @@ class ClassLinker {
   const void* GetOatMethodQuickCodeFor(ArtMethod* method)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+#ifndef MOE
   const OatFile::OatMethod FindOatMethodFor(ArtMethod* method, bool* found)
       SHARED_REQUIRES(Locks::mutator_lock_);
+#endif
 
   pid_t GetClassesLockOwner();  // For SignalCatcher.
   pid_t GetDexLockOwner();  // For SignalCatcher.
@@ -524,7 +536,11 @@ class ClassLinker {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Set the entrypoints up for method to the enter the interpreter.
+#ifndef MOE
   void SetEntryPointsToInterpreter(ArtMethod* method) const
+#else
+  void SetEntryPointsToInterpreter(ArtMethod* method)
+#endif
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Attempts to insert a class into a class table.  Returns null if
@@ -541,15 +557,19 @@ class ClassLinker {
   }
 
   // Move all of the boot image classes into the class table for faster lookups.
+#ifndef MOE
   void AddBootImageClassesToClassTable()
       REQUIRES(!Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
+#endif
 
   // Add image classes to the class table.
+#ifndef MOE
   void AddImageClassesToClassTable(std::vector<gc::space::ImageSpace*> image_spaces,
                                    mirror::ClassLoader* class_loader)
       REQUIRES(!Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
+#endif
 
   // Move the class table to the pre-zygote table to reduce memory usage. This works by ensuring
   // that no more classes are ever added to the pre zygote table which makes it that the pages
@@ -585,6 +605,13 @@ class ClassLinker {
       REQUIRES(!Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+#ifdef MOE
+  const void* GetJniBridgeFromMethod(Thread* self, ArtMethod* method);
+  const void* GetReflectionBridgeFromMethod(Thread* self, ArtMethod* method);
+  const void* GetResolutionTrampolineFromMethod(Thread* self, ArtMethod* method);
+  const void* GetInterpreterBridgeFromMethod(Thread* self, ArtMethod* method);
+#endif
+
   // Unlike GetOrCreateAllocatorForClassLoader, GetAllocatorForClassLoader asserts that the
   // allocator for this class loader is already created.
   LinearAlloc* GetAllocatorForClassLoader(mirror::ClassLoader* class_loader)
@@ -607,9 +634,11 @@ class ClassLinker {
   std::set<DexCacheResolvedClasses> GetResolvedClasses(bool ignore_boot_classes)
       REQUIRES(!dex_lock_);
 
+#ifndef MOE
   std::unordered_set<std::string> GetClassDescriptorsForProfileKeys(
       const std::set<DexCacheResolvedClasses>& classes)
       REQUIRES(!dex_lock_);
+#endif
 
   static bool IsBootClassLoader(ScopedObjectAccessAlreadyRunnable& soa,
                                 mirror::ClassLoader* class_loader)
@@ -762,8 +791,10 @@ class ClassLinker {
 
   // Finds the associated oat class for a dex_file and descriptor. Returns an invalid OatClass on
   // error and sets found to false.
+#ifndef MOE
   OatFile::OatClass FindOatClass(const DexFile& dex_file, uint16_t class_def_idx, bool* found)
       SHARED_REQUIRES(Locks::mutator_lock_);
+#endif
 
   void RegisterDexFileLocked(const DexFile& dex_file, Handle<mirror::DexCache> dex_cache)
       REQUIRES(dex_lock_)
@@ -979,6 +1010,10 @@ class ClassLinker {
   void LinkCode(ArtMethod* method,
                 const OatFile::OatClass* oat_class,
                 uint32_t class_def_method_index)
+#ifdef MOE
+      REQUIRES(resolution_trampolines_lock_, reflection_bridges_lock_, jni_bridges_lock_,
+               interpreter_bridges_lock_)
+#endif
       SHARED_REQUIRES(Locks::mutator_lock_);
   void CreateReferenceInstanceOffsets(Handle<mirror::Class> klass)
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -1013,8 +1048,10 @@ class ClassLinker {
   void EnsureSkipAccessChecksMethods(Handle<mirror::Class> c)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+#ifndef MOE
   mirror::Class* LookupClassFromBootImage(const char* descriptor)
       SHARED_REQUIRES(Locks::mutator_lock_);
+#endif
 
   // Register a class loader and create its class table and allocator. Should not be called if
   // these are already created.
@@ -1067,6 +1104,7 @@ class ClassLinker {
 
   // new_class_set is the set of classes that were read from the class table section in the image.
   // If there was no class table section, it is null.
+#ifndef MOE
   bool UpdateAppImageClassLoadersAndDexCaches(
       gc::space::ImageSpace* space,
       Handle<mirror::ClassLoader> class_loader,
@@ -1076,6 +1114,7 @@ class ClassLinker {
       std::string* out_error_msg)
       REQUIRES(!dex_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
+#endif
 
   // Check that c1 == FindSystemClass(self, descriptor). Abort with class dumps otherwise.
   void CheckSystemClass(Thread* self, Handle<mirror::Class> c1, const char* descriptor)
@@ -1124,7 +1163,10 @@ class ClassLinker {
   std::vector<GcRoot<mirror::Class>> new_class_roots_ GUARDED_BY(Locks::classlinker_classes_lock_);
 
   // Do we need to search dex caches to find boot image classes?
+#ifndef MOE
   bool dex_cache_boot_image_class_lookup_required_;
+#endif
+
   // Number of times we've searched dex caches for a class. After a certain number of misses we move
   // the classes into the class_table_ to avoid dex cache based searches.
   Atomic<uint32_t> failed_dex_cache_class_lookups_;
@@ -1148,10 +1190,14 @@ class ClassLinker {
 
   // Trampolines within the image the bounce to runtime entrypoints. Done so that there is a single
   // patch point within the image. TODO: make these proper relocations.
+#ifndef MOE
   const void* quick_resolution_trampoline_;
+#endif
   const void* quick_imt_conflict_trampoline_;
+#ifndef MOE
   const void* quick_generic_jni_trampoline_;
   const void* quick_to_interpreter_bridge_trampoline_;
+#endif
 
   // Image pointer size.
   size_t image_pointer_size_;
@@ -1162,6 +1208,25 @@ class ClassLinker {
   friend class JniInternalTest;  // for GetRuntimeQuickGenericJniStub
   ART_FRIEND_TEST(ClassLinkerTest, RegisterDexFileName);  // for DexLock, and RegisterDexFileLocked
   ART_FRIEND_TEST(mirror::DexCacheTest, Open);  // for AllocDexCache
+
+#ifdef MOE
+  ReaderWriterMutex reflection_bridges_lock_;
+  std::map<std::string, const void*> reflection_bridges_
+      GUARDED_BY(reflection_bridges_lock_);
+
+  ReaderWriterMutex jni_bridges_lock_;
+  std::map<std::string, const void*> jni_bridges_
+      GUARDED_BY(jni_bridges_lock_);
+
+  ReaderWriterMutex resolution_trampolines_lock_;
+  std::map<std::string, const void*> resolution_trampolines_
+      GUARDED_BY(resolution_trampolines_lock_);
+
+  ReaderWriterMutex interpreter_bridges_lock_;
+  std::map<std::string, const void*> interpreter_bridges_
+      GUARDED_BY(interpreter_bridges_lock_);
+#endif
+
   DISALLOW_COPY_AND_ASSIGN(ClassLinker);
 };
 

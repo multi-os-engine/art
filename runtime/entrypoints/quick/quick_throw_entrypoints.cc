@@ -23,6 +23,9 @@
 namespace art {
 
 // Deliver an exception that's pending on thread helping set up a callee save frame on the way.
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" NO_RETURN void artDeliverPendingExceptionFromCode(Thread* self)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   ScopedQuickEntrypointChecks sqec(self);
@@ -49,6 +52,9 @@ extern "C" NO_RETURN void artDeliverExceptionFromCode(mirror::Throwable* excepti
 }
 
 // Called by generated call to throw a NPE exception.
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" NO_RETURN void artThrowNullPointerExceptionFromCode(Thread* self)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   ScopedQuickEntrypointChecks sqec(self);
@@ -59,6 +65,9 @@ extern "C" NO_RETURN void artThrowNullPointerExceptionFromCode(Thread* self)
 }
 
 // Called by generated call to throw an arithmetic divide by zero exception.
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" NO_RETURN void artThrowDivZeroFromCode(Thread* self)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   ScopedQuickEntrypointChecks sqec(self);
@@ -67,6 +76,9 @@ extern "C" NO_RETURN void artThrowDivZeroFromCode(Thread* self)
 }
 
 // Called by generated call to throw an array index out of bounds exception.
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" NO_RETURN void artThrowArrayBoundsFromCode(int index, int length, Thread* self)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   ScopedQuickEntrypointChecks sqec(self);
@@ -74,6 +86,9 @@ extern "C" NO_RETURN void artThrowArrayBoundsFromCode(int index, int length, Thr
   self->QuickDeliverException();
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" NO_RETURN void artThrowStackOverflowFromCode(Thread* self)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   ScopedQuickEntrypointChecks sqec(self);
@@ -90,6 +105,9 @@ extern "C" NO_RETURN void artThrowNoSuchMethodFromCode(int32_t method_idx, Threa
   self->QuickDeliverException();
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" NO_RETURN void artThrowClassCastException(mirror::Class* dest_type,
                                                      mirror::Class* src_type,
                                                      Thread* self)
@@ -100,6 +118,9 @@ extern "C" NO_RETURN void artThrowClassCastException(mirror::Class* dest_type,
   self->QuickDeliverException();
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" NO_RETURN void artThrowArrayStoreException(mirror::Object* array, mirror::Object* value,
                                                       Thread* self)
     SHARED_REQUIRES(Locks::mutator_lock_) {

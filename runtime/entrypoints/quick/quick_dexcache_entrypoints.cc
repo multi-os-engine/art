@@ -25,6 +25,9 @@
 
 namespace art {
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" mirror::Class* artInitializeStaticStorageFromCode(uint32_t type_idx, Thread* self)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   // Called to ensure static storage base is initialized for direct static field reads and writes.
@@ -35,6 +38,9 @@ extern "C" mirror::Class* artInitializeStaticStorageFromCode(uint32_t type_idx, 
   return ResolveVerifyAndClinit(type_idx, caller, self, true, false);
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" mirror::Class* artInitializeTypeFromCode(uint32_t type_idx, Thread* self)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   // Called when method->dex_cache_resolved_types_[] misses.
@@ -43,6 +49,9 @@ extern "C" mirror::Class* artInitializeTypeFromCode(uint32_t type_idx, Thread* s
   return ResolveVerifyAndClinit(type_idx, caller, self, false, false);
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" mirror::Class* artInitializeTypeAndVerifyAccessFromCode(uint32_t type_idx, Thread* self)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   // Called when caller isn't guaranteed to have access to a type and the dex cache may be
@@ -52,7 +61,14 @@ extern "C" mirror::Class* artInitializeTypeAndVerifyAccessFromCode(uint32_t type
   return ResolveVerifyAndClinit(type_idx, caller, self, false, true);
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
+#ifndef MOE
 extern "C" mirror::String* artResolveStringFromCode(int32_t string_idx, Thread* self)
+#else
+extern "C" mirror::String* artResolveStringFromCode(uint32_t string_idx, Thread* self)
+#endif
     SHARED_REQUIRES(Locks::mutator_lock_) {
   ScopedQuickEntrypointChecks sqec(self);
   auto* caller = GetCalleeSaveMethodCaller(self, Runtime::kRefsOnly);

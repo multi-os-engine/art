@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -582,7 +583,13 @@ class UpdateEntryPointsClassVisitor : public ClassVisitor {
       if (Runtime::Current()->GetHeap()->IsInBootImageOatFile(code) &&
           !m.IsNative() &&
           !m.IsProxyMethod()) {
+#ifndef MOE
         instrumentation_->UpdateMethodsCodeFromDebugger(&m, GetQuickToInterpreterBridge());
+#else
+        instrumentation_->UpdateMethodsCodeFromDebugger(&m,
+            Runtime::Current()->GetClassLinker()->GetInterpreterBridgeFromMethod(Thread::Current(),
+                                                                                 &m));
+#endif
       }
     }
     return true;
@@ -1339,12 +1346,24 @@ static JDWP::MethodId ToMethodId(ArtMethod* m)
 
 static ArtField* FromFieldId(JDWP::FieldId fid)
     SHARED_REQUIRES(Locks::mutator_lock_) {
+#ifndef MOE
   return reinterpret_cast<ArtField*>(static_cast<uintptr_t>(fid));
+#else
+  mirror::ObjectReference<false, ArtField>* fid_ref =
+      reinterpret_cast<mirror::ObjectReference<false, ArtField>*>(&fid);
+  return fid_ref->AsMirrorPtr();
+#endif
 }
 
 static ArtMethod* FromMethodId(JDWP::MethodId mid)
     SHARED_REQUIRES(Locks::mutator_lock_) {
+#ifndef MOE
   return reinterpret_cast<ArtMethod*>(static_cast<uintptr_t>(mid));
+#else
+  mirror::ObjectReference<false, ArtMethod>* mid_ref =
+      reinterpret_cast<mirror::ObjectReference<false, ArtMethod>*>(&mid);
+  return mid_ref->AsMirrorPtr();
+#endif
 }
 
 bool Dbg::MatchThread(JDWP::ObjectId expected_thread_id, Thread* event_thread) {
@@ -2568,7 +2587,11 @@ JDWP::JdwpError Dbg::GetLocalValue(const StackVisitor& visitor, ScopedObjectAcce
   switch (tag) {
     case JDWP::JT_BOOLEAN: {
       CHECK_EQ(width, 1U);
+#ifndef MOE
       uint32_t intVal;
+#else
+      uintptr_t intVal;
+#endif
       if (!visitor.GetVReg(m, vreg, kIntVReg, &intVal)) {
         return FailGetLocalValue(visitor, vreg, tag);
       }
@@ -2578,7 +2601,11 @@ JDWP::JdwpError Dbg::GetLocalValue(const StackVisitor& visitor, ScopedObjectAcce
     }
     case JDWP::JT_BYTE: {
       CHECK_EQ(width, 1U);
+#ifndef MOE
       uint32_t intVal;
+#else
+      uintptr_t intVal;
+#endif
       if (!visitor.GetVReg(m, vreg, kIntVReg, &intVal)) {
         return FailGetLocalValue(visitor, vreg, tag);
       }
@@ -2589,7 +2616,11 @@ JDWP::JdwpError Dbg::GetLocalValue(const StackVisitor& visitor, ScopedObjectAcce
     case JDWP::JT_SHORT:
     case JDWP::JT_CHAR: {
       CHECK_EQ(width, 2U);
+#ifndef MOE
       uint32_t intVal;
+#else
+      uintptr_t intVal;
+#endif
       if (!visitor.GetVReg(m, vreg, kIntVReg, &intVal)) {
         return FailGetLocalValue(visitor, vreg, tag);
       }
@@ -2599,7 +2630,11 @@ JDWP::JdwpError Dbg::GetLocalValue(const StackVisitor& visitor, ScopedObjectAcce
     }
     case JDWP::JT_INT: {
       CHECK_EQ(width, 4U);
+#ifndef MOE
       uint32_t intVal;
+#else
+      uintptr_t intVal;
+#endif
       if (!visitor.GetVReg(m, vreg, kIntVReg, &intVal)) {
         return FailGetLocalValue(visitor, vreg, tag);
       }
@@ -2609,7 +2644,11 @@ JDWP::JdwpError Dbg::GetLocalValue(const StackVisitor& visitor, ScopedObjectAcce
     }
     case JDWP::JT_FLOAT: {
       CHECK_EQ(width, 4U);
+#ifndef MOE
       uint32_t intVal;
+#else
+      uintptr_t intVal;
+#endif
       if (!visitor.GetVReg(m, vreg, kFloatVReg, &intVal)) {
         return FailGetLocalValue(visitor, vreg, tag);
       }
@@ -2625,11 +2664,21 @@ JDWP::JdwpError Dbg::GetLocalValue(const StackVisitor& visitor, ScopedObjectAcce
     case JDWP::JT_THREAD:
     case JDWP::JT_THREAD_GROUP: {
       CHECK_EQ(width, sizeof(JDWP::ObjectId));
+#ifndef MOE
       uint32_t intVal;
+#else
+      uintptr_t intVal;
+#endif
       if (!visitor.GetVReg(m, vreg, kReferenceVReg, &intVal)) {
         return FailGetLocalValue(visitor, vreg, tag);
       }
-      mirror::Object* o = reinterpret_cast<mirror::Object*>(intVal);
+#ifndef MOE
+        mirror::Object* o = reinterpret_cast<mirror::Object*>(intVal);
+#else
+        mirror::ObjectReference<false, mirror::Object>* intVal_ref =
+            reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&intVal);
+        mirror::Object* o = intVal_ref->AsMirrorPtr();
+#endif
       VLOG(jdwp) << "get " << tag << " object local " << vreg << " = " << o;
       if (!Runtime::Current()->GetHeap()->IsValidObjectAddress(o)) {
         LOG(FATAL) << StringPrintf("Found invalid object %#" PRIxPTR " in register v%u",
@@ -3430,6 +3479,16 @@ bool Dbg::IsForcedInterpreterNeededForCallingImpl(Thread* thread, ArtMethod* m) 
     if (ssc->GetStepDepth() == JDWP::SD_INTO) {
       return true;
     }
+
+    // Usually during a step over we should not enter to a new method call from a lower
+    // frame. Because when returning to an upcall we should stop before the very next
+    // instruction. The only allowed exception to this is JNI, because we don't know
+    // anything about what a native frame does, at the end of a step over we need to end
+    // up in the very next debuggable position.
+    if (ssc->GetStepDepth() == JDWP::SD_OVER &&
+        ssc->GetStackDepth() > GetStackDepth(thread)) {
+      return true;
+    }
   }
   return false;
 }
@@ -3503,6 +3562,24 @@ bool Dbg::IsForcedInstrumentationNeededForResolutionImpl(Thread* thread, ArtMeth
   // because the instrumentation exit hook will recognise the need of
   // stack deoptimization by calling IsForcedInterpreterNeededForUpcall.
   return instrumentation->IsDeoptimized(m);
+}
+
+bool Dbg::IsForcedInstrumentationNeededForUpcallImpl(Thread* thread) {
+  instrumentation::Instrumentation* instrumentation =
+      Runtime::Current()->GetInstrumentation();
+  // If we are in interpreter only mode, then we don't have to force interpreter.
+  if (instrumentation->InterpretOnly()) {
+    return false;
+  }
+  const SingleStepControl* const ssc = thread->GetSingleStepControl();
+  if (ssc != nullptr) {
+    // If we don't know the closest quick upcall and the step originates from
+    // a higher stack depth, then require stack instrumentation installation.
+    if (ssc->GetStackDepth() > GetStackDepth(thread)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool Dbg::IsForcedInterpreterNeededForUpcallImpl(Thread* thread, ArtMethod* m) {

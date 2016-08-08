@@ -195,7 +195,12 @@ class GcRoot {
     return root_.IsNull();
   }
 
+#ifndef MOE_WINDOWS
   ALWAYS_INLINE GcRoot(MirrorType* ref = nullptr) SHARED_REQUIRES(Locks::mutator_lock_);
+#else
+  // MOE: This is needed to make Atomic<GcRoot<...>> compatible with MSVC's C++ libraries.
+  ALWAYS_INLINE GcRoot(MirrorType* ref = nullptr) _NOEXCEPT SHARED_REQUIRES(Locks::mutator_lock_);
+#endif
 
  private:
   // Root visitors take pointers to root_ and place them in CompressedReference** arrays. We use a

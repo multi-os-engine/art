@@ -259,6 +259,7 @@ ArtMethod* GetCalleeSaveMethodCaller(ArtMethod** sp,
                                      Runtime::CalleeSaveType type,
                                      bool do_caller_check)
     SHARED_REQUIRES(Locks::mutator_lock_) {
+#ifndef MOE
   DCHECK_EQ(*sp, Runtime::Current()->GetCalleeSaveMethod(type));
 
   const size_t callee_frame_size = GetCalleeSaveFrameSize(kRuntimeISA, type);
@@ -303,6 +304,10 @@ ArtMethod* GetCalleeSaveMethodCaller(ArtMethod** sp,
   }
 
   return caller;
+#else
+  // MOE TODO: implement this for LLVM!
+  return nullptr;
+#endif
 }
 
 }  // namespace art

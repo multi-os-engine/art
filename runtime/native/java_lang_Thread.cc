@@ -29,23 +29,23 @@
 
 namespace art {
 
-static jobject Thread_currentThread(JNIEnv* env, jclass) {
+static JNICALL jobject Thread_currentThread(JNIEnv* env, jclass) {
   ScopedFastNativeObjectAccess soa(env);
   return soa.AddLocalReference<jobject>(soa.Self()->GetPeer());
 }
 
-static jboolean Thread_interrupted(JNIEnv* env, jclass) {
+static JNICALL jboolean Thread_interrupted(JNIEnv* env, jclass) {
   return static_cast<JNIEnvExt*>(env)->self->Interrupted() ? JNI_TRUE : JNI_FALSE;
 }
 
-static jboolean Thread_isInterrupted(JNIEnv* env, jobject java_thread) {
+static JNICALL jboolean Thread_isInterrupted(JNIEnv* env, jobject java_thread) {
   ScopedFastNativeObjectAccess soa(env);
   MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
   Thread* thread = Thread::FromManagedThread(soa, java_thread);
   return (thread != nullptr) ? thread->IsInterrupted() : JNI_FALSE;
 }
 
-static void Thread_nativeCreate(JNIEnv* env, jclass, jobject java_thread, jlong stack_size,
+static JNICALL void Thread_nativeCreate(JNIEnv* env, jclass, jobject java_thread, jlong stack_size,
                                 jboolean daemon) {
   // There are sections in the zygote that forbid thread creation.
   Runtime* runtime = Runtime::Current();
@@ -59,7 +59,7 @@ static void Thread_nativeCreate(JNIEnv* env, jclass, jobject java_thread, jlong 
   Thread::CreateNativeThread(env, java_thread, stack_size, daemon == JNI_TRUE);
 }
 
-static jint Thread_nativeGetStatus(JNIEnv* env, jobject java_thread, jboolean has_been_started) {
+static JNICALL jint Thread_nativeGetStatus(JNIEnv* env, jobject java_thread, jboolean has_been_started) {
   // Ordinals from Java's Thread.State.
   const jint kJavaNew = 0;
   const jint kJavaRunnable = 1;
@@ -107,7 +107,7 @@ static jint Thread_nativeGetStatus(JNIEnv* env, jobject java_thread, jboolean ha
   return -1;  // Unreachable.
 }
 
-static jboolean Thread_nativeHoldsLock(JNIEnv* env, jobject java_thread, jobject java_object) {
+static JNICALL jboolean Thread_nativeHoldsLock(JNIEnv* env, jobject java_thread, jobject java_object) {
   ScopedObjectAccess soa(env);
   mirror::Object* object = soa.Decode<mirror::Object*>(java_object);
   if (object == nullptr) {
@@ -119,7 +119,7 @@ static jboolean Thread_nativeHoldsLock(JNIEnv* env, jobject java_thread, jobject
   return thread->HoldsLock(object);
 }
 
-static void Thread_nativeInterrupt(JNIEnv* env, jobject java_thread) {
+static JNICALL void Thread_nativeInterrupt(JNIEnv* env, jobject java_thread) {
   ScopedFastNativeObjectAccess soa(env);
   MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
   Thread* thread = Thread::FromManagedThread(soa, java_thread);
@@ -128,7 +128,7 @@ static void Thread_nativeInterrupt(JNIEnv* env, jobject java_thread) {
   }
 }
 
-static void Thread_nativeSetName(JNIEnv* env, jobject peer, jstring java_name) {
+static JNICALL void Thread_nativeSetName(JNIEnv* env, jobject peer, jstring java_name) {
   ScopedUtfChars name(env, java_name);
   {
     ScopedObjectAccess soa(env);
@@ -161,7 +161,7 @@ static void Thread_nativeSetName(JNIEnv* env, jobject peer, jstring java_name) {
  * from Thread.MIN_PRIORITY to Thread.MAX_PRIORITY (1-10), with "normal"
  * threads at Thread.NORM_PRIORITY (5).
  */
-static void Thread_nativeSetPriority(JNIEnv* env, jobject java_thread, jint new_priority) {
+static JNICALL void Thread_nativeSetPriority(JNIEnv* env, jobject java_thread, jint new_priority) {
   ScopedObjectAccess soa(env);
   MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
   Thread* thread = Thread::FromManagedThread(soa, java_thread);
@@ -170,7 +170,7 @@ static void Thread_nativeSetPriority(JNIEnv* env, jobject java_thread, jint new_
   }
 }
 
-static void Thread_sleep(JNIEnv* env, jclass, jobject java_lock, jlong ms, jint ns) {
+static JNICALL void Thread_sleep(JNIEnv* env, jclass, jobject java_lock, jlong ms, jint ns) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* lock = soa.Decode<mirror::Object*>(java_lock);
   Monitor::Wait(Thread::Current(), lock, ms, ns, true, kSleeping);
@@ -182,7 +182,7 @@ static void Thread_sleep(JNIEnv* env, jclass, jobject java_lock, jlong ms, jint 
  * The exact behavior is poorly defined.  Some discussion here:
  *   http://www.cs.umd.edu/~pugh/java/memoryModel/archive/0944.html
  */
-static void Thread_yield(JNIEnv*, jobject) {
+static JNICALL void Thread_yield(JNIEnv*, jobject) {
   sched_yield();
 }
 

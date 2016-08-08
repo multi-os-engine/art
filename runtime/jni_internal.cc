@@ -32,7 +32,9 @@
 #include "base/stl_util.h"
 #include "class_linker-inl.h"
 #include "dex_file-inl.h"
+#ifndef MOE_WINDOWS
 #include "fault_handler.h"
+#endif
 #include "gc_root.h"
 #include "gc/accounting/card_table-inl.h"
 #include "indirect_reference_table-inl.h"
@@ -326,16 +328,16 @@ static ArtMethod* FindMethod(mirror::Class* c, const StringPiece& name, const St
 
 class JNI {
  public:
-  static jint GetVersion(JNIEnv*) {
+  static JNICALL jint GetVersion(JNIEnv*) {
     return JNI_VERSION_1_6;
   }
 
-  static jclass DefineClass(JNIEnv*, const char*, jobject, const jbyte*, jsize) {
+  static JNICALL jclass DefineClass(JNIEnv*, const char*, jobject, const jbyte*, jsize) {
     LOG(WARNING) << "JNI DefineClass is not supported";
     return nullptr;
   }
 
-  static jclass FindClass(JNIEnv* env, const char* name) {
+  static JNICALL jclass FindClass(JNIEnv* env, const char* name) {
     CHECK_NON_NULL_ARGUMENT(name);
     Runtime* runtime = Runtime::Current();
     ClassLinker* class_linker = runtime->GetClassLinker();
@@ -352,13 +354,13 @@ class JNI {
     return soa.AddLocalReference<jclass>(c);
   }
 
-  static jmethodID FromReflectedMethod(JNIEnv* env, jobject jlr_method) {
+  static JNICALL jmethodID FromReflectedMethod(JNIEnv* env, jobject jlr_method) {
     CHECK_NON_NULL_ARGUMENT(jlr_method);
     ScopedObjectAccess soa(env);
     return soa.EncodeMethod(ArtMethod::FromReflectedMethod(soa, jlr_method));
   }
 
-  static jfieldID FromReflectedField(JNIEnv* env, jobject jlr_field) {
+  static JNICALL jfieldID FromReflectedField(JNIEnv* env, jobject jlr_field) {
     CHECK_NON_NULL_ARGUMENT(jlr_field);
     ScopedObjectAccess soa(env);
     mirror::Object* obj_field = soa.Decode<mirror::Object*>(jlr_field);
@@ -370,7 +372,7 @@ class JNI {
     return soa.EncodeField(field->GetArtField());
   }
 
-  static jobject ToReflectedMethod(JNIEnv* env, jclass, jmethodID mid, jboolean) {
+  static JNICALL jobject ToReflectedMethod(JNIEnv* env, jclass, jmethodID mid, jboolean) {
     CHECK_NON_NULL_ARGUMENT(mid);
     ScopedObjectAccess soa(env);
     ArtMethod* m = soa.DecodeMethod(mid);
@@ -383,21 +385,21 @@ class JNI {
     return soa.AddLocalReference<jobject>(method);
   }
 
-  static jobject ToReflectedField(JNIEnv* env, jclass, jfieldID fid, jboolean) {
+  static JNICALL jobject ToReflectedField(JNIEnv* env, jclass, jfieldID fid, jboolean) {
     CHECK_NON_NULL_ARGUMENT(fid);
     ScopedObjectAccess soa(env);
     ArtField* f = soa.DecodeField(fid);
     return soa.AddLocalReference<jobject>(mirror::Field::CreateFromArtField(soa.Self(), f, true));
   }
 
-  static jclass GetObjectClass(JNIEnv* env, jobject java_object) {
+  static JNICALL jclass GetObjectClass(JNIEnv* env, jobject java_object) {
     CHECK_NON_NULL_ARGUMENT(java_object);
     ScopedObjectAccess soa(env);
     mirror::Object* o = soa.Decode<mirror::Object*>(java_object);
     return soa.AddLocalReference<jclass>(o->GetClass());
   }
 
-  static jclass GetSuperclass(JNIEnv* env, jclass java_class) {
+  static JNICALL jclass GetSuperclass(JNIEnv* env, jclass java_class) {
     CHECK_NON_NULL_ARGUMENT(java_class);
     ScopedObjectAccess soa(env);
     mirror::Class* c = soa.Decode<mirror::Class*>(java_class);
@@ -406,7 +408,7 @@ class JNI {
 
   // Note: java_class1 should be safely castable to java_class2, and
   // not the other way around.
-  static jboolean IsAssignableFrom(JNIEnv* env, jclass java_class1, jclass java_class2) {
+  static JNICALL jboolean IsAssignableFrom(JNIEnv* env, jclass java_class1, jclass java_class2) {
     CHECK_NON_NULL_ARGUMENT_RETURN(java_class1, JNI_FALSE);
     CHECK_NON_NULL_ARGUMENT_RETURN(java_class2, JNI_FALSE);
     ScopedObjectAccess soa(env);
@@ -415,7 +417,7 @@ class JNI {
     return c2->IsAssignableFrom(c1) ? JNI_TRUE : JNI_FALSE;
   }
 
-  static jboolean IsInstanceOf(JNIEnv* env, jobject jobj, jclass java_class) {
+  static JNICALL jboolean IsInstanceOf(JNIEnv* env, jobject jobj, jclass java_class) {
     CHECK_NON_NULL_ARGUMENT_RETURN(java_class, JNI_FALSE);
     if (jobj == nullptr) {
       // Note: JNI is different from regular Java instanceof in this respect
@@ -428,7 +430,7 @@ class JNI {
     }
   }
 
-  static jint Throw(JNIEnv* env, jthrowable java_exception) {
+  static JNICALL jint Throw(JNIEnv* env, jthrowable java_exception) {
     ScopedObjectAccess soa(env);
     mirror::Throwable* exception = soa.Decode<mirror::Throwable*>(java_exception);
     if (exception == nullptr) {
@@ -438,21 +440,21 @@ class JNI {
     return JNI_OK;
   }
 
-  static jint ThrowNew(JNIEnv* env, jclass c, const char* msg) {
+  static JNICALL jint ThrowNew(JNIEnv* env, jclass c, const char* msg) {
     CHECK_NON_NULL_ARGUMENT_RETURN(c, JNI_ERR);
     return ThrowNewException(env, c, msg, nullptr);
   }
 
-  static jboolean ExceptionCheck(JNIEnv* env) {
+  static JNICALL jboolean ExceptionCheck(JNIEnv* env) {
     return static_cast<JNIEnvExt*>(env)->self->IsExceptionPending() ? JNI_TRUE : JNI_FALSE;
   }
 
-  static void ExceptionClear(JNIEnv* env) {
+  static JNICALL void ExceptionClear(JNIEnv* env) {
     ScopedObjectAccess soa(env);
     soa.Self()->ClearException();
   }
 
-  static void ExceptionDescribe(JNIEnv* env) {
+  static JNICALL void ExceptionDescribe(JNIEnv* env) {
     ScopedObjectAccess soa(env);
 
     // If we have no exception to describe, pass through.
@@ -482,17 +484,17 @@ class JNI {
     soa.Self()->SetException(old_exception.Get());
   }
 
-  static jthrowable ExceptionOccurred(JNIEnv* env) {
+  static JNICALL jthrowable ExceptionOccurred(JNIEnv* env) {
     ScopedObjectAccess soa(env);
     mirror::Object* exception = soa.Self()->GetException();
     return soa.AddLocalReference<jthrowable>(exception);
   }
 
-  static void FatalError(JNIEnv*, const char* msg) {
+  static JNICALL void FatalError(JNIEnv*, const char* msg) {
     LOG(FATAL) << "JNI FatalError called: " << msg;
   }
 
-  static jint PushLocalFrame(JNIEnv* env, jint capacity) {
+  static JNICALL jint PushLocalFrame(JNIEnv* env, jint capacity) {
     // TODO: SOA may not be necessary but I do it to please lock annotations.
     ScopedObjectAccess soa(env);
     if (EnsureLocalCapacityInternal(soa, capacity, "PushLocalFrame") != JNI_OK) {
@@ -502,44 +504,44 @@ class JNI {
     return JNI_OK;
   }
 
-  static jobject PopLocalFrame(JNIEnv* env, jobject java_survivor) {
+  static JNICALL jobject PopLocalFrame(JNIEnv* env, jobject java_survivor) {
     ScopedObjectAccess soa(env);
     mirror::Object* survivor = soa.Decode<mirror::Object*>(java_survivor);
     soa.Env()->PopFrame();
     return soa.AddLocalReference<jobject>(survivor);
   }
 
-  static jint EnsureLocalCapacity(JNIEnv* env, jint desired_capacity) {
+  static JNICALL jint EnsureLocalCapacity(JNIEnv* env, jint desired_capacity) {
     // TODO: SOA may not be necessary but I do it to please lock annotations.
     ScopedObjectAccess soa(env);
     return EnsureLocalCapacityInternal(soa, desired_capacity, "EnsureLocalCapacity");
   }
 
-  static jobject NewGlobalRef(JNIEnv* env, jobject obj) {
+  static JNICALL jobject NewGlobalRef(JNIEnv* env, jobject obj) {
     ScopedObjectAccess soa(env);
     mirror::Object* decoded_obj = soa.Decode<mirror::Object*>(obj);
     return soa.Vm()->AddGlobalRef(soa.Self(), decoded_obj);
   }
 
-  static void DeleteGlobalRef(JNIEnv* env, jobject obj) {
+  static JNICALL void DeleteGlobalRef(JNIEnv* env, jobject obj) {
     JavaVMExt* vm = down_cast<JNIEnvExt*>(env)->vm;
     Thread* self = down_cast<JNIEnvExt*>(env)->self;
     vm->DeleteGlobalRef(self, obj);
   }
 
-  static jweak NewWeakGlobalRef(JNIEnv* env, jobject obj) {
+  static JNICALL jweak NewWeakGlobalRef(JNIEnv* env, jobject obj) {
     ScopedObjectAccess soa(env);
     mirror::Object* decoded_obj = soa.Decode<mirror::Object*>(obj);
     return soa.Vm()->AddWeakGlobalRef(soa.Self(), decoded_obj);
   }
 
-  static void DeleteWeakGlobalRef(JNIEnv* env, jweak obj) {
+  static JNICALL void DeleteWeakGlobalRef(JNIEnv* env, jweak obj) {
     JavaVMExt* vm = down_cast<JNIEnvExt*>(env)->vm;
     Thread* self = down_cast<JNIEnvExt*>(env)->self;
     vm->DeleteWeakGlobalRef(self, obj);
   }
 
-  static jobject NewLocalRef(JNIEnv* env, jobject obj) {
+  static JNICALL jobject NewLocalRef(JNIEnv* env, jobject obj) {
     ScopedObjectAccess soa(env);
     mirror::Object* decoded_obj = soa.Decode<mirror::Object*>(obj);
     // Check for null after decoding the object to handle cleared weak globals.
@@ -549,7 +551,7 @@ class JNI {
     return soa.AddLocalReference<jobject>(decoded_obj);
   }
 
-  static void DeleteLocalRef(JNIEnv* env, jobject obj) {
+  static JNICALL void DeleteLocalRef(JNIEnv* env, jobject obj) {
     if (obj == nullptr) {
       return;
     }
@@ -569,7 +571,7 @@ class JNI {
     }
   }
 
-  static jboolean IsSameObject(JNIEnv* env, jobject obj1, jobject obj2) {
+  static JNICALL jboolean IsSameObject(JNIEnv* env, jobject obj1, jobject obj2) {
     if (obj1 == obj2) {
       return JNI_TRUE;
     } else {
@@ -579,7 +581,7 @@ class JNI {
     }
   }
 
-  static jobject AllocObject(JNIEnv* env, jclass java_class) {
+  static JNICALL jobject AllocObject(JNIEnv* env, jclass java_class) {
     CHECK_NON_NULL_ARGUMENT(java_class);
     ScopedObjectAccess soa(env);
     mirror::Class* c = EnsureInitialized(soa.Self(), soa.Decode<mirror::Class*>(java_class));
@@ -595,7 +597,7 @@ class JNI {
     return soa.AddLocalReference<jobject>(c->AllocObject(soa.Self()));
   }
 
-  static jobject NewObject(JNIEnv* env, jclass java_class, jmethodID mid, ...) {
+  static JNICALL jobject NewObject(JNIEnv* env, jclass java_class, jmethodID mid, ...) {
     va_list args;
     va_start(args, mid);
     CHECK_NON_NULL_ARGUMENT(java_class);
@@ -605,7 +607,7 @@ class JNI {
     return result;
   }
 
-  static jobject NewObjectV(JNIEnv* env, jclass java_class, jmethodID mid, va_list args) {
+  static JNICALL jobject NewObjectV(JNIEnv* env, jclass java_class, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT(java_class);
     CHECK_NON_NULL_ARGUMENT(mid);
     ScopedObjectAccess soa(env);
@@ -630,7 +632,7 @@ class JNI {
     return local_result;
   }
 
-  static jobject NewObjectA(JNIEnv* env, jclass java_class, jmethodID mid, jvalue* args) {
+  static JNICALL jobject NewObjectA(JNIEnv* env, jclass java_class, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT(java_class);
     CHECK_NON_NULL_ARGUMENT(mid);
     ScopedObjectAccess soa(env);
@@ -655,7 +657,7 @@ class JNI {
     return local_result;
   }
 
-  static jmethodID GetMethodID(JNIEnv* env, jclass java_class, const char* name, const char* sig) {
+  static JNICALL jmethodID GetMethodID(JNIEnv* env, jclass java_class, const char* name, const char* sig) {
     CHECK_NON_NULL_ARGUMENT(java_class);
     CHECK_NON_NULL_ARGUMENT(name);
     CHECK_NON_NULL_ARGUMENT(sig);
@@ -663,7 +665,7 @@ class JNI {
     return FindMethodID(soa, java_class, name, sig, false);
   }
 
-  static jmethodID GetStaticMethodID(JNIEnv* env, jclass java_class, const char* name,
+  static JNICALL jmethodID GetStaticMethodID(JNIEnv* env, jclass java_class, const char* name,
                                      const char* sig) {
     CHECK_NON_NULL_ARGUMENT(java_class);
     CHECK_NON_NULL_ARGUMENT(name);
@@ -672,7 +674,7 @@ class JNI {
     return FindMethodID(soa, java_class, name, sig, true);
   }
 
-  static jobject CallObjectMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
+  static JNICALL jobject CallObjectMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT(obj);
@@ -683,7 +685,7 @@ class JNI {
     return soa.AddLocalReference<jobject>(result.GetL());
   }
 
-  static jobject CallObjectMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
+  static JNICALL jobject CallObjectMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT(obj);
     CHECK_NON_NULL_ARGUMENT(mid);
     ScopedObjectAccess soa(env);
@@ -691,7 +693,7 @@ class JNI {
     return soa.AddLocalReference<jobject>(result.GetL());
   }
 
-  static jobject CallObjectMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
+  static JNICALL jobject CallObjectMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT(obj);
     CHECK_NON_NULL_ARGUMENT(mid);
     ScopedObjectAccess soa(env);
@@ -699,7 +701,7 @@ class JNI {
     return soa.AddLocalReference<jobject>(result.GetL());
   }
 
-  static jboolean CallBooleanMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
+  static JNICALL jboolean CallBooleanMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -710,21 +712,21 @@ class JNI {
     return result.GetZ();
   }
 
-  static jboolean CallBooleanMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
+  static JNICALL jboolean CallBooleanMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithVarArgs(soa, obj, mid, args).GetZ();
   }
 
-  static jboolean CallBooleanMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
+  static JNICALL jboolean CallBooleanMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithJValues(soa, obj, mid, args).GetZ();
   }
 
-  static jbyte CallByteMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
+  static JNICALL jbyte CallByteMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -735,21 +737,21 @@ class JNI {
     return result.GetB();
   }
 
-  static jbyte CallByteMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
+  static JNICALL jbyte CallByteMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithVarArgs(soa, obj, mid, args).GetB();
   }
 
-  static jbyte CallByteMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
+  static JNICALL jbyte CallByteMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithJValues(soa, obj, mid, args).GetB();
   }
 
-  static jchar CallCharMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
+  static JNICALL jchar CallCharMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -760,21 +762,21 @@ class JNI {
     return result.GetC();
   }
 
-  static jchar CallCharMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
+  static JNICALL jchar CallCharMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithVarArgs(soa, obj, mid, args).GetC();
   }
 
-  static jchar CallCharMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
+  static JNICALL jchar CallCharMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithJValues(soa, obj, mid, args).GetC();
   }
 
-  static jdouble CallDoubleMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
+  static JNICALL jdouble CallDoubleMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -785,21 +787,21 @@ class JNI {
     return result.GetD();
   }
 
-  static jdouble CallDoubleMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
+  static JNICALL jdouble CallDoubleMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithVarArgs(soa, obj, mid, args).GetD();
   }
 
-  static jdouble CallDoubleMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
+  static JNICALL jdouble CallDoubleMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithJValues(soa, obj, mid, args).GetD();
   }
 
-  static jfloat CallFloatMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
+  static JNICALL jfloat CallFloatMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -810,21 +812,21 @@ class JNI {
     return result.GetF();
   }
 
-  static jfloat CallFloatMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
+  static JNICALL jfloat CallFloatMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithVarArgs(soa, obj, mid, args).GetF();
   }
 
-  static jfloat CallFloatMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
+  static JNICALL jfloat CallFloatMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithJValues(soa, obj, mid, args).GetF();
   }
 
-  static jint CallIntMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
+  static JNICALL jint CallIntMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -835,21 +837,21 @@ class JNI {
     return result.GetI();
   }
 
-  static jint CallIntMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
+  static JNICALL jint CallIntMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithVarArgs(soa, obj, mid, args).GetI();
   }
 
-  static jint CallIntMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
+  static JNICALL jint CallIntMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithJValues(soa, obj, mid, args).GetI();
   }
 
-  static jlong CallLongMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
+  static JNICALL jlong CallLongMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -860,21 +862,21 @@ class JNI {
     return result.GetJ();
   }
 
-  static jlong CallLongMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
+  static JNICALL jlong CallLongMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithVarArgs(soa, obj, mid, args).GetJ();
   }
 
-  static jlong CallLongMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
+  static JNICALL jlong CallLongMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithJValues(soa, obj, mid, args).GetJ();
   }
 
-  static jshort CallShortMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
+  static JNICALL jshort CallShortMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -885,21 +887,21 @@ class JNI {
     return result.GetS();
   }
 
-  static jshort CallShortMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
+  static JNICALL jshort CallShortMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithVarArgs(soa, obj, mid, args).GetS();
   }
 
-  static jshort CallShortMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
+  static JNICALL jshort CallShortMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeVirtualOrInterfaceWithJValues(soa, obj, mid, args).GetS();
   }
 
-  static void CallVoidMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
+  static JNICALL void CallVoidMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(obj);
@@ -909,21 +911,21 @@ class JNI {
     va_end(ap);
   }
 
-  static void CallVoidMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
+  static JNICALL void CallVoidMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(mid);
     ScopedObjectAccess soa(env);
     InvokeVirtualOrInterfaceWithVarArgs(soa, obj, mid, args);
   }
 
-  static void CallVoidMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
+  static JNICALL void CallVoidMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(mid);
     ScopedObjectAccess soa(env);
     InvokeVirtualOrInterfaceWithJValues(soa, obj, mid, args);
   }
 
-  static jobject CallNonvirtualObjectMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
+  static JNICALL jobject CallNonvirtualObjectMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT(obj);
@@ -935,7 +937,7 @@ class JNI {
     return local_result;
   }
 
-  static jobject CallNonvirtualObjectMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jobject CallNonvirtualObjectMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                              va_list args) {
     CHECK_NON_NULL_ARGUMENT(obj);
     CHECK_NON_NULL_ARGUMENT(mid);
@@ -944,7 +946,7 @@ class JNI {
     return soa.AddLocalReference<jobject>(result.GetL());
   }
 
-  static jobject CallNonvirtualObjectMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jobject CallNonvirtualObjectMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                              jvalue* args) {
     CHECK_NON_NULL_ARGUMENT(obj);
     CHECK_NON_NULL_ARGUMENT(mid);
@@ -953,7 +955,7 @@ class JNI {
     return soa.AddLocalReference<jobject>(result.GetL());
   }
 
-  static jboolean CallNonvirtualBooleanMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jboolean CallNonvirtualBooleanMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                               ...) {
     va_list ap;
     va_start(ap, mid);
@@ -965,7 +967,7 @@ class JNI {
     return result.GetZ();
   }
 
-  static jboolean CallNonvirtualBooleanMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jboolean CallNonvirtualBooleanMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                                va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -973,7 +975,7 @@ class JNI {
     return InvokeWithVarArgs(soa, obj, mid, args).GetZ();
   }
 
-  static jboolean CallNonvirtualBooleanMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jboolean CallNonvirtualBooleanMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                                jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -981,7 +983,7 @@ class JNI {
     return InvokeWithJValues(soa, obj, mid, args).GetZ();
   }
 
-  static jbyte CallNonvirtualByteMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
+  static JNICALL jbyte CallNonvirtualByteMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -992,7 +994,7 @@ class JNI {
     return result.GetB();
   }
 
-  static jbyte CallNonvirtualByteMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jbyte CallNonvirtualByteMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                          va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1000,7 +1002,7 @@ class JNI {
     return InvokeWithVarArgs(soa, obj, mid, args).GetB();
   }
 
-  static jbyte CallNonvirtualByteMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jbyte CallNonvirtualByteMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                          jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1008,7 +1010,7 @@ class JNI {
     return InvokeWithJValues(soa, obj, mid, args).GetB();
   }
 
-  static jchar CallNonvirtualCharMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
+  static JNICALL jchar CallNonvirtualCharMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -1019,7 +1021,7 @@ class JNI {
     return result.GetC();
   }
 
-  static jchar CallNonvirtualCharMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jchar CallNonvirtualCharMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                          va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1027,7 +1029,7 @@ class JNI {
     return InvokeWithVarArgs(soa, obj, mid, args).GetC();
   }
 
-  static jchar CallNonvirtualCharMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jchar CallNonvirtualCharMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                          jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1035,7 +1037,7 @@ class JNI {
     return InvokeWithJValues(soa, obj, mid, args).GetC();
   }
 
-  static jshort CallNonvirtualShortMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
+  static JNICALL jshort CallNonvirtualShortMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -1046,7 +1048,7 @@ class JNI {
     return result.GetS();
   }
 
-  static jshort CallNonvirtualShortMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jshort CallNonvirtualShortMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                            va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1054,7 +1056,7 @@ class JNI {
     return InvokeWithVarArgs(soa, obj, mid, args).GetS();
   }
 
-  static jshort CallNonvirtualShortMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jshort CallNonvirtualShortMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                            jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1062,7 +1064,7 @@ class JNI {
     return InvokeWithJValues(soa, obj, mid, args).GetS();
   }
 
-  static jint CallNonvirtualIntMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
+  static JNICALL jint CallNonvirtualIntMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -1073,7 +1075,7 @@ class JNI {
     return result.GetI();
   }
 
-  static jint CallNonvirtualIntMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jint CallNonvirtualIntMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                        va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1081,7 +1083,7 @@ class JNI {
     return InvokeWithVarArgs(soa, obj, mid, args).GetI();
   }
 
-  static jint CallNonvirtualIntMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jint CallNonvirtualIntMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                        jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1089,7 +1091,7 @@ class JNI {
     return InvokeWithJValues(soa, obj, mid, args).GetI();
   }
 
-  static jlong CallNonvirtualLongMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
+  static JNICALL jlong CallNonvirtualLongMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -1100,7 +1102,7 @@ class JNI {
     return result.GetJ();
   }
 
-  static jlong CallNonvirtualLongMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jlong CallNonvirtualLongMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                          va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1108,7 +1110,7 @@ class JNI {
     return InvokeWithVarArgs(soa, obj, mid, args).GetJ();
   }
 
-  static jlong CallNonvirtualLongMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jlong CallNonvirtualLongMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                          jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1116,7 +1118,7 @@ class JNI {
     return InvokeWithJValues(soa, obj, mid, args).GetJ();
   }
 
-  static jfloat CallNonvirtualFloatMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
+  static JNICALL jfloat CallNonvirtualFloatMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -1127,7 +1129,7 @@ class JNI {
     return result.GetF();
   }
 
-  static jfloat CallNonvirtualFloatMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jfloat CallNonvirtualFloatMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                            va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1135,7 +1137,7 @@ class JNI {
     return InvokeWithVarArgs(soa, obj, mid, args).GetF();
   }
 
-  static jfloat CallNonvirtualFloatMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jfloat CallNonvirtualFloatMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                            jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1143,7 +1145,7 @@ class JNI {
     return InvokeWithJValues(soa, obj, mid, args).GetF();
   }
 
-  static jdouble CallNonvirtualDoubleMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
+  static JNICALL jdouble CallNonvirtualDoubleMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
@@ -1154,7 +1156,7 @@ class JNI {
     return result.GetD();
   }
 
-  static jdouble CallNonvirtualDoubleMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jdouble CallNonvirtualDoubleMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                              va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1162,7 +1164,7 @@ class JNI {
     return InvokeWithVarArgs(soa, obj, mid, args).GetD();
   }
 
-  static jdouble CallNonvirtualDoubleMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL jdouble CallNonvirtualDoubleMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                              jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1170,7 +1172,7 @@ class JNI {
     return InvokeWithJValues(soa, obj, mid, args).GetD();
   }
 
-  static void CallNonvirtualVoidMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
+  static JNICALL void CallNonvirtualVoidMethod(JNIEnv* env, jobject obj, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(obj);
@@ -1180,7 +1182,7 @@ class JNI {
     va_end(ap);
   }
 
-  static void CallNonvirtualVoidMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL void CallNonvirtualVoidMethodV(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                         va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(mid);
@@ -1188,7 +1190,7 @@ class JNI {
     InvokeWithVarArgs(soa, obj, mid, args);
   }
 
-  static void CallNonvirtualVoidMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
+  static JNICALL void CallNonvirtualVoidMethodA(JNIEnv* env, jobject obj, jclass, jmethodID mid,
                                         jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(obj);
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(mid);
@@ -1196,7 +1198,7 @@ class JNI {
     InvokeWithJValues(soa, obj, mid, args);
   }
 
-  static jfieldID GetFieldID(JNIEnv* env, jclass java_class, const char* name, const char* sig) {
+  static JNICALL jfieldID GetFieldID(JNIEnv* env, jclass java_class, const char* name, const char* sig) {
     CHECK_NON_NULL_ARGUMENT(java_class);
     CHECK_NON_NULL_ARGUMENT(name);
     CHECK_NON_NULL_ARGUMENT(sig);
@@ -1204,7 +1206,7 @@ class JNI {
     return FindFieldID(soa, java_class, name, sig, false);
   }
 
-  static jfieldID GetStaticFieldID(JNIEnv* env, jclass java_class, const char* name,
+  static JNICALL jfieldID GetStaticFieldID(JNIEnv* env, jclass java_class, const char* name,
                                    const char* sig) {
     CHECK_NON_NULL_ARGUMENT(java_class);
     CHECK_NON_NULL_ARGUMENT(name);
@@ -1213,7 +1215,7 @@ class JNI {
     return FindFieldID(soa, java_class, name, sig, true);
   }
 
-  static jobject GetObjectField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static JNICALL jobject GetObjectField(JNIEnv* env, jobject obj, jfieldID fid) {
     CHECK_NON_NULL_ARGUMENT(obj);
     CHECK_NON_NULL_ARGUMENT(fid);
     ScopedObjectAccess soa(env);
@@ -1222,14 +1224,14 @@ class JNI {
     return soa.AddLocalReference<jobject>(f->GetObject(o));
   }
 
-  static jobject GetStaticObjectField(JNIEnv* env, jclass, jfieldID fid) {
+  static JNICALL jobject GetStaticObjectField(JNIEnv* env, jclass, jfieldID fid) {
     CHECK_NON_NULL_ARGUMENT(fid);
     ScopedObjectAccess soa(env);
     ArtField* f = soa.DecodeField(fid);
     return soa.AddLocalReference<jobject>(f->GetObject(f->GetDeclaringClass()));
   }
 
-  static void SetObjectField(JNIEnv* env, jobject java_object, jfieldID fid, jobject java_value) {
+  static JNICALL void SetObjectField(JNIEnv* env, jobject java_object, jfieldID fid, jobject java_value) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(java_object);
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(fid);
     ScopedObjectAccess soa(env);
@@ -1239,7 +1241,7 @@ class JNI {
     f->SetObject<false>(o, v);
   }
 
-  static void SetStaticObjectField(JNIEnv* env, jclass, jfieldID fid, jobject java_value) {
+  static JNICALL void SetStaticObjectField(JNIEnv* env, jclass, jfieldID fid, jobject java_value) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(fid);
     ScopedObjectAccess soa(env);
     mirror::Object* v = soa.Decode<mirror::Object*>(java_value);
@@ -1275,135 +1277,135 @@ class JNI {
   ArtField* f = soa.DecodeField(fid); \
   f->Set ##fn <false>(f->GetDeclaringClass(), value)
 
-  static jboolean GetBooleanField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static JNICALL jboolean GetBooleanField(JNIEnv* env, jobject obj, jfieldID fid) {
     GET_PRIMITIVE_FIELD(Boolean, obj);
   }
 
-  static jbyte GetByteField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static JNICALL jbyte GetByteField(JNIEnv* env, jobject obj, jfieldID fid) {
     GET_PRIMITIVE_FIELD(Byte, obj);
   }
 
-  static jchar GetCharField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static JNICALL jchar GetCharField(JNIEnv* env, jobject obj, jfieldID fid) {
     GET_PRIMITIVE_FIELD(Char, obj);
   }
 
-  static jshort GetShortField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static JNICALL jshort GetShortField(JNIEnv* env, jobject obj, jfieldID fid) {
     GET_PRIMITIVE_FIELD(Short, obj);
   }
 
-  static jint GetIntField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static JNICALL jint GetIntField(JNIEnv* env, jobject obj, jfieldID fid) {
     GET_PRIMITIVE_FIELD(Int, obj);
   }
 
-  static jlong GetLongField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static JNICALL jlong GetLongField(JNIEnv* env, jobject obj, jfieldID fid) {
     GET_PRIMITIVE_FIELD(Long, obj);
   }
 
-  static jfloat GetFloatField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static JNICALL jfloat GetFloatField(JNIEnv* env, jobject obj, jfieldID fid) {
     GET_PRIMITIVE_FIELD(Float, obj);
   }
 
-  static jdouble GetDoubleField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static JNICALL jdouble GetDoubleField(JNIEnv* env, jobject obj, jfieldID fid) {
     GET_PRIMITIVE_FIELD(Double, obj);
   }
 
-  static jboolean GetStaticBooleanField(JNIEnv* env, jclass, jfieldID fid) {
+  static JNICALL jboolean GetStaticBooleanField(JNIEnv* env, jclass, jfieldID fid) {
     GET_STATIC_PRIMITIVE_FIELD(Boolean);
   }
 
-  static jbyte GetStaticByteField(JNIEnv* env, jclass, jfieldID fid) {
+  static JNICALL jbyte GetStaticByteField(JNIEnv* env, jclass, jfieldID fid) {
     GET_STATIC_PRIMITIVE_FIELD(Byte);
   }
 
-  static jchar GetStaticCharField(JNIEnv* env, jclass, jfieldID fid) {
+  static JNICALL jchar GetStaticCharField(JNIEnv* env, jclass, jfieldID fid) {
     GET_STATIC_PRIMITIVE_FIELD(Char);
   }
 
-  static jshort GetStaticShortField(JNIEnv* env, jclass, jfieldID fid) {
+  static JNICALL jshort GetStaticShortField(JNIEnv* env, jclass, jfieldID fid) {
     GET_STATIC_PRIMITIVE_FIELD(Short);
   }
 
-  static jint GetStaticIntField(JNIEnv* env, jclass, jfieldID fid) {
+  static JNICALL jint GetStaticIntField(JNIEnv* env, jclass, jfieldID fid) {
     GET_STATIC_PRIMITIVE_FIELD(Int);
   }
 
-  static jlong GetStaticLongField(JNIEnv* env, jclass, jfieldID fid) {
+  static JNICALL jlong GetStaticLongField(JNIEnv* env, jclass, jfieldID fid) {
     GET_STATIC_PRIMITIVE_FIELD(Long);
   }
 
-  static jfloat GetStaticFloatField(JNIEnv* env, jclass, jfieldID fid) {
+  static JNICALL jfloat GetStaticFloatField(JNIEnv* env, jclass, jfieldID fid) {
     GET_STATIC_PRIMITIVE_FIELD(Float);
   }
 
-  static jdouble GetStaticDoubleField(JNIEnv* env, jclass, jfieldID fid) {
+  static JNICALL jdouble GetStaticDoubleField(JNIEnv* env, jclass, jfieldID fid) {
     GET_STATIC_PRIMITIVE_FIELD(Double);
   }
 
-  static void SetBooleanField(JNIEnv* env, jobject obj, jfieldID fid, jboolean v) {
+  static JNICALL void SetBooleanField(JNIEnv* env, jobject obj, jfieldID fid, jboolean v) {
     SET_PRIMITIVE_FIELD(Boolean, obj, v);
   }
 
-  static void SetByteField(JNIEnv* env, jobject obj, jfieldID fid, jbyte v) {
+  static JNICALL void SetByteField(JNIEnv* env, jobject obj, jfieldID fid, jbyte v) {
     SET_PRIMITIVE_FIELD(Byte, obj, v);
   }
 
-  static void SetCharField(JNIEnv* env, jobject obj, jfieldID fid, jchar v) {
+  static JNICALL void SetCharField(JNIEnv* env, jobject obj, jfieldID fid, jchar v) {
     SET_PRIMITIVE_FIELD(Char, obj, v);
   }
 
-  static void SetFloatField(JNIEnv* env, jobject obj, jfieldID fid, jfloat v) {
+  static JNICALL void SetFloatField(JNIEnv* env, jobject obj, jfieldID fid, jfloat v) {
     SET_PRIMITIVE_FIELD(Float, obj, v);
   }
 
-  static void SetDoubleField(JNIEnv* env, jobject obj, jfieldID fid, jdouble v) {
+  static JNICALL void SetDoubleField(JNIEnv* env, jobject obj, jfieldID fid, jdouble v) {
     SET_PRIMITIVE_FIELD(Double, obj, v);
   }
 
-  static void SetIntField(JNIEnv* env, jobject obj, jfieldID fid, jint v) {
+  static JNICALL void SetIntField(JNIEnv* env, jobject obj, jfieldID fid, jint v) {
     SET_PRIMITIVE_FIELD(Int, obj, v);
   }
 
-  static void SetLongField(JNIEnv* env, jobject obj, jfieldID fid, jlong v) {
+  static JNICALL void SetLongField(JNIEnv* env, jobject obj, jfieldID fid, jlong v) {
     SET_PRIMITIVE_FIELD(Long, obj, v);
   }
 
-  static void SetShortField(JNIEnv* env, jobject obj, jfieldID fid, jshort v) {
+  static JNICALL void SetShortField(JNIEnv* env, jobject obj, jfieldID fid, jshort v) {
     SET_PRIMITIVE_FIELD(Short, obj, v);
   }
 
-  static void SetStaticBooleanField(JNIEnv* env, jclass, jfieldID fid, jboolean v) {
+  static JNICALL void SetStaticBooleanField(JNIEnv* env, jclass, jfieldID fid, jboolean v) {
     SET_STATIC_PRIMITIVE_FIELD(Boolean, v);
   }
 
-  static void SetStaticByteField(JNIEnv* env, jclass, jfieldID fid, jbyte v) {
+  static JNICALL void SetStaticByteField(JNIEnv* env, jclass, jfieldID fid, jbyte v) {
     SET_STATIC_PRIMITIVE_FIELD(Byte, v);
   }
 
-  static void SetStaticCharField(JNIEnv* env, jclass, jfieldID fid, jchar v) {
+  static JNICALL void SetStaticCharField(JNIEnv* env, jclass, jfieldID fid, jchar v) {
     SET_STATIC_PRIMITIVE_FIELD(Char, v);
   }
 
-  static void SetStaticFloatField(JNIEnv* env, jclass, jfieldID fid, jfloat v) {
+  static JNICALL void SetStaticFloatField(JNIEnv* env, jclass, jfieldID fid, jfloat v) {
     SET_STATIC_PRIMITIVE_FIELD(Float, v);
   }
 
-  static void SetStaticDoubleField(JNIEnv* env, jclass, jfieldID fid, jdouble v) {
+  static JNICALL void SetStaticDoubleField(JNIEnv* env, jclass, jfieldID fid, jdouble v) {
     SET_STATIC_PRIMITIVE_FIELD(Double, v);
   }
 
-  static void SetStaticIntField(JNIEnv* env, jclass, jfieldID fid, jint v) {
+  static JNICALL void SetStaticIntField(JNIEnv* env, jclass, jfieldID fid, jint v) {
     SET_STATIC_PRIMITIVE_FIELD(Int, v);
   }
 
-  static void SetStaticLongField(JNIEnv* env, jclass, jfieldID fid, jlong v) {
+  static JNICALL void SetStaticLongField(JNIEnv* env, jclass, jfieldID fid, jlong v) {
     SET_STATIC_PRIMITIVE_FIELD(Long, v);
   }
 
-  static void SetStaticShortField(JNIEnv* env, jclass, jfieldID fid, jshort v) {
+  static JNICALL void SetStaticShortField(JNIEnv* env, jclass, jfieldID fid, jshort v) {
     SET_STATIC_PRIMITIVE_FIELD(Short, v);
   }
 
-  static jobject CallStaticObjectMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
+  static JNICALL jobject CallStaticObjectMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT(mid);
@@ -1414,21 +1416,21 @@ class JNI {
     return local_result;
   }
 
-  static jobject CallStaticObjectMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
+  static JNICALL jobject CallStaticObjectMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT(mid);
     ScopedObjectAccess soa(env);
     JValue result(InvokeWithVarArgs(soa, nullptr, mid, args));
     return soa.AddLocalReference<jobject>(result.GetL());
   }
 
-  static jobject CallStaticObjectMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
+  static JNICALL jobject CallStaticObjectMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT(mid);
     ScopedObjectAccess soa(env);
     JValue result(InvokeWithJValues(soa, nullptr, mid, args));
     return soa.AddLocalReference<jobject>(result.GetL());
   }
 
-  static jboolean CallStaticBooleanMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
+  static JNICALL jboolean CallStaticBooleanMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1438,19 +1440,19 @@ class JNI {
     return result.GetZ();
   }
 
-  static jboolean CallStaticBooleanMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
+  static JNICALL jboolean CallStaticBooleanMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithVarArgs(soa, nullptr, mid, args).GetZ();
   }
 
-  static jboolean CallStaticBooleanMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
+  static JNICALL jboolean CallStaticBooleanMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithJValues(soa, nullptr, mid, args).GetZ();
   }
 
-  static jbyte CallStaticByteMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
+  static JNICALL jbyte CallStaticByteMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1460,19 +1462,19 @@ class JNI {
     return result.GetB();
   }
 
-  static jbyte CallStaticByteMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
+  static JNICALL jbyte CallStaticByteMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithVarArgs(soa, nullptr, mid, args).GetB();
   }
 
-  static jbyte CallStaticByteMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
+  static JNICALL jbyte CallStaticByteMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithJValues(soa, nullptr, mid, args).GetB();
   }
 
-  static jchar CallStaticCharMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
+  static JNICALL jchar CallStaticCharMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1482,19 +1484,19 @@ class JNI {
     return result.GetC();
   }
 
-  static jchar CallStaticCharMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
+  static JNICALL jchar CallStaticCharMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithVarArgs(soa, nullptr, mid, args).GetC();
   }
 
-  static jchar CallStaticCharMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
+  static JNICALL jchar CallStaticCharMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithJValues(soa, nullptr, mid, args).GetC();
   }
 
-  static jshort CallStaticShortMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
+  static JNICALL jshort CallStaticShortMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1504,19 +1506,19 @@ class JNI {
     return result.GetS();
   }
 
-  static jshort CallStaticShortMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
+  static JNICALL jshort CallStaticShortMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithVarArgs(soa, nullptr, mid, args).GetS();
   }
 
-  static jshort CallStaticShortMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
+  static JNICALL jshort CallStaticShortMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithJValues(soa, nullptr, mid, args).GetS();
   }
 
-  static jint CallStaticIntMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
+  static JNICALL jint CallStaticIntMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1526,19 +1528,19 @@ class JNI {
     return result.GetI();
   }
 
-  static jint CallStaticIntMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
+  static JNICALL jint CallStaticIntMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithVarArgs(soa, nullptr, mid, args).GetI();
   }
 
-  static jint CallStaticIntMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
+  static JNICALL jint CallStaticIntMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithJValues(soa, nullptr, mid, args).GetI();
   }
 
-  static jlong CallStaticLongMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
+  static JNICALL jlong CallStaticLongMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1548,19 +1550,19 @@ class JNI {
     return result.GetJ();
   }
 
-  static jlong CallStaticLongMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
+  static JNICALL jlong CallStaticLongMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithVarArgs(soa, nullptr, mid, args).GetJ();
   }
 
-  static jlong CallStaticLongMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
+  static JNICALL jlong CallStaticLongMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithJValues(soa, nullptr, mid, args).GetJ();
   }
 
-  static jfloat CallStaticFloatMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
+  static JNICALL jfloat CallStaticFloatMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1570,19 +1572,19 @@ class JNI {
     return result.GetF();
   }
 
-  static jfloat CallStaticFloatMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
+  static JNICALL jfloat CallStaticFloatMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithVarArgs(soa, nullptr, mid, args).GetF();
   }
 
-  static jfloat CallStaticFloatMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
+  static JNICALL jfloat CallStaticFloatMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithJValues(soa, nullptr, mid, args).GetF();
   }
 
-  static jdouble CallStaticDoubleMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
+  static JNICALL jdouble CallStaticDoubleMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
@@ -1592,19 +1594,19 @@ class JNI {
     return result.GetD();
   }
 
-  static jdouble CallStaticDoubleMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
+  static JNICALL jdouble CallStaticDoubleMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithVarArgs(soa, nullptr, mid, args).GetD();
   }
 
-  static jdouble CallStaticDoubleMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
+  static JNICALL jdouble CallStaticDoubleMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(mid);
     ScopedObjectAccess soa(env);
     return InvokeWithJValues(soa, nullptr, mid, args).GetD();
   }
 
-  static void CallStaticVoidMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
+  static JNICALL void CallStaticVoidMethod(JNIEnv* env, jclass, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(mid);
@@ -1613,19 +1615,19 @@ class JNI {
     va_end(ap);
   }
 
-  static void CallStaticVoidMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
+  static JNICALL void CallStaticVoidMethodV(JNIEnv* env, jclass, jmethodID mid, va_list args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(mid);
     ScopedObjectAccess soa(env);
     InvokeWithVarArgs(soa, nullptr, mid, args);
   }
 
-  static void CallStaticVoidMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
+  static JNICALL void CallStaticVoidMethodA(JNIEnv* env, jclass, jmethodID mid, jvalue* args) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(mid);
     ScopedObjectAccess soa(env);
     InvokeWithJValues(soa, nullptr, mid, args);
   }
 
-  static jstring NewString(JNIEnv* env, const jchar* chars, jsize char_count) {
+  static JNICALL jstring NewString(JNIEnv* env, const jchar* chars, jsize char_count) {
     if (UNLIKELY(char_count < 0)) {
       JavaVmExtFromEnv(env)->JniAbortF("NewString", "char_count < 0: %d", char_count);
       return nullptr;
@@ -1639,7 +1641,7 @@ class JNI {
     return soa.AddLocalReference<jstring>(result);
   }
 
-  static jstring NewStringUTF(JNIEnv* env, const char* utf) {
+  static JNICALL jstring NewStringUTF(JNIEnv* env, const char* utf) {
     if (utf == nullptr) {
       return nullptr;
     }
@@ -1648,19 +1650,19 @@ class JNI {
     return soa.AddLocalReference<jstring>(result);
   }
 
-  static jsize GetStringLength(JNIEnv* env, jstring java_string) {
+  static JNICALL jsize GetStringLength(JNIEnv* env, jstring java_string) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(java_string);
     ScopedObjectAccess soa(env);
     return soa.Decode<mirror::String*>(java_string)->GetLength();
   }
 
-  static jsize GetStringUTFLength(JNIEnv* env, jstring java_string) {
+  static JNICALL jsize GetStringUTFLength(JNIEnv* env, jstring java_string) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(java_string);
     ScopedObjectAccess soa(env);
     return soa.Decode<mirror::String*>(java_string)->GetUtfLength();
   }
 
-  static void GetStringRegion(JNIEnv* env, jstring java_string, jsize start, jsize length,
+  static JNICALL void GetStringRegion(JNIEnv* env, jstring java_string, jsize start, jsize length,
                               jchar* buf) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(java_string);
     ScopedObjectAccess soa(env);
@@ -1674,7 +1676,7 @@ class JNI {
     }
   }
 
-  static void GetStringUTFRegion(JNIEnv* env, jstring java_string, jsize start, jsize length,
+  static JNICALL void GetStringUTFRegion(JNIEnv* env, jstring java_string, jsize start, jsize length,
                                  char* buf) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(java_string);
     ScopedObjectAccess soa(env);
@@ -1689,26 +1691,37 @@ class JNI {
     }
   }
 
-  static const jchar* GetStringChars(JNIEnv* env, jstring java_string, jboolean* is_copy) {
+  static JNICALL const jchar* GetStringChars(JNIEnv* env, jstring java_string, jboolean* is_copy) {
     CHECK_NON_NULL_ARGUMENT(java_string);
     ScopedObjectAccess soa(env);
     mirror::String* s = soa.Decode<mirror::String*>(java_string);
     gc::Heap* heap = Runtime::Current()->GetHeap();
+#ifdef MOE
+    {
+      // MOE TODO: JNI applications can assume that the returned string are
+      // null-terminated, but ART Strings are not, thus we have to terminate it
+      // by ourself.
+      jchar* chars = new jchar[s->GetLength() + 1];
+      chars[s->GetLength()] = 0;
+#else
     if (heap->IsMovableObject(s)) {
       jchar* chars = new jchar[s->GetLength()];
+#endif
       memcpy(chars, s->GetValue(), sizeof(jchar) * s->GetLength());
       if (is_copy != nullptr) {
         *is_copy = JNI_TRUE;
       }
       return chars;
     }
+#ifndef MOE
     if (is_copy != nullptr) {
       *is_copy = JNI_FALSE;
     }
     return static_cast<jchar*>(s->GetValue());
+#endif
   }
 
-  static void ReleaseStringChars(JNIEnv* env, jstring java_string, const jchar* chars) {
+  static JNICALL void ReleaseStringChars(JNIEnv* env, jstring java_string, const jchar* chars) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(java_string);
     ScopedObjectAccess soa(env);
     mirror::String* s = soa.Decode<mirror::String*>(java_string);
@@ -1717,7 +1730,7 @@ class JNI {
     }
   }
 
-  static const jchar* GetStringCritical(JNIEnv* env, jstring java_string, jboolean* is_copy) {
+  static JNICALL const jchar* GetStringCritical(JNIEnv* env, jstring java_string, jboolean* is_copy) {
     CHECK_NON_NULL_ARGUMENT(java_string);
     ScopedObjectAccess soa(env);
     mirror::String* s = soa.Decode<mirror::String*>(java_string);
@@ -1739,7 +1752,7 @@ class JNI {
     return static_cast<jchar*>(s->GetValue());
   }
 
-  static void ReleaseStringCritical(JNIEnv* env,
+  static JNICALL void ReleaseStringCritical(JNIEnv* env,
                                     jstring java_string,
                                     const jchar* chars ATTRIBUTE_UNUSED) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(java_string);
@@ -1755,7 +1768,7 @@ class JNI {
     }
   }
 
-  static const char* GetStringUTFChars(JNIEnv* env, jstring java_string, jboolean* is_copy) {
+  static JNICALL const char* GetStringUTFChars(JNIEnv* env, jstring java_string, jboolean* is_copy) {
     if (java_string == nullptr) {
       return nullptr;
     }
@@ -1773,11 +1786,11 @@ class JNI {
     return bytes;
   }
 
-  static void ReleaseStringUTFChars(JNIEnv*, jstring, const char* chars) {
+  static JNICALL void ReleaseStringUTFChars(JNIEnv*, jstring, const char* chars) {
     delete[] chars;
   }
 
-  static jsize GetArrayLength(JNIEnv* env, jarray java_array) {
+  static JNICALL jsize GetArrayLength(JNIEnv* env, jarray java_array) {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(java_array);
     ScopedObjectAccess soa(env);
     mirror::Object* obj = soa.Decode<mirror::Object*>(java_array);
@@ -1789,7 +1802,7 @@ class JNI {
     return array->GetLength();
   }
 
-  static jobject GetObjectArrayElement(JNIEnv* env, jobjectArray java_array, jsize index) {
+  static JNICALL jobject GetObjectArrayElement(JNIEnv* env, jobjectArray java_array, jsize index) {
     CHECK_NON_NULL_ARGUMENT(java_array);
     ScopedObjectAccess soa(env);
     mirror::ObjectArray<mirror::Object>* array =
@@ -1797,7 +1810,7 @@ class JNI {
     return soa.AddLocalReference<jobject>(array->Get(index));
   }
 
-  static void SetObjectArrayElement(JNIEnv* env, jobjectArray java_array, jsize index,
+  static JNICALL void SetObjectArrayElement(JNIEnv* env, jobjectArray java_array, jsize index,
                                     jobject java_value) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(java_array);
     ScopedObjectAccess soa(env);
@@ -1807,35 +1820,35 @@ class JNI {
     array->Set<false>(index, value);
   }
 
-  static jbooleanArray NewBooleanArray(JNIEnv* env, jsize length) {
+  static JNICALL jbooleanArray NewBooleanArray(JNIEnv* env, jsize length) {
     return NewPrimitiveArray<jbooleanArray, mirror::BooleanArray>(env, length);
   }
 
-  static jbyteArray NewByteArray(JNIEnv* env, jsize length) {
+  static JNICALL jbyteArray NewByteArray(JNIEnv* env, jsize length) {
     return NewPrimitiveArray<jbyteArray, mirror::ByteArray>(env, length);
   }
 
-  static jcharArray NewCharArray(JNIEnv* env, jsize length) {
+  static JNICALL jcharArray NewCharArray(JNIEnv* env, jsize length) {
     return NewPrimitiveArray<jcharArray, mirror::CharArray>(env, length);
   }
 
-  static jdoubleArray NewDoubleArray(JNIEnv* env, jsize length) {
+  static JNICALL jdoubleArray NewDoubleArray(JNIEnv* env, jsize length) {
     return NewPrimitiveArray<jdoubleArray, mirror::DoubleArray>(env, length);
   }
 
-  static jfloatArray NewFloatArray(JNIEnv* env, jsize length) {
+  static JNICALL jfloatArray NewFloatArray(JNIEnv* env, jsize length) {
     return NewPrimitiveArray<jfloatArray, mirror::FloatArray>(env, length);
   }
 
-  static jintArray NewIntArray(JNIEnv* env, jsize length) {
+  static JNICALL jintArray NewIntArray(JNIEnv* env, jsize length) {
     return NewPrimitiveArray<jintArray, mirror::IntArray>(env, length);
   }
 
-  static jlongArray NewLongArray(JNIEnv* env, jsize length) {
+  static JNICALL jlongArray NewLongArray(JNIEnv* env, jsize length) {
     return NewPrimitiveArray<jlongArray, mirror::LongArray>(env, length);
   }
 
-  static jobjectArray NewObjectArray(JNIEnv* env, jsize length, jclass element_jclass,
+  static JNICALL jobjectArray NewObjectArray(JNIEnv* env, jsize length, jclass element_jclass,
                                      jobject initial_element) {
     if (UNLIKELY(length < 0)) {
       JavaVmExtFromEnv(env)->JniAbortF("NewObjectArray", "negative array length: %d", length);
@@ -1883,11 +1896,11 @@ class JNI {
     return soa.AddLocalReference<jobjectArray>(result);
   }
 
-  static jshortArray NewShortArray(JNIEnv* env, jsize length) {
+  static JNICALL jshortArray NewShortArray(JNIEnv* env, jsize length) {
     return NewPrimitiveArray<jshortArray, mirror::ShortArray>(env, length);
   }
 
-  static void* GetPrimitiveArrayCritical(JNIEnv* env, jarray java_array, jboolean* is_copy) {
+  static JNICALL void* GetPrimitiveArrayCritical(JNIEnv* env, jarray java_array, jboolean* is_copy) {
     CHECK_NON_NULL_ARGUMENT(java_array);
     ScopedObjectAccess soa(env);
     mirror::Array* array = soa.Decode<mirror::Array*>(java_array);
@@ -1914,7 +1927,7 @@ class JNI {
     return array->GetRawData(array->GetClass()->GetComponentSize(), 0);
   }
 
-  static void ReleasePrimitiveArrayCritical(JNIEnv* env, jarray java_array, void* elements,
+  static JNICALL void ReleasePrimitiveArrayCritical(JNIEnv* env, jarray java_array, void* elements,
                                             jint mode) {
     CHECK_NON_NULL_ARGUMENT_RETURN_VOID(java_array);
     ScopedObjectAccess soa(env);
@@ -1928,169 +1941,169 @@ class JNI {
     ReleasePrimitiveArray(soa, array, component_size, elements, mode);
   }
 
-  static jboolean* GetBooleanArrayElements(JNIEnv* env, jbooleanArray array, jboolean* is_copy) {
+  static JNICALL jboolean* GetBooleanArrayElements(JNIEnv* env, jbooleanArray array, jboolean* is_copy) {
     return GetPrimitiveArray<jbooleanArray, jboolean, mirror::BooleanArray>(env, array, is_copy);
   }
 
-  static jbyte* GetByteArrayElements(JNIEnv* env, jbyteArray array, jboolean* is_copy) {
+  static JNICALL jbyte* GetByteArrayElements(JNIEnv* env, jbyteArray array, jboolean* is_copy) {
     return GetPrimitiveArray<jbyteArray, jbyte, mirror::ByteArray>(env, array, is_copy);
   }
 
-  static jchar* GetCharArrayElements(JNIEnv* env, jcharArray array, jboolean* is_copy) {
+  static JNICALL jchar* GetCharArrayElements(JNIEnv* env, jcharArray array, jboolean* is_copy) {
     return GetPrimitiveArray<jcharArray, jchar, mirror::CharArray>(env, array, is_copy);
   }
 
-  static jdouble* GetDoubleArrayElements(JNIEnv* env, jdoubleArray array, jboolean* is_copy) {
+  static JNICALL jdouble* GetDoubleArrayElements(JNIEnv* env, jdoubleArray array, jboolean* is_copy) {
     return GetPrimitiveArray<jdoubleArray, jdouble, mirror::DoubleArray>(env, array, is_copy);
   }
 
-  static jfloat* GetFloatArrayElements(JNIEnv* env, jfloatArray array, jboolean* is_copy) {
+  static JNICALL jfloat* GetFloatArrayElements(JNIEnv* env, jfloatArray array, jboolean* is_copy) {
     return GetPrimitiveArray<jfloatArray, jfloat, mirror::FloatArray>(env, array, is_copy);
   }
 
-  static jint* GetIntArrayElements(JNIEnv* env, jintArray array, jboolean* is_copy) {
+  static JNICALL jint* GetIntArrayElements(JNIEnv* env, jintArray array, jboolean* is_copy) {
     return GetPrimitiveArray<jintArray, jint, mirror::IntArray>(env, array, is_copy);
   }
 
-  static jlong* GetLongArrayElements(JNIEnv* env, jlongArray array, jboolean* is_copy) {
+  static JNICALL jlong* GetLongArrayElements(JNIEnv* env, jlongArray array, jboolean* is_copy) {
     return GetPrimitiveArray<jlongArray, jlong, mirror::LongArray>(env, array, is_copy);
   }
 
-  static jshort* GetShortArrayElements(JNIEnv* env, jshortArray array, jboolean* is_copy) {
+  static JNICALL jshort* GetShortArrayElements(JNIEnv* env, jshortArray array, jboolean* is_copy) {
     return GetPrimitiveArray<jshortArray, jshort, mirror::ShortArray>(env, array, is_copy);
   }
 
-  static void ReleaseBooleanArrayElements(JNIEnv* env, jbooleanArray array, jboolean* elements,
+  static JNICALL void ReleaseBooleanArrayElements(JNIEnv* env, jbooleanArray array, jboolean* elements,
                                           jint mode) {
     ReleasePrimitiveArray<jbooleanArray, jboolean, mirror::BooleanArray>(env, array, elements,
                                                                          mode);
   }
 
-  static void ReleaseByteArrayElements(JNIEnv* env, jbyteArray array, jbyte* elements, jint mode) {
+  static JNICALL void ReleaseByteArrayElements(JNIEnv* env, jbyteArray array, jbyte* elements, jint mode) {
     ReleasePrimitiveArray<jbyteArray, jbyte, mirror::ByteArray>(env, array, elements, mode);
   }
 
-  static void ReleaseCharArrayElements(JNIEnv* env, jcharArray array, jchar* elements, jint mode) {
+  static JNICALL void ReleaseCharArrayElements(JNIEnv* env, jcharArray array, jchar* elements, jint mode) {
     ReleasePrimitiveArray<jcharArray, jchar, mirror::CharArray>(env, array, elements, mode);
   }
 
-  static void ReleaseDoubleArrayElements(JNIEnv* env, jdoubleArray array, jdouble* elements,
+  static JNICALL void ReleaseDoubleArrayElements(JNIEnv* env, jdoubleArray array, jdouble* elements,
                                          jint mode) {
     ReleasePrimitiveArray<jdoubleArray, jdouble, mirror::DoubleArray>(env, array, elements, mode);
   }
 
-  static void ReleaseFloatArrayElements(JNIEnv* env, jfloatArray array, jfloat* elements,
+  static JNICALL void ReleaseFloatArrayElements(JNIEnv* env, jfloatArray array, jfloat* elements,
                                         jint mode) {
     ReleasePrimitiveArray<jfloatArray, jfloat, mirror::FloatArray>(env, array, elements, mode);
   }
 
-  static void ReleaseIntArrayElements(JNIEnv* env, jintArray array, jint* elements, jint mode) {
+  static JNICALL void ReleaseIntArrayElements(JNIEnv* env, jintArray array, jint* elements, jint mode) {
     ReleasePrimitiveArray<jintArray, jint, mirror::IntArray>(env, array, elements, mode);
   }
 
-  static void ReleaseLongArrayElements(JNIEnv* env, jlongArray array, jlong* elements, jint mode) {
+  static JNICALL void ReleaseLongArrayElements(JNIEnv* env, jlongArray array, jlong* elements, jint mode) {
     ReleasePrimitiveArray<jlongArray, jlong, mirror::LongArray>(env, array, elements, mode);
   }
 
-  static void ReleaseShortArrayElements(JNIEnv* env, jshortArray array, jshort* elements,
+  static JNICALL void ReleaseShortArrayElements(JNIEnv* env, jshortArray array, jshort* elements,
                                         jint mode) {
     ReleasePrimitiveArray<jshortArray, jshort, mirror::ShortArray>(env, array, elements, mode);
   }
 
-  static void GetBooleanArrayRegion(JNIEnv* env, jbooleanArray array, jsize start, jsize length,
+  static JNICALL void GetBooleanArrayRegion(JNIEnv* env, jbooleanArray array, jsize start, jsize length,
                                     jboolean* buf) {
     GetPrimitiveArrayRegion<jbooleanArray, jboolean, mirror::BooleanArray>(env, array, start,
                                                                            length, buf);
   }
 
-  static void GetByteArrayRegion(JNIEnv* env, jbyteArray array, jsize start, jsize length,
+  static JNICALL void GetByteArrayRegion(JNIEnv* env, jbyteArray array, jsize start, jsize length,
                                  jbyte* buf) {
     GetPrimitiveArrayRegion<jbyteArray, jbyte, mirror::ByteArray>(env, array, start, length, buf);
   }
 
-  static void GetCharArrayRegion(JNIEnv* env, jcharArray array, jsize start, jsize length,
+  static JNICALL void GetCharArrayRegion(JNIEnv* env, jcharArray array, jsize start, jsize length,
                                  jchar* buf) {
     GetPrimitiveArrayRegion<jcharArray, jchar, mirror::CharArray>(env, array, start, length, buf);
   }
 
-  static void GetDoubleArrayRegion(JNIEnv* env, jdoubleArray array, jsize start, jsize length,
+  static JNICALL void GetDoubleArrayRegion(JNIEnv* env, jdoubleArray array, jsize start, jsize length,
                                    jdouble* buf) {
     GetPrimitiveArrayRegion<jdoubleArray, jdouble, mirror::DoubleArray>(env, array, start, length,
                                                                         buf);
   }
 
-  static void GetFloatArrayRegion(JNIEnv* env, jfloatArray array, jsize start, jsize length,
+  static JNICALL void GetFloatArrayRegion(JNIEnv* env, jfloatArray array, jsize start, jsize length,
                                   jfloat* buf) {
     GetPrimitiveArrayRegion<jfloatArray, jfloat, mirror::FloatArray>(env, array, start, length,
                                                                      buf);
   }
 
-  static void GetIntArrayRegion(JNIEnv* env, jintArray array, jsize start, jsize length,
+  static JNICALL void GetIntArrayRegion(JNIEnv* env, jintArray array, jsize start, jsize length,
                                 jint* buf) {
     GetPrimitiveArrayRegion<jintArray, jint, mirror::IntArray>(env, array, start, length, buf);
   }
 
-  static void GetLongArrayRegion(JNIEnv* env, jlongArray array, jsize start, jsize length,
+  static JNICALL void GetLongArrayRegion(JNIEnv* env, jlongArray array, jsize start, jsize length,
                                  jlong* buf) {
     GetPrimitiveArrayRegion<jlongArray, jlong, mirror::LongArray>(env, array, start, length, buf);
   }
 
-  static void GetShortArrayRegion(JNIEnv* env, jshortArray array, jsize start, jsize length,
+  static JNICALL void GetShortArrayRegion(JNIEnv* env, jshortArray array, jsize start, jsize length,
                                   jshort* buf) {
     GetPrimitiveArrayRegion<jshortArray, jshort, mirror::ShortArray>(env, array, start, length,
                                                                      buf);
   }
 
-  static void SetBooleanArrayRegion(JNIEnv* env, jbooleanArray array, jsize start, jsize length,
+  static JNICALL void SetBooleanArrayRegion(JNIEnv* env, jbooleanArray array, jsize start, jsize length,
                                     const jboolean* buf) {
     SetPrimitiveArrayRegion<jbooleanArray, jboolean, mirror::BooleanArray>(env, array, start,
                                                                            length, buf);
   }
 
-  static void SetByteArrayRegion(JNIEnv* env, jbyteArray array, jsize start, jsize length,
+  static JNICALL void SetByteArrayRegion(JNIEnv* env, jbyteArray array, jsize start, jsize length,
                                  const jbyte* buf) {
     SetPrimitiveArrayRegion<jbyteArray, jbyte, mirror::ByteArray>(env, array, start, length, buf);
   }
 
-  static void SetCharArrayRegion(JNIEnv* env, jcharArray array, jsize start, jsize length,
+  static JNICALL void SetCharArrayRegion(JNIEnv* env, jcharArray array, jsize start, jsize length,
                                  const jchar* buf) {
     SetPrimitiveArrayRegion<jcharArray, jchar, mirror::CharArray>(env, array, start, length, buf);
   }
 
-  static void SetDoubleArrayRegion(JNIEnv* env, jdoubleArray array, jsize start, jsize length,
+  static JNICALL void SetDoubleArrayRegion(JNIEnv* env, jdoubleArray array, jsize start, jsize length,
                                    const jdouble* buf) {
     SetPrimitiveArrayRegion<jdoubleArray, jdouble, mirror::DoubleArray>(env, array, start, length,
                                                                         buf);
   }
 
-  static void SetFloatArrayRegion(JNIEnv* env, jfloatArray array, jsize start, jsize length,
+  static JNICALL void SetFloatArrayRegion(JNIEnv* env, jfloatArray array, jsize start, jsize length,
                                   const jfloat* buf) {
     SetPrimitiveArrayRegion<jfloatArray, jfloat, mirror::FloatArray>(env, array, start, length,
                                                                      buf);
   }
 
-  static void SetIntArrayRegion(JNIEnv* env, jintArray array, jsize start, jsize length,
+  static JNICALL void SetIntArrayRegion(JNIEnv* env, jintArray array, jsize start, jsize length,
                                 const jint* buf) {
     SetPrimitiveArrayRegion<jintArray, jint, mirror::IntArray>(env, array, start, length, buf);
   }
 
-  static void SetLongArrayRegion(JNIEnv* env, jlongArray array, jsize start, jsize length,
+  static JNICALL void SetLongArrayRegion(JNIEnv* env, jlongArray array, jsize start, jsize length,
                                  const jlong* buf) {
     SetPrimitiveArrayRegion<jlongArray, jlong, mirror::LongArray>(env, array, start, length, buf);
   }
 
-  static void SetShortArrayRegion(JNIEnv* env, jshortArray array, jsize start, jsize length,
+  static JNICALL void SetShortArrayRegion(JNIEnv* env, jshortArray array, jsize start, jsize length,
                                   const jshort* buf) {
     SetPrimitiveArrayRegion<jshortArray, jshort, mirror::ShortArray>(env, array, start, length,
                                                                      buf);
   }
 
-  static jint RegisterNatives(JNIEnv* env, jclass java_class, const JNINativeMethod* methods,
+  static JNICALL jint RegisterNatives(JNIEnv* env, jclass java_class, const JNINativeMethod* methods,
                               jint method_count) {
     return RegisterNativeMethods(env, java_class, methods, method_count, true);
   }
 
-  static jint RegisterNativeMethods(JNIEnv* env, jclass java_class, const JNINativeMethod* methods,
+  static JNICALL jint RegisterNativeMethods(JNIEnv* env, jclass java_class, const JNINativeMethod* methods,
                                     jint method_count, bool return_errors) {
     if (UNLIKELY(method_count < 0)) {
       JavaVmExtFromEnv(env)->JniAbortF("RegisterNatives", "negative method count: %d",
@@ -2206,7 +2219,7 @@ class JNI {
     return JNI_OK;
   }
 
-  static jint UnregisterNatives(JNIEnv* env, jclass java_class) {
+  static JNICALL jint UnregisterNatives(JNIEnv* env, jclass java_class) {
     CHECK_NON_NULL_ARGUMENT_RETURN(java_class, JNI_ERR);
     ScopedObjectAccess soa(env);
     mirror::Class* c = soa.Decode<mirror::Class*>(java_class);
@@ -2229,7 +2242,7 @@ class JNI {
     return JNI_OK;
   }
 
-  static jint MonitorEnter(JNIEnv* env, jobject java_object) NO_THREAD_SAFETY_ANALYSIS {
+  static JNICALL jint MonitorEnter(JNIEnv* env, jobject java_object) NO_THREAD_SAFETY_ANALYSIS {
     CHECK_NON_NULL_ARGUMENT_RETURN(java_object, JNI_ERR);
     ScopedObjectAccess soa(env);
     mirror::Object* o = soa.Decode<mirror::Object*>(java_object);
@@ -2241,7 +2254,7 @@ class JNI {
     return JNI_OK;
   }
 
-  static jint MonitorExit(JNIEnv* env, jobject java_object) NO_THREAD_SAFETY_ANALYSIS {
+  static JNICALL jint MonitorExit(JNIEnv* env, jobject java_object) NO_THREAD_SAFETY_ANALYSIS {
     CHECK_NON_NULL_ARGUMENT_RETURN(java_object, JNI_ERR);
     ScopedObjectAccess soa(env);
     mirror::Object* o = soa.Decode<mirror::Object*>(java_object);
@@ -2253,7 +2266,7 @@ class JNI {
     return JNI_OK;
   }
 
-  static jint GetJavaVM(JNIEnv* env, JavaVM** vm) {
+  static JNICALL jint GetJavaVM(JNIEnv* env, JavaVM** vm) {
     CHECK_NON_NULL_ARGUMENT_RETURN(vm, JNI_ERR);
     Runtime* runtime = Runtime::Current();
     if (runtime != nullptr) {
@@ -2264,7 +2277,7 @@ class JNI {
     return (*vm != nullptr) ? JNI_OK : JNI_ERR;
   }
 
-  static jobject NewDirectByteBuffer(JNIEnv* env, void* address, jlong capacity) {
+  static JNICALL jobject NewDirectByteBuffer(JNIEnv* env, void* address, jlong capacity) {
     if (capacity < 0) {
       JavaVmExtFromEnv(env)->JniAbortF("NewDirectByteBuffer", "negative buffer capacity: %" PRId64,
                                        capacity);
@@ -2292,17 +2305,17 @@ class JNI {
     return static_cast<JNIEnvExt*>(env)->self->IsExceptionPending() ? nullptr : result;
   }
 
-  static void* GetDirectBufferAddress(JNIEnv* env, jobject java_buffer) {
+  static JNICALL void* GetDirectBufferAddress(JNIEnv* env, jobject java_buffer) {
     return reinterpret_cast<void*>(env->GetLongField(
         java_buffer, WellKnownClasses::java_nio_DirectByteBuffer_effectiveDirectAddress));
   }
 
-  static jlong GetDirectBufferCapacity(JNIEnv* env, jobject java_buffer) {
+  static JNICALL jlong GetDirectBufferCapacity(JNIEnv* env, jobject java_buffer) {
     return static_cast<jlong>(env->GetIntField(
         java_buffer, WellKnownClasses::java_nio_DirectByteBuffer_capacity));
   }
 
-  static jobjectRefType GetObjectRefType(JNIEnv* env ATTRIBUTE_UNUSED, jobject java_object) {
+  static JNICALL jobjectRefType GetObjectRefType(JNIEnv* env ATTRIBUTE_UNUSED, jobject java_object) {
     if (java_object == nullptr) {
       return JNIInvalidRefType;
     }

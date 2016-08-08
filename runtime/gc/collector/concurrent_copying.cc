@@ -359,6 +359,7 @@ void ConcurrentCopying::MarkingPhase() {
     // Mark the image root. The WB-based collectors do not need to
     // scan the image objects from roots by relying on the card table,
     // but it's necessary for the RB to-space invariant to hold.
+#ifndef MOE
     TimingLogger::ScopedTiming split1("VisitImageRoots", GetTimings());
     for (space::ContinuousSpace* space : heap_->GetContinuousSpaces()) {
       if (space->IsImageSpace()) {
@@ -373,6 +374,7 @@ void ConcurrentCopying::MarkingPhase() {
         }
       }
     }
+#endif
   }
   {
     TimingLogger::ScopedTiming split2("VisitConcurrentRoots", GetTimings());

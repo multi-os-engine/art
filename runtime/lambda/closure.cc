@@ -402,7 +402,11 @@ size_t Closure::GetClosureSize(const uint8_t* closure) {
 }
 
 size_t Closure::GetStartingOffset() const {
+#ifndef MOE_WINDOWS
   static constexpr const size_t captured_offset = offsetof(Closure, captured_);
+#else
+  const size_t captured_offset = offsetof(Closure, captured_);
+#endif
   if (LIKELY(lambda_info_->IsStaticSize())) {
     return offsetof(Closure, captured_[0].static_variables_) - captured_offset;
   } else {

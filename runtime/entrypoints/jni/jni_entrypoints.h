@@ -28,10 +28,16 @@
 namespace art {
 
 // Pointers to functions that are called by JNI trampolines via thread-local storage.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 struct PACKED(4) JniEntryPoints {
   // Called when the JNI method isn't registered.
   void* (*pDlsymLookup)(JNIEnv* env, jobject);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace art
 

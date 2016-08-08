@@ -29,6 +29,9 @@ struct ThrowableOffsets;
 namespace mirror {
 
 // C++ mirror of java.lang.Throwable
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED Throwable : public Object {
  public:
   void SetDetailMessage(String* new_detail_message) SHARED_REQUIRES(Locks::mutator_lock_);
@@ -66,6 +69,10 @@ class MANAGED Throwable : public Object {
     return GetFieldObjectVolatile<Object>(OFFSET_OF_OBJECT_MEMBER(Throwable, backtrace_));
   }
 
+#if defined(MOE) && defined(__LP64__)
+  uint32_t reference_padding_ ATTRIBUTE_UNUSED;
+#endif
+
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
   HeapReference<Object> backtrace_;  // Note this is Java volatile:
   HeapReference<Throwable> cause_;
@@ -78,6 +85,9 @@ class MANAGED Throwable : public Object {
   friend struct art::ThrowableOffsets;  // for verifying offset information
   DISALLOW_IMPLICIT_CONSTRUCTORS(Throwable);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

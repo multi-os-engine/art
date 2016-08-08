@@ -1,0 +1,2 @@
+## getDisplayName: Central European Standard Time
+## This is with ICU. Without ICU: "Central European Time"

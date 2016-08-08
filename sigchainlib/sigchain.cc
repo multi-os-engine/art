@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -138,7 +139,11 @@ extern "C" void UnclaimSignalChain(int signal) {
 }
 
 // Invoke the user's signal handler.
+#ifndef MOE
 extern "C" void InvokeUserSignalHandler(int sig, siginfo_t* info, void* context) {
+#else
+extern "C" bool InvokeUserSignalHandler(int sig, siginfo_t* info, void* context) {
+#endif
   // Check the arguments.
   CheckSignalValid(sig);
 
@@ -156,7 +161,11 @@ extern "C" void InvokeUserSignalHandler(int sig, siginfo_t* info, void* context)
     // Call the handler. If it succeeds, we're done.
     if (managed(sig, info, context)) {
       sigprocmask(SIG_SETMASK, &old_mask, nullptr);
+#ifndef MOE
       return;
+#else
+      return true;
+#endif
     }
     sigprocmask(SIG_SETMASK, &old_mask, nullptr);
   }
@@ -166,8 +175,12 @@ extern "C" void InvokeUserSignalHandler(int sig, siginfo_t* info, void* context)
     if (action.sa_handler != nullptr) {
       action.sa_handler(sig);
     } else {
+#ifndef MOE
       signal(sig, SIG_DFL);
       raise(sig);
+#else
+      return false;
+#endif
     }
   } else {
     if (action.sa_sigaction != nullptr) {
@@ -176,10 +189,18 @@ extern "C" void InvokeUserSignalHandler(int sig, siginfo_t* info, void* context)
       action.sa_sigaction(sig, info, context);
       sigprocmask(SIG_SETMASK, &old_mask, nullptr);
     } else {
+#ifndef MOE
       signal(sig, SIG_DFL);
       raise(sig);
+#else
+      return false;
+#endif
     }
   }
+
+#ifdef MOE
+  return true;
+#endif
 }
 
 extern "C" void EnsureFrontOfChain(int signal, struct sigaction* expected_action) {
@@ -316,7 +337,14 @@ extern "C" void InitializeSignalChain() {
     // Don't initialize twice.
     return;
   }
+
   linked_sigaction_sym = dlsym(RTLD_NEXT, "sigaction");
+#ifdef MOE
+  if (linked_sigaction_sym == nullptr) {
+    void* handle = dlopen("/usr/lib/system/libsystem_c.dylib", RTLD_LAZY);
+    linked_sigaction_sym = dlsym(handle, "sigaction");
+  }
+#endif
   if (linked_sigaction_sym == nullptr) {
     linked_sigaction_sym = dlsym(RTLD_DEFAULT, "sigaction");
     if (linked_sigaction_sym == nullptr ||
@@ -326,6 +354,12 @@ extern "C" void InitializeSignalChain() {
   }
 
   linked_sigprocmask_sym = dlsym(RTLD_NEXT, "sigprocmask");
+#ifdef MOE
+  if (linked_sigaction_sym == nullptr) {
+    void* handle = dlopen("/usr/lib/system/libsystem_c.dylib", RTLD_LAZY);
+    linked_sigprocmask_sym = dlsym(handle, "sigprocmask");
+  }
+#endif
   if (linked_sigprocmask_sym == nullptr) {
     linked_sigprocmask_sym = dlsym(RTLD_DEFAULT, "sigprocmask");
     if (linked_sigprocmask_sym == nullptr ||

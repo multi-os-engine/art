@@ -20,6 +20,9 @@
 
 namespace art {
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int artLockObjectFromCode(mirror::Object* obj, Thread* self)
     NO_THREAD_SAFETY_ANALYSIS
     REQUIRES(!Roles::uninterruptible_)
@@ -41,6 +44,9 @@ extern "C" int artLockObjectFromCode(mirror::Object* obj, Thread* self)
   }
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int artUnlockObjectFromCode(mirror::Object* obj, Thread* self)
     NO_THREAD_SAFETY_ANALYSIS
     REQUIRES(!Roles::uninterruptible_)

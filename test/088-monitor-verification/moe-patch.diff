@@ -1,0 +1,9 @@
+diff --git a/test/088-monitor-verification/expected.txt b/test/088-monitor-verification/expected.txt
+index 2cb8f2c..33ef3f1 100644
+--- a/test/088-monitor-verification/expected.txt
++++ b/test/088-monitor-verification/expected.txt
+@@ -1,4 +1,3 @@
+-JNI_OnLoad called
+ recursiveSync ok
+ nestedMayThrow ok
+ constantLock ok

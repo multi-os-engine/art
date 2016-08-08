@@ -27,7 +27,7 @@
 
 namespace art {
 
-static jobjectArray AbstractMethod_getDeclaredAnnotations(JNIEnv* env, jobject javaMethod) {
+static JNICALL jobjectArray AbstractMethod_getDeclaredAnnotations(JNIEnv* env, jobject javaMethod) {
   ScopedFastNativeObjectAccess soa(env);
   ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod);
   if (method->GetDeclaringClass()->IsProxyClass()) {
@@ -41,7 +41,7 @@ static jobjectArray AbstractMethod_getDeclaredAnnotations(JNIEnv* env, jobject j
   return soa.AddLocalReference<jobjectArray>(method->GetDexFile()->GetAnnotationsForMethod(method));
 }
 
-static jobjectArray AbstractMethod_getSignatureAnnotation(JNIEnv* env, jobject javaMethod) {
+static JNICALL jobjectArray AbstractMethod_getSignatureAnnotation(JNIEnv* env, jobject javaMethod) {
   ScopedFastNativeObjectAccess soa(env);
   ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod);
   if (method->GetDeclaringClass()->IsProxyClass()) {
@@ -53,7 +53,7 @@ static jobjectArray AbstractMethod_getSignatureAnnotation(JNIEnv* env, jobject j
 }
 
 
-static jboolean AbstractMethod_isAnnotationPresentNative(JNIEnv* env, jobject javaMethod,
+static JNICALL jboolean AbstractMethod_isAnnotationPresentNative(JNIEnv* env, jobject javaMethod,
                                                          jclass annotationType) {
   ScopedFastNativeObjectAccess soa(env);
   ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod);

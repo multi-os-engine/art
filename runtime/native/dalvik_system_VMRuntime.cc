@@ -52,21 +52,21 @@ extern "C" void android_set_application_target_sdk_version(uint32_t version);
 
 namespace art {
 
-static jfloat VMRuntime_getTargetHeapUtilization(JNIEnv*, jobject) {
+static JNICALL jfloat VMRuntime_getTargetHeapUtilization(JNIEnv*, jobject) {
   return Runtime::Current()->GetHeap()->GetTargetHeapUtilization();
 }
 
-static void VMRuntime_nativeSetTargetHeapUtilization(JNIEnv*, jobject, jfloat target) {
+static JNICALL void VMRuntime_nativeSetTargetHeapUtilization(JNIEnv*, jobject, jfloat target) {
   Runtime::Current()->GetHeap()->SetTargetHeapUtilization(target);
 }
 
-static void VMRuntime_startJitCompilation(JNIEnv*, jobject) {
+static JNICALL void VMRuntime_startJitCompilation(JNIEnv*, jobject) {
 }
 
-static void VMRuntime_disableJitCompilation(JNIEnv*, jobject) {
+static JNICALL void VMRuntime_disableJitCompilation(JNIEnv*, jobject) {
 }
 
-static jobject VMRuntime_newNonMovableArray(JNIEnv* env, jobject, jclass javaElementClass,
+static JNICALL jobject VMRuntime_newNonMovableArray(JNIEnv* env, jobject, jclass javaElementClass,
                                             jint length) {
   ScopedFastNativeObjectAccess soa(env);
   if (UNLIKELY(length < 0)) {
@@ -91,7 +91,7 @@ static jobject VMRuntime_newNonMovableArray(JNIEnv* env, jobject, jclass javaEle
   return soa.AddLocalReference<jobject>(result);
 }
 
-static jobject VMRuntime_newUnpaddedArray(JNIEnv* env, jobject, jclass javaElementClass,
+static JNICALL jobject VMRuntime_newUnpaddedArray(JNIEnv* env, jobject, jclass javaElementClass,
                                           jint length) {
   ScopedFastNativeObjectAccess soa(env);
   if (UNLIKELY(length < 0)) {
@@ -116,7 +116,7 @@ static jobject VMRuntime_newUnpaddedArray(JNIEnv* env, jobject, jclass javaEleme
   return soa.AddLocalReference<jobject>(result);
 }
 
-static jlong VMRuntime_addressOf(JNIEnv* env, jobject, jobject javaArray) {
+static JNICALL jlong VMRuntime_addressOf(JNIEnv* env, jobject, jobject javaArray) {
   if (javaArray == nullptr) {  // Most likely allocation failed
     return 0;
   }
@@ -133,23 +133,23 @@ static jlong VMRuntime_addressOf(JNIEnv* env, jobject, jobject javaArray) {
   return reinterpret_cast<uintptr_t>(array->GetRawData(array->GetClass()->GetComponentSize(), 0));
 }
 
-static void VMRuntime_clearGrowthLimit(JNIEnv*, jobject) {
+static JNICALL void VMRuntime_clearGrowthLimit(JNIEnv*, jobject) {
   Runtime::Current()->GetHeap()->ClearGrowthLimit();
 }
 
-static void VMRuntime_clampGrowthLimit(JNIEnv*, jobject) {
+static JNICALL void VMRuntime_clampGrowthLimit(JNIEnv*, jobject) {
   Runtime::Current()->GetHeap()->ClampGrowthLimit();
 }
 
-static jboolean VMRuntime_isDebuggerActive(JNIEnv*, jobject) {
+static JNICALL jboolean VMRuntime_isDebuggerActive(JNIEnv*, jobject) {
   return Dbg::IsDebuggerActive();
 }
 
-static jboolean VMRuntime_isNativeDebuggable(JNIEnv*, jobject) {
+static JNICALL jboolean VMRuntime_isNativeDebuggable(JNIEnv*, jobject) {
   return Runtime::Current()->IsNativeDebuggable();
 }
 
-static jobjectArray VMRuntime_properties(JNIEnv* env, jobject) {
+static JNICALL jobjectArray VMRuntime_properties(JNIEnv* env, jobject) {
   return toStringArray(env, Runtime::Current()->GetProperties());
 }
 
@@ -162,38 +162,38 @@ static const char* DefaultToDot(const std::string& class_path) {
   return class_path.empty() ? "." : class_path.c_str();
 }
 
-static jstring VMRuntime_bootClassPath(JNIEnv* env, jobject) {
+static JNICALL jstring VMRuntime_bootClassPath(JNIEnv* env, jobject) {
   return env->NewStringUTF(DefaultToDot(Runtime::Current()->GetBootClassPathString()));
 }
 
-static jstring VMRuntime_classPath(JNIEnv* env, jobject) {
+static JNICALL jstring VMRuntime_classPath(JNIEnv* env, jobject) {
   return env->NewStringUTF(DefaultToDot(Runtime::Current()->GetClassPathString()));
 }
 
-static jstring VMRuntime_vmVersion(JNIEnv* env, jobject) {
+static JNICALL jstring VMRuntime_vmVersion(JNIEnv* env, jobject) {
   return env->NewStringUTF(Runtime::GetVersion());
 }
 
-static jstring VMRuntime_vmLibrary(JNIEnv* env, jobject) {
+static JNICALL jstring VMRuntime_vmLibrary(JNIEnv* env, jobject) {
   return env->NewStringUTF(kIsDebugBuild ? "libartd.so" : "libart.so");
 }
 
-static jstring VMRuntime_vmInstructionSet(JNIEnv* env, jobject) {
+static JNICALL jstring VMRuntime_vmInstructionSet(JNIEnv* env, jobject) {
   InstructionSet isa = Runtime::Current()->GetInstructionSet();
   const char* isa_string = GetInstructionSetString(isa);
   return env->NewStringUTF(isa_string);
 }
 
-static jboolean VMRuntime_is64Bit(JNIEnv*, jobject) {
+static JNICALL jboolean VMRuntime_is64Bit(JNIEnv*, jobject) {
   bool is64BitMode = (sizeof(void*) == sizeof(uint64_t));
   return is64BitMode ? JNI_TRUE : JNI_FALSE;
 }
 
-static jboolean VMRuntime_isCheckJniEnabled(JNIEnv* env, jobject) {
+static JNICALL jboolean VMRuntime_isCheckJniEnabled(JNIEnv* env, jobject) {
   return down_cast<JNIEnvExt*>(env)->vm->IsCheckJniEnabled() ? JNI_TRUE : JNI_FALSE;
 }
 
-static void VMRuntime_setTargetSdkVersionNative(JNIEnv*, jobject, jint target_sdk_version) {
+static JNICALL void VMRuntime_setTargetSdkVersionNative(JNIEnv*, jobject, jint target_sdk_version) {
   // This is the target SDK version of the app we're about to run. It is intended that this a place
   // where workarounds can be enabled.
   // Note that targetSdkVersion may be CUR_DEVELOPMENT (10000).
@@ -207,7 +207,7 @@ static void VMRuntime_setTargetSdkVersionNative(JNIEnv*, jobject, jint target_sd
 #endif
 }
 
-static void VMRuntime_registerNativeAllocation(JNIEnv* env, jobject, jint bytes) {
+static JNICALL void VMRuntime_registerNativeAllocation(JNIEnv* env, jobject, jint bytes) {
   if (UNLIKELY(bytes < 0)) {
     ScopedObjectAccess soa(env);
     ThrowRuntimeException("allocation size negative %d", bytes);
@@ -216,11 +216,11 @@ static void VMRuntime_registerNativeAllocation(JNIEnv* env, jobject, jint bytes)
   Runtime::Current()->GetHeap()->RegisterNativeAllocation(env, static_cast<size_t>(bytes));
 }
 
-static void VMRuntime_registerSensitiveThread(JNIEnv*, jobject) {
+static JNICALL void VMRuntime_registerSensitiveThread(JNIEnv*, jobject) {
   Runtime::Current()->RegisterSensitiveThread();
 }
 
-static void VMRuntime_registerNativeFree(JNIEnv* env, jobject, jint bytes) {
+static JNICALL void VMRuntime_registerNativeFree(JNIEnv* env, jobject, jint bytes) {
   if (UNLIKELY(bytes < 0)) {
     ScopedObjectAccess soa(env);
     ThrowRuntimeException("allocation size negative %d", bytes);
@@ -229,36 +229,36 @@ static void VMRuntime_registerNativeFree(JNIEnv* env, jobject, jint bytes) {
   Runtime::Current()->GetHeap()->RegisterNativeFree(env, static_cast<size_t>(bytes));
 }
 
-static void VMRuntime_updateProcessState(JNIEnv*, jobject, jint process_state) {
+static JNICALL void VMRuntime_updateProcessState(JNIEnv*, jobject, jint process_state) {
   Runtime* runtime = Runtime::Current();
   runtime->UpdateProcessState(static_cast<ProcessState>(process_state));
 }
 
-static void VMRuntime_trimHeap(JNIEnv* env, jobject) {
+static JNICALL void VMRuntime_trimHeap(JNIEnv* env, jobject) {
   Runtime::Current()->GetHeap()->Trim(ThreadForEnv(env));
 }
 
-static void VMRuntime_concurrentGC(JNIEnv* env, jobject) {
+static JNICALL void VMRuntime_concurrentGC(JNIEnv* env, jobject) {
   Runtime::Current()->GetHeap()->ConcurrentGC(ThreadForEnv(env), true);
 }
 
-static void VMRuntime_requestHeapTrim(JNIEnv* env, jobject) {
+static JNICALL void VMRuntime_requestHeapTrim(JNIEnv* env, jobject) {
   Runtime::Current()->GetHeap()->RequestTrim(ThreadForEnv(env));
 }
 
-static void VMRuntime_requestConcurrentGC(JNIEnv* env, jobject) {
+static JNICALL void VMRuntime_requestConcurrentGC(JNIEnv* env, jobject) {
   Runtime::Current()->GetHeap()->RequestConcurrentGC(ThreadForEnv(env), true);
 }
 
-static void VMRuntime_startHeapTaskProcessor(JNIEnv* env, jobject) {
+static JNICALL void VMRuntime_startHeapTaskProcessor(JNIEnv* env, jobject) {
   Runtime::Current()->GetHeap()->GetTaskProcessor()->Start(ThreadForEnv(env));
 }
 
-static void VMRuntime_stopHeapTaskProcessor(JNIEnv* env, jobject) {
+static JNICALL void VMRuntime_stopHeapTaskProcessor(JNIEnv* env, jobject) {
   Runtime::Current()->GetHeap()->GetTaskProcessor()->Stop(ThreadForEnv(env));
 }
 
-static void VMRuntime_runHeapTasks(JNIEnv* env, jobject) {
+static JNICALL void VMRuntime_runHeapTasks(JNIEnv* env, jobject) {
   Runtime::Current()->GetHeap()->GetTaskProcessor()->RunAllTasks(ThreadForEnv(env));
 }
 
@@ -474,7 +474,7 @@ static void PreloadDexCachesStatsFilled(DexCacheStats* filled)
 // Dalvik version. However, ART has similar code in other places such
 // as the CompilerDriver. This code could probably be refactored to
 // serve both uses.
-static void VMRuntime_preloadDexCaches(JNIEnv* env, jobject) {
+static JNICALL void VMRuntime_preloadDexCaches(JNIEnv* env, jobject) {
   if (!kPreloadDexCachesEnabled) {
     return;
   }
@@ -571,7 +571,7 @@ static void VMRuntime_preloadDexCaches(JNIEnv* env, jobject) {
  * This is called by the framework when it knows the application directory and
  * process name.
  */
-static void VMRuntime_registerAppInfo(JNIEnv* env,
+static JNICALL void VMRuntime_registerAppInfo(JNIEnv* env,
                                       jclass clazz ATTRIBUTE_UNUSED,
                                       jstring profile_file,
                                       jstring app_dir,
@@ -608,7 +608,7 @@ static void VMRuntime_registerAppInfo(JNIEnv* env,
                                       app_dir_str);
 }
 
-static jboolean VMRuntime_isBootClassPathOnDisk(JNIEnv* env, jclass, jstring java_instruction_set) {
+static JNICALL jboolean VMRuntime_isBootClassPathOnDisk(JNIEnv* env, jclass, jstring java_instruction_set) {
   ScopedUtfChars instruction_set(env, java_instruction_set);
   if (instruction_set.c_str() == nullptr) {
     return JNI_FALSE;
@@ -620,13 +620,17 @@ static jboolean VMRuntime_isBootClassPathOnDisk(JNIEnv* env, jclass, jstring jav
     env->ThrowNew(iae.get(), message.c_str());
     return JNI_FALSE;
   }
+#ifndef MOE
   std::string error_msg;
   std::unique_ptr<ImageHeader> image_header(gc::space::ImageSpace::ReadImageHeader(
       Runtime::Current()->GetImageLocation().c_str(), isa, &error_msg));
   return image_header.get() != nullptr;
+#else
+  return true;
+#endif
 }
 
-static jstring VMRuntime_getCurrentInstructionSet(JNIEnv* env, jclass) {
+static JNICALL jstring VMRuntime_getCurrentInstructionSet(JNIEnv* env, jclass) {
   return env->NewStringUTF(GetInstructionSetString(kRuntimeISA));
 }
 

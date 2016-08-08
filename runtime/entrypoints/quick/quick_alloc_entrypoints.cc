@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -190,6 +191,7 @@ GENERATE_ENTRYPOINTS_FOR_ALLOCATOR(TLAB, gc::kAllocatorTypeTLAB)
 GENERATE_ENTRYPOINTS_FOR_ALLOCATOR(Region, gc::kAllocatorTypeRegion)
 GENERATE_ENTRYPOINTS_FOR_ALLOCATOR(RegionTLAB, gc::kAllocatorTypeRegionTLAB)
 
+#ifndef MOE
 #define GENERATE_ENTRYPOINTS(suffix) \
 extern "C" void* art_quick_alloc_array##suffix(uint32_t, int32_t, ArtMethod* ref); \
 extern "C" void* art_quick_alloc_array_resolved##suffix(mirror::Class* klass, int32_t, ArtMethod* ref); \
@@ -244,8 +246,41 @@ void SetQuickAllocEntryPoints##suffix(QuickEntryPoints* qpoints, bool instrument
     qpoints->pAllocStringFromString = art_quick_alloc_string_from_string##suffix; \
   } \
 }
+#else
+#define GENERATE_ENTRYPOINTS(c_suffix, suffix) \
+void SetQuickAllocEntryPoints##c_suffix(QuickEntryPoints* qpoints, bool instrumented) { \
+  if (instrumented) { \
+    qpoints->pAllocArray = artAllocArrayFromCode##suffix##Instrumented; \
+    qpoints->pAllocArrayResolved = artAllocArrayFromCodeResolved##suffix##Instrumented; \
+    qpoints->pAllocArrayWithAccessCheck = artAllocArrayFromCodeWithAccessCheck##suffix##Instrumented; \
+    qpoints->pAllocObject = artAllocObjectFromCode##suffix##Instrumented; \
+    qpoints->pAllocObjectResolved = artAllocObjectFromCodeResolved##suffix##Instrumented; \
+    qpoints->pAllocObjectInitialized = artAllocObjectFromCodeInitialized##suffix##Instrumented; \
+    qpoints->pAllocObjectWithAccessCheck = artAllocObjectFromCodeWithAccessCheck##suffix##Instrumented; \
+    qpoints->pCheckAndAllocArray = artCheckAndAllocArrayFromCode##suffix##Instrumented; \
+    qpoints->pCheckAndAllocArrayWithAccessCheck = artCheckAndAllocArrayFromCodeWithAccessCheck##suffix##Instrumented; \
+    qpoints->pAllocStringFromBytes = artAllocStringFromBytesFromCode##suffix##Instrumented; \
+    qpoints->pAllocStringFromChars = artAllocStringFromCharsFromCode##suffix##Instrumented; \
+    qpoints->pAllocStringFromString = artAllocStringFromStringFromCode##suffix##Instrumented; \
+  } else { \
+    qpoints->pAllocArray = artAllocArrayFromCode##suffix; \
+    qpoints->pAllocArrayResolved = artAllocArrayFromCodeResolved##suffix; \
+    qpoints->pAllocArrayWithAccessCheck = artAllocArrayFromCodeWithAccessCheck##suffix; \
+    qpoints->pAllocObject = artAllocObjectFromCode##suffix; \
+    qpoints->pAllocObjectResolved = artAllocObjectFromCodeResolved##suffix; \
+    qpoints->pAllocObjectInitialized = artAllocObjectFromCodeInitialized##suffix; \
+    qpoints->pAllocObjectWithAccessCheck = artAllocObjectFromCodeWithAccessCheck##suffix; \
+    qpoints->pCheckAndAllocArray = artCheckAndAllocArrayFromCode##suffix; \
+    qpoints->pCheckAndAllocArrayWithAccessCheck = artCheckAndAllocArrayFromCodeWithAccessCheck##suffix; \
+    qpoints->pAllocStringFromBytes = artAllocStringFromBytesFromCode##suffix; \
+    qpoints->pAllocStringFromChars = artAllocStringFromCharsFromCode##suffix; \
+    qpoints->pAllocStringFromString = artAllocStringFromStringFromCode##suffix; \
+  } \
+}
+#endif
 
 // Generate the entrypoint functions.
+#ifndef MOE
 #if !defined(__APPLE__) || !defined(__LP64__)
 GENERATE_ENTRYPOINTS(_dlmalloc)
 GENERATE_ENTRYPOINTS(_rosalloc)
@@ -253,6 +288,14 @@ GENERATE_ENTRYPOINTS(_bump_pointer)
 GENERATE_ENTRYPOINTS(_tlab)
 GENERATE_ENTRYPOINTS(_region)
 GENERATE_ENTRYPOINTS(_region_tlab)
+#endif
+#else
+GENERATE_ENTRYPOINTS(_dlmalloc, DlMalloc)
+GENERATE_ENTRYPOINTS(_rosalloc, RosAlloc)
+GENERATE_ENTRYPOINTS(_bump_pointer, BumpPointer)
+GENERATE_ENTRYPOINTS(_tlab, TLAB)
+GENERATE_ENTRYPOINTS(_region, Region)
+GENERATE_ENTRYPOINTS(_region_tlab, RegionTLAB)
 #endif
 
 static bool entry_points_instrumented = false;
@@ -267,7 +310,7 @@ void SetQuickAllocEntryPointsInstrumented(bool instrumented) {
 }
 
 void ResetQuickAllocEntryPoints(QuickEntryPoints* qpoints) {
-#if !defined(__APPLE__) || !defined(__LP64__)
+#if !defined(__APPLE__) || !defined(__LP64__) || defined(MOE)
   switch (entry_points_allocator) {
     case gc::kAllocatorTypeDlMalloc: {
       SetQuickAllocEntryPoints_dlmalloc(qpoints, entry_points_instrumented);

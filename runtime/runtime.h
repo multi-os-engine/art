@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +41,12 @@
 #include "quick/quick_method_frame_info.h"
 #include "runtime_stats.h"
 #include "safe_map.h"
+
+#ifdef MOE
+extern uint8_t* get_slided_section_data(const char* seg, const char* sect, size_t* size);
+extern uint8_t* get_art_data(size_t* size);
+extern uint8_t* get_oat_data(size_t* size);
+#endif
 
 namespace art {
 
@@ -127,7 +134,11 @@ class Runtime {
 
   // IsAotCompiler for compilers that don't have a running runtime. Only dex2oat currently.
   bool IsAotCompiler() const {
+#ifndef MOE
     return !UseJitCompilation() && IsCompiler();
+#else
+    return IsCompiler();
+#endif
   }
 
   // IsCompiler is any runtime which has a running compiler, either dex2oat or JIT.
@@ -328,7 +339,9 @@ class Runtime {
 
   // Visit image roots, only used for hprof since the GC uses the image space mod union table
   // instead.
+#ifndef MOE
   void VisitImageRoots(RootVisitor* visitor) SHARED_REQUIRES(Locks::mutator_lock_);
+#endif
 
   // Visit all of the roots we can do safely do concurrently.
   void VisitConcurrentRoots(RootVisitor* visitor,
@@ -449,6 +462,7 @@ class Runtime {
     kInitialize
   };
 
+#ifndef MOE
   jit::Jit* GetJit() {
     return jit_.get();
   }
@@ -457,6 +471,7 @@ class Runtime {
   bool UseJitCompilation() const;
   // Returns true if profile saving is enabled. GetJit() will be not null in this case.
   bool SaveProfileInfo() const;
+#endif
 
   void PreZygoteFork();
   bool InitZygote();
@@ -522,7 +537,9 @@ class Runtime {
     return fault_message_;
   }
 
+#ifndef MOE
   void AddCurrentRuntimeFeaturesAsDex2OatArguments(std::vector<std::string>* arg_vector) const;
+#endif
 
   bool ExplicitStackOverflowChecks() const {
     return !implicit_so_checks_;
@@ -564,7 +581,9 @@ class Runtime {
   }
 
   // Create the JIT and instrumentation and code cache.
+#ifndef MOE
   void CreateJit();
+#endif
 
   ArenaPool* GetArenaPool() {
     return arena_pool_.get();
@@ -582,9 +601,11 @@ class Runtime {
     return linear_alloc_.get();
   }
 
+#ifndef MOE
   jit::JitOptions* GetJITOptions() {
     return jit_options_.get();
   }
+#endif
 
   bool IsDebuggable() const;
 
@@ -607,10 +628,12 @@ class Runtime {
   // Create a normal LinearAlloc or low 4gb version if we are 64 bit AOT compiler.
   LinearAlloc* CreateLinearAlloc();
 
+#ifndef MOE
   OatFileManager& GetOatFileManager() const {
     DCHECK(oat_file_manager_ != nullptr);
     return *oat_file_manager_;
   }
+#endif
 
   double GetHashTableMinLoadFactor() const;
   double GetHashTableMaxLoadFactor() const;
@@ -666,7 +689,9 @@ class Runtime {
   void RegisterRuntimeNativeMethods(JNIEnv* env);
 
   void StartDaemonThreads();
+#ifndef MOE_WINDOWS
   void StartSignalCatcher();
+#endif
 
   void MaybeSaveJitProfilingInfo();
 
@@ -738,13 +763,17 @@ class Runtime {
 
   ClassLinker* class_linker_;
 
+#ifndef MOE_WINDOWS
   SignalCatcher* signal_catcher_;
+#endif
   std::string stack_trace_file_;
 
   JavaVMExt* java_vm_;
 
+#ifndef MOE
   std::unique_ptr<jit::Jit> jit_;
   std::unique_ptr<jit::JitOptions> jit_options_;
+#endif
 
   std::unique_ptr<lambda::BoxTable> lambda_box_table_;
 
@@ -856,7 +885,9 @@ class Runtime {
   std::string fingerprint_;
 
   // Oat file manager, keeps track of what oat files are open.
+#ifndef MOE
   OatFileManager* oat_file_manager_;
+#endif
 
   // Whether or not we are on a low RAM device.
   bool is_low_memory_mode_;

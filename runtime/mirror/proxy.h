@@ -26,13 +26,23 @@ struct ProxyOffsets;
 namespace mirror {
 
 // C++ mirror of java.lang.reflect.Proxy.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED Proxy FINAL : public Object {
  private:
+#if defined(MOE) && defined(__LP64__)
+  uint32_t reference_padding_ ATTRIBUTE_UNUSED;
+#endif
+
   HeapReference<Object> h_;
 
   friend struct art::ProxyOffsets;  // for verifying offset information
   DISALLOW_IMPLICIT_CONSTRUCTORS(Proxy);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

@@ -28,6 +28,10 @@
 #include <utility>
 #include <vector>
 
+#ifdef MOE
+#include <dlfcn.h>
+#endif
+
 #include "art_field-inl.h"
 #include "art_method-inl.h"
 #include "base/arena_allocator.h"
@@ -77,11 +81,13 @@
 #include "mirror/stack_trace_element.h"
 #include "mirror/string-inl.h"
 #include "native/dalvik_system_DexFile.h"
+#ifndef MOE
 #include "oat.h"
 #include "oat_file.h"
 #include "oat_file-inl.h"
 #include "oat_file_assistant.h"
 #include "oat_file_manager.h"
+#endif
 #include "object_lock.h"
 #include "os.h"
 #include "runtime.h"
@@ -311,7 +317,9 @@ static void ShuffleForward(size_t* current_field_idx,
 ClassLinker::ClassLinker(InternTable* intern_table)
     // dex_lock_ is recursive as it may be used in stack dumping.
     : dex_lock_("ClassLinker dex lock", kDefaultMutexLevel),
+#ifndef MOE
       dex_cache_boot_image_class_lookup_required_(false),
+#endif
       failed_dex_cache_class_lookups_(0),
       class_roots_(nullptr),
       array_iftable_(nullptr),
@@ -319,10 +327,19 @@ ClassLinker::ClassLinker(InternTable* intern_table)
       init_done_(false),
       log_new_class_table_roots_(false),
       intern_table_(intern_table),
+#ifndef MOE
       quick_resolution_trampoline_(nullptr),
+#endif
       quick_imt_conflict_trampoline_(nullptr),
+#ifndef MOE
       quick_generic_jni_trampoline_(nullptr),
       quick_to_interpreter_bridge_trampoline_(nullptr),
+#else
+      reflection_bridges_lock_("Reflection bridges lock", kDefaultMutexLevel),
+      jni_bridges_lock_("Jni bridges lock", kDefaultMutexLevel),
+      resolution_trampolines_lock_("Resolution trampolines lock", kDefaultMutexLevel),
+      interpreter_bridges_lock_("Interpreter bridges lock", kDefaultMutexLevel),
+#endif
       image_pointer_size_(sizeof(void*)) {
   CHECK(intern_table_ != nullptr);
   static_assert(kFindArrayCacheSize == arraysize(find_array_class_cache_),
@@ -359,8 +376,6 @@ bool ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
   CHECK(!heap->HasBootImageSpace()) << "Runtime has image. We should use it.";
   CHECK(!init_done_);
 
-  // Use the pointer size from the runtime since we are probably creating the image.
-  image_pointer_size_ = InstructionSetPointerSize(runtime->GetInstructionSet());
   if (!ValidPointerSize(image_pointer_size_)) {
     *error_msg = StringPrintf("Invalid image pointer size: %zu", image_pointer_size_);
     return false;
@@ -530,12 +545,18 @@ bool ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
 
   // Set up GenericJNI entrypoint. That is mainly a hack for common_compiler_test.h so that
   // we do not need friend classes or a publicly exposed setter.
+#ifndef MOE
   quick_generic_jni_trampoline_ = GetQuickGenericJniStub();
+#endif
   if (!runtime->IsAotCompiler()) {
     // We need to set up the generic trampolines since we don't have an image.
+#ifndef MOE
     quick_resolution_trampoline_ = GetQuickResolutionStub();
+#endif
     quick_imt_conflict_trampoline_ = GetQuickImtConflictStub();
+#ifndef MOE
     quick_to_interpreter_bridge_trampoline_ = GetQuickToInterpreterBridge();
+#endif
   }
 
   // Object, String and DexCache need to be rerun through FindSystemClass to finish init
@@ -762,8 +783,12 @@ void ClassLinker::RunRootClinits() {
 }
 
 static void SanityCheckArtMethod(ArtMethod* m,
+#ifndef MOE
                                  mirror::Class* expected_class,
                                  const std::vector<gc::space::ImageSpace*>& spaces)
+#else
+                                 mirror::Class* expected_class)
+#endif
     SHARED_REQUIRES(Locks::mutator_lock_) {
   if (m->IsRuntimeMethod()) {
     mirror::Class* declaring_class = m->GetDeclaringClassUnchecked();
@@ -773,6 +798,7 @@ static void SanityCheckArtMethod(ArtMethod* m,
   } else if (expected_class != nullptr) {
     CHECK_EQ(m->GetDeclaringClassUnchecked(), expected_class) << PrettyMethod(m);
   }
+#ifndef MOE
   if (!spaces.empty()) {
     bool contains = false;
     for (gc::space::ImageSpace* space : spaces) {
@@ -787,12 +813,17 @@ static void SanityCheckArtMethod(ArtMethod* m,
     }
     CHECK(contains) << m << " not found";
   }
+#endif
 }
 
 static void SanityCheckArtMethodPointerArray(mirror::PointerArray* arr,
                                              mirror::Class* expected_class,
+#ifndef MOE
                                              size_t pointer_size,
                                              const std::vector<gc::space::ImageSpace*>& spaces)
+#else
+                                             size_t pointer_size)
+#endif
     SHARED_REQUIRES(Locks::mutator_lock_) {
   CHECK(arr != nullptr);
   for (int32_t j = 0; j < arr->GetLength(); ++j) {
@@ -802,17 +833,26 @@ static void SanityCheckArtMethodPointerArray(mirror::PointerArray* arr,
       CHECK(method != nullptr);
     }
     if (method != nullptr) {
+#ifndef MOE
       SanityCheckArtMethod(method, expected_class, spaces);
+#else
+      SanityCheckArtMethod(method, expected_class);
+#endif
     }
   }
 }
 
 static void SanityCheckArtMethodPointerArray(ArtMethod** arr,
                                              size_t size,
+#ifndef MOE
                                              size_t pointer_size,
                                              const std::vector<gc::space::ImageSpace*>& spaces)
+#else
+                                             size_t pointer_size)
+#endif
     SHARED_REQUIRES(Locks::mutator_lock_) {
   CHECK_EQ(arr != nullptr, size != 0u);
+#ifndef MOE
   if (arr != nullptr) {
     bool contains = false;
     for (auto space : spaces) {
@@ -825,11 +865,16 @@ static void SanityCheckArtMethodPointerArray(ArtMethod** arr,
     }
     CHECK(contains);
   }
+#endif
   for (size_t j = 0; j < size; ++j) {
     ArtMethod* method = mirror::DexCache::GetElementPtrSize(arr, j, pointer_size);
     // expected_class == null means we are a dex cache.
     if (method != nullptr) {
+#ifndef MOE
       SanityCheckArtMethod(method, nullptr, spaces);
+#else
+      SanityCheckArtMethod(method, nullptr);
+#endif
     }
   }
 }
@@ -851,19 +896,35 @@ static void SanityCheckObjectsCallback(mirror::Object* obj, void* arg ATTRIBUTE_
     auto image_spaces = runtime->GetHeap()->GetBootImageSpaces();
     auto pointer_size = runtime->GetClassLinker()->GetImagePointerSize();
     for (auto& m : klass->GetMethods(pointer_size)) {
+#ifndef MOE
       SanityCheckArtMethod(&m, klass, image_spaces);
+#else
+      SanityCheckArtMethod(&m, klass);
+#endif
     }
     auto* vtable = klass->GetVTable();
     if (vtable != nullptr) {
+#ifndef MOE
       SanityCheckArtMethodPointerArray(vtable, nullptr, pointer_size, image_spaces);
+#else
+      SanityCheckArtMethodPointerArray(vtable, nullptr, pointer_size);
+#endif
     }
     if (klass->ShouldHaveEmbeddedImtAndVTable()) {
       for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
         SanityCheckArtMethod(
+#ifndef MOE
             klass->GetEmbeddedImTableEntry(i, pointer_size), nullptr, image_spaces);
+#else
+            klass->GetEmbeddedImTableEntry(i, pointer_size), nullptr);
+#endif
       }
       for (int32_t i = 0; i < klass->GetEmbeddedVTableLength(); ++i) {
+#ifndef MOE
         SanityCheckArtMethod(klass->GetEmbeddedVTableEntry(i, pointer_size), nullptr, image_spaces);
+#else
+        SanityCheckArtMethod(klass->GetEmbeddedVTableEntry(i, pointer_size), nullptr);
+#endif
       }
     }
     auto* iftable = klass->GetIfTable();
@@ -871,7 +932,11 @@ static void SanityCheckObjectsCallback(mirror::Object* obj, void* arg ATTRIBUTE_
       for (int32_t i = 0; i < klass->GetIfTableCount(); ++i) {
         if (iftable->GetMethodArrayCount(i) > 0) {
           SanityCheckArtMethodPointerArray(
+#ifndef MOE
               iftable->GetMethodArray(i), nullptr, pointer_size, image_spaces);
+#else
+              iftable->GetMethodArray(i), nullptr, pointer_size);
+#endif
         }
       }
     }
@@ -889,7 +954,13 @@ class SetInterpreterEntrypointArtMethodVisitor : public ArtMethodVisitor {
       CHECK(method->GetDeclaringClass() != nullptr);
     }
     if (!method->IsNative() && !method->IsRuntimeMethod() && !method->IsResolutionMethod()) {
+#ifndef MOE
       method->SetEntryPointFromQuickCompiledCodePtrSize(GetQuickToInterpreterBridge(),
+#else
+      method->SetEntryPointFromQuickCompiledCodePtrSize(
+          Runtime::Current()->GetClassLinker()->GetInterpreterBridgeFromMethod(Thread::Current(),
+                                                                               method),
+#endif
                                                         image_pointer_size_);
     }
   }
@@ -929,6 +1000,10 @@ static void CheckTrampolines(mirror::Object* obj, void* arg) NO_THREAD_SAFETY_AN
 }
 
 bool ClassLinker::InitFromBootImage(std::string* error_msg) {
+#ifdef MOE
+  LOG(FATAL) << "Images are not supported!";
+  return false;
+#else
   VLOG(startup) << __FUNCTION__ << " entering";
   CHECK(!init_done_);
 
@@ -1062,6 +1137,7 @@ bool ClassLinker::InitFromBootImage(std::string* error_msg) {
 
   VLOG(startup) << __FUNCTION__ << " exiting";
   return true;
+#endif
 }
 
 bool ClassLinker::IsBootClassLoader(ScopedObjectAccessAlreadyRunnable& soa,
@@ -1143,6 +1219,7 @@ static bool FlattenPathClassLoader(mirror::ClassLoader* class_loader,
   return true;
 }
 
+#ifndef MOE
 class FixupArtMethodArrayVisitor : public ArtMethodVisitor {
  public:
   explicit FixupArtMethodArrayVisitor(const ImageHeader& header) : header_(header) {}
@@ -1188,6 +1265,7 @@ class FixupArtMethodArrayVisitor : public ArtMethodVisitor {
  private:
   const ImageHeader& header_;
 };
+#endif
 
 class VerifyClassInTableArtMethodVisitor : public ArtMethodVisitor {
  public:
@@ -1222,6 +1300,7 @@ class VerifyDeclaringClassVisitor : public ArtMethodVisitor {
   gc::accounting::HeapBitmap* const live_bitmap_;
 };
 
+#ifndef MOE
 bool ClassLinker::UpdateAppImageClassLoadersAndDexCaches(
     gc::space::ImageSpace* space,
     Handle<mirror::ClassLoader> class_loader,
@@ -1460,9 +1539,11 @@ bool ClassLinker::UpdateAppImageClassLoadersAndDexCaches(
   }
   return true;
 }
+#endif
 
 // Update the class loader and resolved string dex cache array of classes. Should only be used on
 // classes in the image space.
+#ifndef MOE
 class UpdateClassLoaderAndResolvedStringsVisitor {
  public:
   UpdateClassLoaderAndResolvedStringsVisitor(gc::space::ImageSpace* space,
@@ -1495,7 +1576,9 @@ class UpdateClassLoaderAndResolvedStringsVisitor {
   mirror::ClassLoader* const class_loader_;
   const bool forward_strings_;
 };
+#endif
 
+#ifndef MOE
 static std::unique_ptr<const DexFile> OpenOatDexFile(const OatFile* oat_file,
                                                      const char* location,
                                                      std::string* error_msg)
@@ -1553,6 +1636,7 @@ bool ClassLinker::OpenImageDexFiles(gc::space::ImageSpace* space,
   }
   return true;
 }
+#endif
 
 bool ClassLinker::AddImageSpace(
     gc::space::ImageSpace* space,
@@ -1561,6 +1645,10 @@ bool ClassLinker::AddImageSpace(
     const char* dex_location,
     std::vector<std::unique_ptr<const DexFile>>* out_dex_files,
     std::string* error_msg) {
+#ifdef MOE
+  LOG(FATAL) << "Images are not supported!";
+  return false;
+#else
   DCHECK(out_dex_files != nullptr);
   DCHECK(error_msg != nullptr);
   const uint64_t start_time = NanoTime();
@@ -1812,6 +1900,7 @@ bool ClassLinker::AddImageSpace(
   }
   VLOG(class_linker) << "Adding image space took " << PrettyDuration(NanoTime() - start_time);
   return true;
+#endif
 }
 
 bool ClassLinker::ClassInClassTable(mirror::Class* klass) {
@@ -1915,9 +2004,11 @@ void ClassLinker::VisitClassesInternal(ClassVisitor* visitor) {
 }
 
 void ClassLinker::VisitClasses(ClassVisitor* visitor) {
+#ifndef MOE
   if (dex_cache_boot_image_class_lookup_required_) {
     AddBootImageClassesToClassTable();
   }
+#endif
   Thread* const self = Thread::Current();
   ReaderMutexLock mu(self, *Locks::classlinker_classes_lock_);
   // Not safe to have thread suspension when we are holding a lock.
@@ -2040,6 +2131,7 @@ void ClassLinker::DeleteClassLoader(Thread* self, const ClassLoaderData& data) {
   Runtime* const runtime = Runtime::Current();
   JavaVMExt* const vm = runtime->GetJavaVM();
   vm->DeleteWeakGlobalRef(self, data.weak_root);
+#ifndef MOE
   // Notify the JIT that we need to remove the methods and/or profiling info.
   if (runtime->GetJit() != nullptr) {
     jit::JitCodeCache* code_cache = runtime->GetJit()->GetCodeCache();
@@ -2047,6 +2139,7 @@ void ClassLinker::DeleteClassLoader(Thread* self, const ClassLoaderData& data) {
       code_cache->RemoveMethodsIn(self, *data.allocator);
     }
   }
+#endif
   delete data.allocator;
   delete data.class_table;
 }
@@ -2549,7 +2642,9 @@ mirror::Class* ClassLinker::DefineClass(Thread* self,
   Dbg::PostClassPrepare(h_new_class.Get());
 
   // Notify native debugger of the new class and its layout.
+#ifndef MOE
   jit::Jit::NewTypeLoadedIfUsingJit(h_new_class.Get());
+#endif
 
   return h_new_class.Get();
 }
@@ -2614,6 +2709,7 @@ uint32_t ClassLinker::SizeOfClassWithoutEmbeddedTables(const DexFile& dex_file,
                                          image_pointer_size_);
 }
 
+#ifndef MOE
 OatFile::OatClass ClassLinker::FindOatClass(const DexFile& dex_file,
                                             uint16_t class_def_idx,
                                             bool* found) {
@@ -2626,6 +2722,7 @@ OatFile::OatClass ClassLinker::FindOatClass(const DexFile& dex_file,
   *found = true;
   return oat_dex_file->GetOatClass(class_def_idx);
 }
+#endif
 
 static uint32_t GetOatMethodIndexFromMethodIndex(const DexFile& dex_file,
                                                  uint16_t class_def_idx,
@@ -2662,6 +2759,7 @@ static uint32_t GetOatMethodIndexFromMethodIndex(const DexFile& dex_file,
   UNREACHABLE();
 }
 
+#ifndef MOE
 const OatFile::OatMethod ClassLinker::FindOatMethodFor(ArtMethod* method, bool* found) {
   // Although we overwrite the trampoline of non-static methods, we may get here via the resolution
   // method for direct methods (or virtual methods made direct).
@@ -2698,6 +2796,7 @@ const OatFile::OatMethod ClassLinker::FindOatMethodFor(ArtMethod* method, bool* 
   }
   return oat_class.GetOatMethod(oat_method_index);
 }
+#endif
 
 // Special case to get oat code without overwriting a trampoline.
 const void* ClassLinker::GetQuickOatCodeFor(ArtMethod* method) {
@@ -2706,6 +2805,7 @@ const void* ClassLinker::GetQuickOatCodeFor(ArtMethod* method) {
     return GetQuickProxyInvokeHandler();
   }
   bool found;
+#ifndef MOE
   OatFile::OatMethod oat_method = FindOatMethodFor(method, &found);
   if (found) {
     auto* code = oat_method.GetQuickCode();
@@ -2713,22 +2813,37 @@ const void* ClassLinker::GetQuickOatCodeFor(ArtMethod* method) {
       return code;
     }
   }
+#else
+  // MOE TODO: implement this for LLVM!
+#endif
   if (method->IsNative()) {
     // No code and native? Use generic trampoline.
+#ifndef MOE
     return GetQuickGenericJniStub();
+#else
+    return GetJniBridgeFromMethod(Thread::Current(), method);
+#endif
   }
+#ifndef MOE
   return GetQuickToInterpreterBridge();
+#else
+  return GetInterpreterBridgeFromMethod(Thread::Current(), method);
+#endif
 }
 
 const void* ClassLinker::GetOatMethodQuickCodeFor(ArtMethod* method) {
   if (method->IsNative() || !method->IsInvokable() || method->IsProxyMethod()) {
     return nullptr;
   }
+#ifndef MOE
   bool found;
   OatFile::OatMethod oat_method = FindOatMethodFor(method, &found);
   if (found) {
     return oat_method.GetQuickCode();
   }
+#else
+  // MOE TODO: implement this for LLVM!
+#endif
   return nullptr;
 }
 
@@ -2757,6 +2872,7 @@ bool ClassLinker::ShouldUseInterpreterEntrypoint(ArtMethod* method, const void* 
     return true;
   }
 
+#ifndef MOE
   if (runtime->IsNativeDebuggable()) {
     DCHECK(runtime->UseJitCompilation() && runtime->GetJit()->JitAtFirstUse());
     // If we are doing native debugging, ignore application's AOT code,
@@ -2765,6 +2881,7 @@ bool ClassLinker::ShouldUseInterpreterEntrypoint(ArtMethod* method, const void* 
     // blocking JIT would results in non-negligible performance impact.
     return !runtime->GetHeap()->IsInBootImageOatFile(quick_code);
   }
+#endif
 
   if (Dbg::IsDebuggerActive()) {
     // Boot image classes may be AOT-compiled as non-debuggable.
@@ -2801,10 +2918,12 @@ void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {
   while (it.HasNextInstanceField()) {
     it.Next();
   }
+#ifndef MOE
   bool has_oat_class;
   OatFile::OatClass oat_class = FindOatClass(dex_file,
                                              klass->GetDexClassDefIndex(),
                                              &has_oat_class);
+#endif
   // Link the code of methods skipped by LinkCode.
   for (size_t method_index = 0; it.HasNextDirectMethod(); ++method_index, it.Next()) {
     ArtMethod* method = klass->GetDirectMethod(method_index, image_pointer_size_);
@@ -2813,16 +2932,28 @@ void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {
       continue;
     }
     const void* quick_code = nullptr;
+#ifndef MOE
     if (has_oat_class) {
       OatFile::OatMethod oat_method = oat_class.GetOatMethod(method_index);
       quick_code = oat_method.GetQuickCode();
     }
+#else
+    // MOE TODO: implement this for LLVM!
+#endif
     // Check whether the method is native, in which case it's generic JNI.
     if (quick_code == nullptr && method->IsNative()) {
+#ifndef MOE
       quick_code = GetQuickGenericJniStub();
+#else
+      quick_code = GetJniBridgeFromMethod(Thread::Current(), method);
+#endif
     } else if (ShouldUseInterpreterEntrypoint(method, quick_code)) {
       // Use interpreter entry point.
+#ifndef MOE
       quick_code = GetQuickToInterpreterBridge();
+#else
+      quick_code = GetInterpreterBridgeFromMethod(Thread::Current(), method);
+#endif
     }
     runtime->GetInstrumentation()->UpdateMethodsCode(method, quick_code);
   }
@@ -2832,9 +2963,69 @@ void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {
 void ClassLinker::EnsureThrowsInvocationError(ArtMethod* method) {
   DCHECK(method != nullptr);
   DCHECK(!method->IsInvokable());
+#ifndef MOE
   method->SetEntryPointFromQuickCompiledCodePtrSize(quick_to_interpreter_bridge_trampoline_,
+#else
+  method->SetEntryPointFromQuickCompiledCodePtrSize(
+      GetInterpreterBridgeFromMethod(Thread::Current(), method),
+#endif
                                                     image_pointer_size_);
 }
+
+#ifdef MOE
+static inline const void* FindLLVMCode(Thread* self, const std::string& name, ReaderWriterMutex& lock,
+                                       std::map<std::string, const void*>& cache) {
+  std::remove_reference<decltype(cache)>::type::iterator hint;
+  {
+    ReaderMutexLock mu(self, lock);
+    hint = cache.lower_bound(name);
+    if (hint != cache.end() && hint->first == name) {
+      return hint->second;
+    }
+  }
+  {
+    const void* code;
+    WriterMutexLock mu(self, lock);
+    auto it = cache.emplace_hint(hint, name, nullptr);
+    if (it->second == nullptr) {
+      code = dlsym(dlopen(0, RTLD_LAZY), name.c_str());
+      it->second = code;
+    } else {
+      code = it->second;
+    }
+    return code;
+  }
+}
+
+const void* ClassLinker::GetJniBridgeFromMethod(Thread* self, ArtMethod* method) {
+  std::string bridge_name = "MOE__NB_";
+  bridge_name += method->IsSynchronized() ? "SYNC_" : "NOSYNC_";
+  bridge_name += method->IsStatic() ? "STATIC_" : "NOSTATIC_";
+  bridge_name += method->GetShorty();
+  return FindLLVMCode(self, bridge_name, jni_bridges_lock_, jni_bridges_);
+}
+
+const void* ClassLinker::GetReflectionBridgeFromMethod(Thread* self, ArtMethod* method) {
+  std::string bridge_name = "MOE__RT_";
+  bridge_name += method->IsStatic() ? "STATIC_" : "NOSTATIC_";
+  bridge_name += method->GetShorty();
+  return FindLLVMCode(self, bridge_name, resolution_trampolines_lock_, resolution_trampolines_);
+}
+
+const void* ClassLinker::GetResolutionTrampolineFromMethod(Thread* self, ArtMethod* method) {
+  std::string bridge_name = "MOE__RB_";
+  bridge_name += method->IsStatic() ? "STATIC_" : "NOSTATIC_";
+  bridge_name += method->GetShorty();
+  return FindLLVMCode(self, bridge_name, reflection_bridges_lock_, reflection_bridges_);
+}
+
+const void* ClassLinker::GetInterpreterBridgeFromMethod(Thread* self, ArtMethod* method) {
+  std::string bridge_name = "MOE__IB_";
+  bridge_name += method->IsStatic() ? "STATIC_" : "NOSTATIC_";
+  bridge_name += method->GetShorty();
+  return FindLLVMCode(self, bridge_name, interpreter_bridges_lock_, interpreter_bridges_);
+}
+#endif
 
 void ClassLinker::LinkCode(ArtMethod* method, const OatFile::OatClass* oat_class,
                            uint32_t class_def_method_index) {
@@ -2848,8 +3039,12 @@ void ClassLinker::LinkCode(ArtMethod* method, const OatFile::OatClass* oat_class
   if (oat_class != nullptr) {
     // Every kind of method should at least get an invoke stub from the oat_method.
     // non-abstract methods also get their code pointers.
+#ifndef MOE
     const OatFile::OatMethod oat_method = oat_class->GetOatMethod(class_def_method_index);
     oat_method.LinkMethod(method);
+#else
+    // MOE TODO: review this code for LLVM!
+#endif
   }
 
   // Install entry point from interpreter.
@@ -2861,17 +3056,37 @@ void ClassLinker::LinkCode(ArtMethod* method, const OatFile::OatClass* oat_class
     return;
   }
 
+#ifdef MOE
+  Thread* self = Thread::Current();
+#endif
+
   if (method->IsStatic() && !method->IsConstructor()) {
     // For static methods excluding the class initializer, install the trampoline.
     // It will be replaced by the proper entry point by ClassLinker::FixupStaticTrampolines
     // after initializing class (see ClassLinker::InitializeClass method).
+#ifndef MOE
     method->SetEntryPointFromQuickCompiledCode(GetQuickResolutionStub());
+#else
+    method->SetEntryPointFromQuickCompiledCode(GetReflectionBridgeFromMethod(self, method));
+#endif
   } else if (quick_code == nullptr && method->IsNative()) {
+#ifndef MOE
     method->SetEntryPointFromQuickCompiledCode(GetQuickGenericJniStub());
+#else
+    method->SetEntryPointFromQuickCompiledCode(GetJniBridgeFromMethod(self, method));
+#endif
   } else if (enter_interpreter) {
     // Set entry point from compiled code if there's no code or in interpreter only mode.
+#ifndef MOE
     method->SetEntryPointFromQuickCompiledCode(GetQuickToInterpreterBridge());
+#else
+    method->SetEntryPointFromQuickCompiledCode(GetInterpreterBridgeFromMethod(self, method));
+#endif
   }
+
+#ifdef MOE
+  method->SetEntryPointFromReflection(GetResolutionTrampolineFromMethod(self, method));
+#endif
 
   if (method->IsNative()) {
     // Unregistering restores the dlsym lookup stub.
@@ -2919,6 +3134,7 @@ void ClassLinker::LoadClass(Thread* self,
     return;  // no fields or methods - for example a marker interface
   }
   bool has_oat_class = false;
+#ifndef MOE
   if (Runtime::Current()->IsStarted() && !Runtime::Current()->IsAotCompiler()) {
     OatFile::OatClass oat_class = FindOatClass(dex_file, klass->GetDexClassDefIndex(),
                                                &has_oat_class);
@@ -2926,6 +3142,7 @@ void ClassLinker::LoadClass(Thread* self,
       LoadClassMembers(self, dex_file, class_data, klass, &oat_class);
     }
   }
+#endif
   if (!has_oat_class) {
     LoadClassMembers(self, dex_file, class_data, klass, nullptr);
   }
@@ -3473,7 +3690,9 @@ mirror::Class* ClassLinker::CreateArrayClass(Thread* self, const char* descripto
 
   mirror::Class* existing = InsertClass(descriptor, new_class.Get(), hash);
   if (existing == nullptr) {
+#ifndef MOE
     jit::Jit::NewTypeLoadedIfUsingJit(new_class.Get());
+#endif
     return new_class.Get();
   }
   // Another thread must have loaded the class after we
@@ -3530,6 +3749,7 @@ mirror::Class* ClassLinker::InsertClass(const char* descriptor, mirror::Class* k
   if (existing != nullptr) {
     return existing;
   }
+#ifndef MOE
   if (kIsDebugBuild &&
       !klass->IsTemp() &&
       class_loader == nullptr &&
@@ -3541,6 +3761,7 @@ mirror::Class* ClassLinker::InsertClass(const char* descriptor, mirror::Class* k
       CHECK_EQ(klass, existing);
     }
   }
+#endif
   VerifyObject(klass);
   class_table->InsertWithHash(klass, hash);
   if (class_loader != nullptr) {
@@ -3583,6 +3804,7 @@ mirror::Class* ClassLinker::LookupClass(Thread* self,
       }
     }
   }
+#ifndef MOE
   if (class_loader != nullptr || !dex_cache_boot_image_class_lookup_required_) {
     return nullptr;
   }
@@ -3600,8 +3822,12 @@ mirror::Class* ClassLinker::LookupClass(Thread* self,
     }
   }
   return result;
+#else
+  return nullptr;
+#endif
 }
 
+#ifndef MOE
 static std::vector<mirror::ObjectArray<mirror::DexCache>*> GetImageDexCaches(
     std::vector<gc::space::ImageSpace*> image_spaces) SHARED_REQUIRES(Locks::mutator_lock_) {
   CHECK(!image_spaces.empty());
@@ -3613,7 +3839,9 @@ static std::vector<mirror::ObjectArray<mirror::DexCache>*> GetImageDexCaches(
   }
   return dex_caches_vector;
 }
+#endif
 
+#ifndef MOE
 void ClassLinker::AddBootImageClassesToClassTable() {
   if (dex_cache_boot_image_class_lookup_required_) {
     AddImageClassesToClassTable(Runtime::Current()->GetHeap()->GetBootImageSpaces(),
@@ -3621,7 +3849,9 @@ void ClassLinker::AddBootImageClassesToClassTable() {
     dex_cache_boot_image_class_lookup_required_ = false;
   }
 }
+#endif
 
+#ifndef MOE
 void ClassLinker::AddImageClassesToClassTable(std::vector<gc::space::ImageSpace*> image_spaces,
                                               mirror::ClassLoader* class_loader) {
   Thread* self = Thread::Current();
@@ -3658,6 +3888,7 @@ void ClassLinker::AddImageClassesToClassTable(std::vector<gc::space::ImageSpace*
     }
   }
 }
+#endif
 
 class MoveClassTableToPreZygoteVisitor : public ClassLoaderVisitor {
  public:
@@ -3680,6 +3911,7 @@ void ClassLinker::MoveClassTableToPreZygote() {
   VisitClassLoaders(&visitor);
 }
 
+#ifndef MOE
 mirror::Class* ClassLinker::LookupClassFromBootImage(const char* descriptor) {
   ScopedAssertNoThreadSuspension ants(Thread::Current(), "Image class lookup");
   std::vector<mirror::ObjectArray<mirror::DexCache>*> dex_caches_vector =
@@ -3701,6 +3933,7 @@ mirror::Class* ClassLinker::LookupClassFromBootImage(const char* descriptor) {
   }
   return nullptr;
 }
+#endif
 
 // Look up classes by hash and descriptor and put all matching ones in the result array.
 class LookupClassesVisitor : public ClassLoaderVisitor {
@@ -3727,9 +3960,11 @@ class LookupClassesVisitor : public ClassLoaderVisitor {
 
 void ClassLinker::LookupClasses(const char* descriptor, std::vector<mirror::Class*>& result) {
   result.clear();
+#ifndef MOE
   if (dex_cache_boot_image_class_lookup_required_) {
     AddBootImageClassesToClassTable();
   }
+#endif
   Thread* const self = Thread::Current();
   ReaderMutexLock mu(self, *Locks::classlinker_classes_lock_);
   const size_t hash = ComputeModifiedUtf8Hash(descriptor);
@@ -3883,12 +4118,16 @@ void ClassLinker::VerifyClass(Thread* self, Handle<mirror::Class> klass, LogSeve
 
   // Try to use verification information from the oat file, otherwise do runtime verification.
   const DexFile& dex_file = *klass->GetDexCache()->GetDexFile();
+#ifndef MOE
   mirror::Class::Status oat_file_class_status(mirror::Class::kStatusNotReady);
   bool preverified = VerifyClassUsingOatFile(dex_file, klass.Get(), oat_file_class_status);
   // If the oat file says the class had an error, re-run the verifier. That way we will get a
   // precise error message. To ensure a rerun, test:
   //     oat_file_class_status == mirror::Class::kStatusError => !preverified
   DCHECK(!(oat_file_class_status == mirror::Class::kStatusError) || !preverified);
+#else
+  bool preverified = false;
+#endif
 
   verifier::MethodVerifier::FailureKind verifier_failure = verifier::MethodVerifier::kNoFailure;
   std::string error_msg;
@@ -3972,6 +4211,7 @@ void ClassLinker::EnsureSkipAccessChecksMethods(Handle<mirror::Class> klass) {
   }
 }
 
+#ifndef MOE
 bool ClassLinker::VerifyClassUsingOatFile(const DexFile& dex_file,
                                           mirror::Class* klass,
                                           mirror::Class::Status& oat_file_class_status) {
@@ -4060,6 +4300,7 @@ bool ClassLinker::VerifyClassUsingOatFile(const DexFile& dex_file,
              << klass->GetDescriptor(&temp);
   UNREACHABLE();
 }
+#endif
 
 void ClassLinker::ResolveClassExceptionHandlerTypes(Handle<mirror::Class> klass) {
   for (ArtMethod& method : klass->GetMethods(image_pointer_size_)) {
@@ -5100,6 +5341,7 @@ bool ClassLinker::LinkClass(Thread* self,
         Runtime::Current()->GetHeap()->WriteBarrierEveryFieldOf(class_loader);
       }
       CHECK_EQ(existing, klass.Get());
+#ifndef MOE
       if (kIsDebugBuild && class_loader == nullptr && dex_cache_boot_image_class_lookup_required_) {
         // Check a class loaded with the system class loader matches one in the image if the class
         // is in the image.
@@ -5108,6 +5350,7 @@ bool ClassLinker::LinkClass(Thread* self,
           CHECK_EQ(klass.Get(), existing) << descriptor;
         }
       }
+#endif
       if (log_new_class_table_roots_) {
         new_class_roots_.push_back(GcRoot<mirror::Class>(h_new_class.Get()));
       }
@@ -5275,16 +5518,20 @@ static bool CheckSuperClassChange(Handle<mirror::Class> klass,
     // are referenced from the dex file, so do (b) first. Only relevant if we have oat files.
     const OatDexFile* class_oat_dex_file = dex_file.GetOatDexFile();
     const OatFile* class_oat_file = nullptr;
+#ifndef MOE
     if (class_oat_dex_file != nullptr) {
       class_oat_file = class_oat_dex_file->GetOatFile();
     }
+#endif
 
     if (class_oat_file != nullptr) {
       const OatDexFile* loaded_super_oat_dex_file = super_class->GetDexFile().GetOatDexFile();
       const OatFile* loaded_super_oat_file = nullptr;
+#ifndef MOE
       if (loaded_super_oat_dex_file != nullptr) {
         loaded_super_oat_file = loaded_super_oat_dex_file->GetOatFile();
       }
+#endif
 
       if (loaded_super_oat_file != nullptr && class_oat_file != loaded_super_oat_file) {
         // Now check (a).
@@ -7116,7 +7363,12 @@ bool ClassLinker::LinkFields(Thread* self,
     if (UNLIKELY(!IsAligned<sizeof(mirror::HeapReference<mirror::Object>)>(
         field_offset.Uint32Value()))) {
       MemberOffset old_offset = field_offset;
+#ifndef MOE
       field_offset = MemberOffset(RoundUp(field_offset.Uint32Value(), 4));
+#else
+      field_offset = MemberOffset(RoundUp(field_offset.Uint32Value(),
+          sizeof(mirror::HeapReference<mirror::Object>)));
+#endif
       AddFieldGap(old_offset.Uint32Value(), field_offset.Uint32Value(), &gaps);
     }
     DCHECK_ALIGNED(field_offset.Uint32Value(), sizeof(mirror::HeapReference<mirror::Object>));
@@ -7691,45 +7943,76 @@ static OatFile::OatMethod CreateOatMethod(const void* code) {
 }
 
 bool ClassLinker::IsQuickResolutionStub(const void* entry_point) const {
+#ifndef MOE
   return (entry_point == GetQuickResolutionStub()) ||
       (quick_resolution_trampoline_ == entry_point);
+#else
+  return false;
+#endif
 }
 
 bool ClassLinker::IsQuickToInterpreterBridge(const void* entry_point) const {
+#ifndef MOE
   return (entry_point == GetQuickToInterpreterBridge()) ||
       (quick_to_interpreter_bridge_trampoline_ == entry_point);
+#else
+  return false;
+#endif
 }
 
 bool ClassLinker::IsQuickGenericJniStub(const void* entry_point) const {
+#ifndef MOE
   return (entry_point == GetQuickGenericJniStub()) ||
       (quick_generic_jni_trampoline_ == entry_point);
+#else
+  return false;
+#endif
 }
 
+#ifndef MOE
 const void* ClassLinker::GetRuntimeQuickGenericJniStub() const {
   return GetQuickGenericJniStub();
 }
+#endif
 
 void ClassLinker::SetEntryPointsToCompiledCode(ArtMethod* method,
                                                const void* method_code) const {
+#ifndef MOE
   OatFile::OatMethod oat_method = CreateOatMethod(method_code);
   oat_method.LinkMethod(method);
+#else
+  // MOE TODO: review this code for LLVM!
+#endif
 }
 
+#ifndef MOE
 void ClassLinker::SetEntryPointsToInterpreter(ArtMethod* method) const {
+#else
+void ClassLinker::SetEntryPointsToInterpreter(ArtMethod* method) {
+#endif
   if (!method->IsNative()) {
+#ifndef MOE
     method->SetEntryPointFromQuickCompiledCode(GetQuickToInterpreterBridge());
+#else
+    method->SetEntryPointFromQuickCompiledCode(GetInterpreterBridgeFromMethod(Thread::Current(),
+                                                                              method));
+#endif
   } else {
+#ifndef MOE
     const void* quick_method_code = GetQuickGenericJniStub();
     OatFile::OatMethod oat_method = CreateOatMethod(quick_method_code);
     oat_method.LinkMethod(method);
+#endif
   }
 }
 
 void ClassLinker::DumpForSigQuit(std::ostream& os) {
   ScopedObjectAccess soa(Thread::Current());
+#ifndef MOE
   if (dex_cache_boot_image_class_lookup_required_) {
     AddBootImageClassesToClassTable();
   }
+#endif
   ReaderMutexLock mu(soa.Self(), *Locks::classlinker_classes_lock_);
   os << "Zygote loaded classes=" << NumZygoteClasses() << " post zygote classes="
      << NumNonZygoteClasses() << "\n";
@@ -7765,9 +8048,11 @@ size_t ClassLinker::NumNonZygoteClasses() const {
 }
 
 size_t ClassLinker::NumLoadedClasses() {
+#ifndef MOE
   if (dex_cache_boot_image_class_lookup_required_) {
     AddBootImageClassesToClassTable();
   }
+#endif
   ReaderMutexLock mu(Thread::Current(), *Locks::classlinker_classes_lock_);
   // Only return non zygote classes since these are the ones which apps which care about.
   return NumNonZygoteClasses();
@@ -8069,6 +8354,7 @@ std::set<DexCacheResolvedClasses> ClassLinker::GetResolvedClasses(bool ignore_bo
   return ret;
 }
 
+#ifndef MOE
 std::unordered_set<std::string> ClassLinker::GetClassDescriptorsForProfileKeys(
     const std::set<DexCacheResolvedClasses>& classes) {
   ScopedTrace trace(__PRETTY_FUNCTION__);
@@ -8114,6 +8400,7 @@ std::unordered_set<std::string> ClassLinker::GetClassDescriptorsForProfileKeys(
   }
   return ret;
 }
+#endif
 
 // Instantiate ResolveMethod.
 template ArtMethod* ClassLinker::ResolveMethod<ClassLinker::kForceICCECheck>(

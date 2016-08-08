@@ -26,7 +26,7 @@
 
 namespace art {
 
-static jclass Proxy_generateProxy(JNIEnv* env, jclass, jstring name, jobjectArray interfaces,
+static JNICALL jclass Proxy_generateProxy(JNIEnv* env, jclass, jstring name, jobjectArray interfaces,
                                   jobject loader, jobjectArray methods, jobjectArray throws) {
   ScopedFastNativeObjectAccess soa(env);
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();

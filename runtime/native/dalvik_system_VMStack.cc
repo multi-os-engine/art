@@ -55,7 +55,7 @@ static jobject GetThreadStack(const ScopedFastNativeObjectAccess& soa, jobject p
   return trace;
 }
 
-static jint VMStack_fillStackTraceElements(JNIEnv* env, jclass, jobject javaThread,
+static JNICALL jint VMStack_fillStackTraceElements(JNIEnv* env, jclass, jobject javaThread,
                                            jobjectArray javaSteArray) {
   ScopedFastNativeObjectAccess soa(env);
   jobject trace = GetThreadStack(soa, javaThread);
@@ -68,7 +68,7 @@ static jint VMStack_fillStackTraceElements(JNIEnv* env, jclass, jobject javaThre
 }
 
 // Returns the defining class loader of the caller's caller.
-static jobject VMStack_getCallingClassLoader(JNIEnv* env, jclass) {
+static JNICALL jobject VMStack_getCallingClassLoader(JNIEnv* env, jclass) {
   ScopedFastNativeObjectAccess soa(env);
   NthCallerVisitor visitor(soa.Self(), 2);
   visitor.WalkStack();
@@ -79,7 +79,7 @@ static jobject VMStack_getCallingClassLoader(JNIEnv* env, jclass) {
   return soa.AddLocalReference<jobject>(visitor.caller->GetDeclaringClass()->GetClassLoader());
 }
 
-static jobject VMStack_getClosestUserClassLoader(JNIEnv* env, jclass) {
+static JNICALL jobject VMStack_getClosestUserClassLoader(JNIEnv* env, jclass) {
   struct ClosestUserClassLoaderVisitor : public StackVisitor {
     explicit ClosestUserClassLoaderVisitor(Thread* thread)
       : StackVisitor(thread, nullptr, StackVisitor::StackWalkKind::kIncludeInlinedFrames),
@@ -108,7 +108,7 @@ static jobject VMStack_getClosestUserClassLoader(JNIEnv* env, jclass) {
 }
 
 // Returns the class of the caller's caller's caller.
-static jclass VMStack_getStackClass2(JNIEnv* env, jclass) {
+static JNICALL jclass VMStack_getStackClass2(JNIEnv* env, jclass) {
   ScopedFastNativeObjectAccess soa(env);
   NthCallerVisitor visitor(soa.Self(), 3);
   visitor.WalkStack();
@@ -119,7 +119,7 @@ static jclass VMStack_getStackClass2(JNIEnv* env, jclass) {
   return soa.AddLocalReference<jclass>(visitor.caller->GetDeclaringClass());
 }
 
-static jobjectArray VMStack_getThreadStackTrace(JNIEnv* env, jclass, jobject javaThread) {
+static JNICALL jobjectArray VMStack_getThreadStackTrace(JNIEnv* env, jclass, jobject javaThread) {
   ScopedFastNativeObjectAccess soa(env);
   jobject trace = GetThreadStack(soa, javaThread);
   if (trace == nullptr) {

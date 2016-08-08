@@ -130,19 +130,35 @@ void Instrumentation::InstallStubsForMethod(ArtMethod* method) {
   bool is_class_initialized = method->GetDeclaringClass()->IsInitialized();
   if (uninstall) {
     if ((forced_interpret_only_ || IsDeoptimized(method)) && !method->IsNative()) {
+#ifndef MOE
       new_quick_code = GetQuickToInterpreterBridge();
+#else
+      new_quick_code = class_linker->GetInterpreterBridgeFromMethod(Thread::Current(), method);
+#endif
     } else if (is_class_initialized || !method->IsStatic() || method->IsConstructor()) {
       new_quick_code = class_linker->GetQuickOatCodeFor(method);
       if (NeedDebugVersionForBootImageCode(method, new_quick_code)) {
+#ifndef MOE
         new_quick_code = GetQuickToInterpreterBridge();
+#else
+        new_quick_code = class_linker->GetInterpreterBridgeFromMethod(Thread::Current(), method);
+#endif
       }
     } else {
+#ifndef MOE
       new_quick_code = GetQuickResolutionStub();
+#else
+      new_quick_code = class_linker->GetResolutionTrampolineFromMethod(Thread::Current(), method);
+#endif
     }
   } else {  // !uninstall
     if ((interpreter_stubs_installed_ || forced_interpret_only_ || IsDeoptimized(method)) &&
         !method->IsNative()) {
+#ifndef MOE
       new_quick_code = GetQuickToInterpreterBridge();
+#else
+      new_quick_code = class_linker->GetInterpreterBridgeFromMethod(Thread::Current(), method);
+#endif
     } else {
       // Do not overwrite resolution trampoline. When the trampoline initializes the method's
       // class, all its static methods code will be set to the instrumentation entry point.
@@ -152,12 +168,20 @@ void Instrumentation::InstallStubsForMethod(ArtMethod* method) {
         if (NeedDebugVersionForBootImageCode(method, new_quick_code)) {
           // Oat code should not be used. Don't install instrumentation stub and
           // use interpreter for instrumentation.
+#ifndef MOE
           new_quick_code = GetQuickToInterpreterBridge();
+#else
+          new_quick_code = class_linker->GetInterpreterBridgeFromMethod(Thread::Current(), method);
+#endif
         } else if (entry_exit_stubs_installed_) {
           new_quick_code = GetQuickInstrumentationEntryPoint();
         }
       } else {
+#ifndef MOE
         new_quick_code = GetQuickResolutionStub();
+#else
+        new_quick_code = class_linker->GetResolutionTrampolineFromMethod(Thread::Current(), method);
+#endif
       }
     }
   }
@@ -198,6 +222,7 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
         shadow_stack_.push_back(instrumentation_frame);
         return true;  // Continue.
       }
+#ifndef MOE
       uintptr_t return_pc = GetReturnPc();
       if (m->IsRuntimeMethod()) {
         if (return_pc == instrumentation_exit_pc_) {
@@ -267,6 +292,10 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
       last_return_pc_ = return_pc;
       ++instrumentation_stack_depth_;
       return true;  // Continue.
+#else
+      // MOE TODO: revisit this code for LLVM!
+      return true;
+#endif
     }
     std::deque<InstrumentationStackFrame>* const instrumentation_stack_;
     std::vector<InstrumentationStackFrame> shadow_stack_;
@@ -693,7 +722,13 @@ void Instrumentation::UpdateMethodsCodeImpl(ArtMethod* method, const void* quick
     new_quick_code = quick_code;
   } else {
     if ((interpreter_stubs_installed_ || IsDeoptimized(method)) && !method->IsNative()) {
+#ifndef MOE
       new_quick_code = GetQuickToInterpreterBridge();
+#else
+      new_quick_code =
+          Runtime::Current()->GetClassLinker()->GetInterpreterBridgeFromMethod(Thread::Current(),
+                                                                               method);
+#endif
     } else {
       ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
       if (class_linker->IsQuickResolutionStub(quick_code) ||
@@ -800,11 +835,19 @@ void Instrumentation::Undeoptimize(ArtMethod* method) {
     ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
     if (method->IsStatic() && !method->IsConstructor() &&
         !method->GetDeclaringClass()->IsInitialized()) {
+#ifndef MOE
       UpdateEntrypoints(method, GetQuickResolutionStub());
+#else
+      UpdateEntrypoints(method, class_linker->GetResolutionTrampolineFromMethod(self, method));
+#endif
     } else {
       const void* quick_code = class_linker->GetQuickOatCodeFor(method);
       if (NeedDebugVersionForBootImageCode(method, quick_code)) {
+#ifndef MOE
         quick_code = GetQuickToInterpreterBridge();
+#else
+        quick_code = class_linker->GetInterpreterBridgeFromMethod(self, method);
+#endif
       }
       UpdateEntrypoints(method, quick_code);
     }

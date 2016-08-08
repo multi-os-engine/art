@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -456,17 +457,30 @@ void UnexpectedOpcode(const Instruction* inst, const ShadowFrame& shadow_frame) 
 }
 
 // Assign register 'src_reg' from shadow_frame to register 'dest_reg' into new_shadow_frame.
+#ifndef MOE
 static inline void AssignRegister(ShadowFrame* new_shadow_frame, const ShadowFrame& shadow_frame,
+#else
+static inline void AssignRegister(ShadowFrame* new_shadow_frame, ShadowFrame& shadow_frame,
+#endif
                                   size_t dest_reg, size_t src_reg)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   // Uint required, so that sign extension does not make this wrong on 64b systems
+#ifndef MOE
   uint32_t src_value = shadow_frame.GetVReg(src_reg);
+#else
+  uintptr_t src_value = *shadow_frame.GetVRegArgs(src_reg);
+#endif
   mirror::Object* o = shadow_frame.GetVRegReference<kVerifyNone>(src_reg);
-
   // If both register locations contains the same value, the register probably holds a reference.
   // Note: As an optimization, non-moving collectors leave a stale reference value
   // in the references array even after the original vreg was overwritten to a non-reference.
+#ifndef MOE
   if (src_value == reinterpret_cast<uintptr_t>(o)) {
+#else
+  mirror::ObjectReference<false, mirror::Object>* ref =
+      reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&src_value);
+  if (ref->AsMirrorPtr() == o) {
+#endif
     new_shadow_frame->SetVRegReference(dest_reg, o);
   } else {
     new_shadow_frame->SetVReg(dest_reg, src_value);
@@ -531,10 +545,12 @@ void ArtInterpreterToCompiledCodeBridge(Thread* self,
   uint16_t arg_offset = (code_item == nullptr)
                             ? 0
                             : code_item->registers_size_ - code_item->ins_size_;
+#ifndef MOE
   jit::Jit* jit = Runtime::Current()->GetJit();
   if (jit != nullptr && caller != nullptr) {
     jit->NotifyInterpreterToCompiledCodeTransition(self, caller);
   }
+#endif
   method->Invoke(self, shadow_frame->GetVRegArgs(arg_offset),
                  (shadow_frame->NumberOfVRegs() - arg_offset) * sizeof(uint32_t),
                  result, method->GetInterfaceMethodIfProxy(sizeof(void*))->GetShorty());

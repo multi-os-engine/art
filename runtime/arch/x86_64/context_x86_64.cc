@@ -118,7 +118,12 @@ void X86_64Context::DoLongJump() {
   gprs[kNumberOfCpuRegisters] = rsp;
   *(reinterpret_cast<uintptr_t*>(rsp)) = rip_;
 
+#ifndef MOE
   art_quick_do_long_jump(gprs, fprs);
+#else
+  // MOE TODO: implement jump for this platform.
+  UNIMPLEMENTED(FATAL);
+#endif
 #else
   UNIMPLEMENTED(FATAL);
   UNREACHABLE();

@@ -130,7 +130,7 @@ static void EnableDebugFeatures(uint32_t debug_flags) {
   }
 }
 
-static jlong ZygoteHooks_nativePreFork(JNIEnv* env, jclass) {
+static JNICALL jlong ZygoteHooks_nativePreFork(JNIEnv* env, jclass) {
   Runtime* runtime = Runtime::Current();
   CHECK(runtime->IsZygote()) << "runtime instance not started with -Xzygote";
 
@@ -145,7 +145,7 @@ static jlong ZygoteHooks_nativePreFork(JNIEnv* env, jclass) {
   return reinterpret_cast<jlong>(ThreadForEnv(env));
 }
 
-static void ZygoteHooks_nativePostForkChild(JNIEnv* env,
+static JNICALL void ZygoteHooks_nativePostForkChild(JNIEnv* env,
                                             jclass,
                                             jlong token,
                                             jint debug_flags,

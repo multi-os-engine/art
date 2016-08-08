@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Stop if something fails.
+set -e
+
+perl -i -pe 's/LItf;/Laosp_467_regalloc_pair\/Itf;/g' smali/*.smali
+
+mkdir classes
+${JAVAC} -d classes `find src -name '*.java'`
+
+${SMALI} --output smali_classes.dex `find smali -name '*.smali'`

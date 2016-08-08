@@ -22,6 +22,10 @@
 
 #include <memory>  // std::unique_ptr
 
+#ifdef MOE_WINDOWS
+#undef CONST
+#endif
+
 namespace art {
 namespace interpreter {
 

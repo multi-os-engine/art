@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,12 +26,16 @@
 #include "base/systrace.h"
 #include "check_jni.h"
 #include "dex_file-inl.h"
+#ifndef MOE_WINDOWS
 #include "fault_handler.h"
+#endif
 #include "indirect_reference_table-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/class_loader.h"
+#ifndef MOE
 #include "nativebridge/native_bridge.h"
 #include "nativeloader/native_loader.h"
+#endif
 #include "java_vm_ext.h"
 #include "parsed_options.h"
 #include "runtime-inl.h"
@@ -140,20 +145,48 @@ class SharedLibrary {
   void* FindSymbol(const std::string& symbol_name, const char* shorty = nullptr) {
     return NeedsNativeBridge()
         ? FindSymbolWithNativeBridge(symbol_name.c_str(), shorty)
+#ifndef MOE_WINDOWS
         : FindSymbolWithoutNativeBridge(symbol_name.c_str());
+#else
+        : FindSymbolWithoutNativeBridge(symbol_name.c_str(), shorty);
+#endif
   }
 
+#ifndef MOE_WINDOWS
   void* FindSymbolWithoutNativeBridge(const std::string& symbol_name) {
+#else
+  void* FindSymbolWithoutNativeBridge(const std::string& symbol_name, const char* shorty) {
+#endif
     CHECK(!NeedsNativeBridge());
 
+#if !defined(MOE_WINDOWS) || defined(_WIN64)
     return dlsym(handle_, symbol_name.c_str());
+#else
+    if (shorty) {
+        const char* p = &shorty[1]; // Skip return type.
+        size_t s = 8; // Size of JNIEnv* and jobject/jclass arguments.
+        while (*p) {
+            s += Primitive::ComponentSize(Primitive::GetType(*p));
+            p++;
+        }
+        void* ptr = dlsym(handle_, ("_" + symbol_name + "@" + std::to_string(s)).c_str());
+        if (ptr) {
+            return ptr;
+        }
+    }
+    return dlsym(handle_, symbol_name.c_str());
+#endif
   }
 
   void* FindSymbolWithNativeBridge(const std::string& symbol_name, const char* shorty) {
     CHECK(NeedsNativeBridge());
 
     uint32_t len = 0;
+#ifndef MOE
     return android::NativeBridgeGetTrampoline(handle_, symbol_name.c_str(), shorty, len);
+#else
+    return nullptr;
+#endif
   }
 
  private:
@@ -246,9 +279,13 @@ class Libraries {
         continue;
       }
       // Try the short name then the long name...
+#ifndef MOE_WINDOWS
       const char* shorty = library->NeedsNativeBridge()
           ? m->GetShorty()
           : nullptr;
+#else
+      const char* shorty = m->GetShorty();
+#endif
       void* fn = library->FindSymbol(jni_short_name, shorty);
       if (fn == nullptr) {
         fn = library->FindSymbol(jni_long_name, shorty);
@@ -312,25 +349,47 @@ class Libraries {
 
 class JII {
  public:
-  static jint DestroyJavaVM(JavaVM* vm) {
+  static JNICALL jint DestroyJavaVM(JavaVM* vm) {
+#ifdef MOE
+    if (Runtime::Current() == nullptr) {
+      return JNI_ERR;
+    }
+#endif
     if (vm == nullptr) {
       return JNI_ERR;
     }
     JavaVMExt* raw_vm = reinterpret_cast<JavaVMExt*>(vm);
     delete raw_vm->GetRuntime();
+#ifndef MOE
     android::ResetNativeLoader();
+#endif
     return JNI_OK;
   }
 
-  static jint AttachCurrentThread(JavaVM* vm, JNIEnv** p_env, void* thr_args) {
+  static JNICALL jint AttachCurrentThread(JavaVM* vm, JNIEnv** p_env, void* thr_args) {
+#ifdef MOE
+    if (Runtime::Current() == nullptr) {
+      return JNI_ERR;
+    }
+#endif
     return AttachCurrentThreadInternal(vm, p_env, thr_args, false);
   }
 
-  static jint AttachCurrentThreadAsDaemon(JavaVM* vm, JNIEnv** p_env, void* thr_args) {
+  static JNICALL jint AttachCurrentThreadAsDaemon(JavaVM* vm, JNIEnv** p_env, void* thr_args) {
+#ifdef MOE
+    if (Runtime::Current() == nullptr) {
+      return JNI_ERR;
+    }
+#endif
     return AttachCurrentThreadInternal(vm, p_env, thr_args, true);
   }
 
-  static jint DetachCurrentThread(JavaVM* vm) {
+  static JNICALL jint DetachCurrentThread(JavaVM* vm) {
+#ifdef MOE
+    if (Runtime::Current() == nullptr) {
+      return JNI_ERR;
+    }
+#endif
     if (vm == nullptr || Thread::Current() == nullptr) {
       return JNI_ERR;
     }
@@ -340,7 +399,12 @@ class JII {
     return JNI_OK;
   }
 
-  static jint GetEnv(JavaVM* vm, void** env, jint version) {
+  static JNICALL jint GetEnv(JavaVM* vm, void** env, jint version) {
+#ifdef MOE
+    if (Runtime::Current() == nullptr) {
+      return JNI_ERR;
+    }
+#endif
     // GetEnv always returns a JNIEnv* for the most current supported JNI version,
     // and unlike other calls that take a JNI version doesn't care if you supply
     // JNI_VERSION_1_1, which we don't otherwise support.
@@ -778,19 +842,32 @@ bool JavaVMExt::LoadNativeLibrary(JNIEnv* env,
 
   Locks::mutator_lock_->AssertNotHeld(self);
   const char* path_str = path.empty() ? nullptr : path.c_str();
+#ifdef MOE
+  void* handle = dlopen(path_str, RTLD_NOW);
+  bool is_dynamic = handle != nullptr;
+  if (!is_dynamic) {
+#ifdef MOE_WINDOWS
+    handle = dlopen(MOE_WINDOWS_DLL, RTLD_NOW);
+#else
+    handle = dlopen(nullptr, RTLD_NOW);
+#endif
+  }
+#else
   void* handle = android::OpenNativeLibrary(env,
                                             runtime_->GetTargetSdkVersion(),
                                             path_str,
                                             class_loader,
                                             library_path);
-
+#endif
   bool needs_native_bridge = false;
+#ifndef MOE
   if (handle == nullptr) {
     if (android::NativeBridgeIsSupported(path_str)) {
       handle = android::NativeBridgeLoadLibrary(path_str, RTLD_NOW);
       needs_native_bridge = true;
     }
   }
+#endif
 
   VLOG(jni) << "[Call to dlopen(\"" << path << "\", RTLD_NOW) returned " << handle << "]";
 
@@ -831,8 +908,40 @@ bool JavaVMExt::LoadNativeLibrary(JNIEnv* env,
   void* sym;
   if (needs_native_bridge) {
     library->SetNeedsNativeBridge();
+#ifdef MOE
+    if (is_dynamic) {
+#endif
+    sym = library->FindSymbol("JNI_OnLoad", nullptr);
+#ifdef MOE
+    } else {
+      sym = library->FindSymbol(((std::string)"JNI_OnLoad_" + path).c_str(), nullptr);
+    }
+#endif
+  } else {
+#ifdef MOE
+    if (is_dynamic) {
+#endif
+#if defined(MOE_WINDOWS) && !defined(_WIN64)
+    sym = dlsym(handle, "_JNI_OnLoad@8");
+    if (sym == nullptr) {
+      sym = dlsym(handle, "JNI_OnLoad");
+    }
+#else
+    sym = dlsym(handle, "JNI_OnLoad");
+#endif
+#ifdef MOE
+    } else {
+#if defined(MOE_WINDOWS) && !defined(_WIN64)
+      sym = dlsym(handle, ((std::string)"_JNI_OnLoad_" + path + "@8").c_str());
+      if (sym == nullptr) {
+        sym = dlsym(handle, ((std::string)"JNI_OnLoad_" + path).c_str());
+      }
+#else
+      sym = dlsym(handle, ((std::string)"JNI_OnLoad_" + path).c_str());
+#endif
+    }
+#endif
   }
-  sym = library->FindSymbol("JNI_OnLoad", nullptr);
   if (sym == nullptr) {
     VLOG(jni) << "[No JNI_OnLoad found in \"" << path << "\"]";
     was_successful = true;
@@ -845,13 +954,19 @@ bool JavaVMExt::LoadNativeLibrary(JNIEnv* env,
     self->SetClassLoaderOverride(class_loader);
 
     VLOG(jni) << "[Calling JNI_OnLoad in \"" << path << "\"]";
+#ifndef MOE
     typedef int (*JNI_OnLoadFn)(JavaVM*, void*);
+#else
+    typedef int (JNICALL *JNI_OnLoadFn)(JavaVM*, void*);
+#endif
     JNI_OnLoadFn jni_on_load = reinterpret_cast<JNI_OnLoadFn>(sym);
     int version = (*jni_on_load)(this, nullptr);
 
+#ifndef MOE_WINDOWS
     if (runtime_->GetTargetSdkVersion() != 0 && runtime_->GetTargetSdkVersion() <= 21) {
       fault_manager.EnsureArtActionInFrontOfSignalChain();
     }
+#endif
 
     self->SetClassLoaderOverride(old_class_loader.get());
 
@@ -927,6 +1042,9 @@ void JavaVMExt::VisitRoots(RootVisitor* visitor) {
 
 // JNI Invocation interface.
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" jint JNI_CreateJavaVM(JavaVM** p_vm, JNIEnv** p_env, void* vm_args) {
   ScopedTrace trace(__FUNCTION__);
   const JavaVMInitArgs* args = static_cast<JavaVMInitArgs*>(vm_args);
@@ -946,7 +1064,9 @@ extern "C" jint JNI_CreateJavaVM(JavaVM** p_vm, JNIEnv** p_env, void* vm_args) {
 
   // Initialize native loader. This step makes sure we have
   // everything set up before we start using JNI.
+#ifndef MOE
   android::InitializeNativeLoader();
+#endif
 
   Runtime* runtime = Runtime::Current();
   bool started = runtime->Start();
@@ -962,6 +1082,9 @@ extern "C" jint JNI_CreateJavaVM(JavaVM** p_vm, JNIEnv** p_env, void* vm_args) {
   return JNI_OK;
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" jint JNI_GetCreatedJavaVMs(JavaVM** vms_buf, jsize buf_len, jsize* vm_count) {
   Runtime* runtime = Runtime::Current();
   if (runtime == nullptr || buf_len == 0) {
@@ -974,6 +1097,9 @@ extern "C" jint JNI_GetCreatedJavaVMs(JavaVM** vms_buf, jsize buf_len, jsize* vm
 }
 
 // Historically unsupported.
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" jint JNI_GetDefaultJavaVMInitArgs(void* /*vm_args*/) {
   return JNI_ERR;
 }

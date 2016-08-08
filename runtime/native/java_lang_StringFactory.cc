@@ -27,7 +27,7 @@
 
 namespace art {
 
-static jstring StringFactory_newStringFromBytes(JNIEnv* env, jclass, jbyteArray java_data,
+static JNICALL jstring StringFactory_newStringFromBytes(JNIEnv* env, jclass, jbyteArray java_data,
                                                 jint high, jint offset, jint byte_count) {
   ScopedFastNativeObjectAccess soa(env);
   if (UNLIKELY(java_data == nullptr)) {
@@ -51,7 +51,7 @@ static jstring StringFactory_newStringFromBytes(JNIEnv* env, jclass, jbyteArray 
 }
 
 // The char array passed as `java_data` must not be a null reference.
-static jstring StringFactory_newStringFromChars(JNIEnv* env, jclass, jint offset,
+static JNICALL jstring StringFactory_newStringFromChars(JNIEnv* env, jclass, jint offset,
                                                 jint char_count, jcharArray java_data) {
   DCHECK(java_data != nullptr);
   ScopedFastNativeObjectAccess soa(env);
@@ -64,7 +64,7 @@ static jstring StringFactory_newStringFromChars(JNIEnv* env, jclass, jint offset
   return soa.AddLocalReference<jstring>(result);
 }
 
-static jstring StringFactory_newStringFromString(JNIEnv* env, jclass, jstring to_copy) {
+static JNICALL jstring StringFactory_newStringFromString(JNIEnv* env, jclass, jstring to_copy) {
   ScopedFastNativeObjectAccess soa(env);
   if (UNLIKELY(to_copy == nullptr)) {
     ThrowNullPointerException("toCopy == null");

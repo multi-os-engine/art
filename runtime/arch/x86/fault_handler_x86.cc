@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,7 +70,7 @@
 
 namespace art {
 
-#if defined(__APPLE__) && defined(__x86_64__)
+#if defined(__APPLE__) && defined(__x86_64__) && !defined(MOE)
 // mac symbols have a prefix of _ on x86_64
 extern "C" void _art_quick_throw_null_pointer_exception();
 extern "C" void _art_quick_throw_stack_overflow();
@@ -245,7 +246,12 @@ void FaultManager::HandleNestedSignal(int, siginfo_t*, void* context) {
 
   struct ucontext* uc = reinterpret_cast<struct ucontext*>(context);
   uc->CTX_JMP_BUF = reinterpret_cast<uintptr_t>(*self->GetNestedSignalState());
+#ifndef MOE
   uc->CTX_EIP = reinterpret_cast<uintptr_t>(art_nested_signal_return);
+#else
+  // MOE TODO: we have to find a solution that works with LLVM.
+  uc->CTX_EIP = reinterpret_cast<uintptr_t>(nullptr);
+#endif
 }
 
 void FaultManager::GetMethodAndReturnPcAndSp(siginfo_t* siginfo, void* context,
@@ -314,7 +320,12 @@ bool NullPointerHandler::Action(int, siginfo_t*, void* context) {
   *next_sp = retaddr;
   uc->CTX_ESP = reinterpret_cast<uintptr_t>(next_sp);
 
+#ifndef MOE
   uc->CTX_EIP = reinterpret_cast<uintptr_t>(EXT_SYM(art_quick_throw_null_pointer_exception));
+#else
+  // MOE TODO: we have to find a solution that works with LLVM.
+  uc->CTX_EIP = reinterpret_cast<uintptr_t>(EXT_SYM(nullptr));
+#endif
   VLOG(signals) << "Generating null pointer exception";
   return true;
 }
@@ -388,7 +399,12 @@ bool SuspensionHandler::Action(int, siginfo_t*, void* context) {
     *next_sp = retaddr;
     uc->CTX_ESP = reinterpret_cast<uintptr_t>(next_sp);
 
+#ifndef MOE
     uc->CTX_EIP = reinterpret_cast<uintptr_t>(EXT_SYM(art_quick_test_suspend));
+#else
+    // MOE TODO: we have to find a solution that works with LLVM.
+    uc->CTX_EIP = reinterpret_cast<uintptr_t>(EXT_SYM(nullptr));
+#endif
 
     // Now remove the suspend trigger that caused this fault.
     Thread::Current()->RemoveSuspendTrigger();
@@ -434,8 +450,14 @@ bool StackOverflowHandler::Action(int, siginfo_t* info, void* context) {
   // the previous frame.
 
   // Now arrange for the signal handler to return to art_quick_throw_stack_overflow.
+#ifndef MOE
   uc->CTX_EIP = reinterpret_cast<uintptr_t>(EXT_SYM(art_quick_throw_stack_overflow));
+#else
+  // MOE TODO: we have to find a solution that works with LLVM.
+  uc->CTX_EIP = reinterpret_cast<uintptr_t>(nullptr);
+#endif
 
   return true;
 }
 }       // namespace art
+

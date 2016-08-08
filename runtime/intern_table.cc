@@ -173,6 +173,7 @@ void InternTable::RemoveWeakFromTransaction(mirror::String* s) {
   RemoveWeak(s);
 }
 
+#ifndef MOE
 void InternTable::AddImagesStringsToTable(const std::vector<gc::space::ImageSpace*>& image_spaces) {
   MutexLock mu(Thread::Current(), *Locks::intern_table_lock_);
   for (gc::space::ImageSpace* image_space : image_spaces) {
@@ -233,6 +234,7 @@ mirror::String* InternTable::LookupStringFromImage(mirror::String* s) {
   }
   return nullptr;
 }
+#endif
 
 void InternTable::BroadcastForNewInterns() {
   CHECK(kUseReadBarrier);
@@ -304,12 +306,14 @@ mirror::String* InternTable::Insert(mirror::String* s, bool is_strong, bool hold
     return weak;
   }
   // Check the image for a match.
+#ifndef MOE
   if (!images_added_to_intern_table_) {
     mirror::String* const image_string = LookupStringFromImage(s);
     if (image_string != nullptr) {
       return is_strong ? InsertStrong(image_string) : InsertWeak(image_string);
     }
   }
+#endif
   // No match in the strong table or the weak table. Insert into the strong / weak table.
   return is_strong ? InsertStrong(s) : InsertWeak(s);
 }

@@ -20,6 +20,10 @@
 #include "dex_file.h"
 #include "os.h"
 
+#ifdef MOE
+#include "arch/instruction_set.h"
+#endif
+
 namespace art {
 
 namespace jit {
@@ -38,7 +42,11 @@ class Compiler {
     kOptimizing
   };
 
+#ifndef MOE
   static Compiler* Create(CompilerDriver* driver, Kind kind);
+#else
+  static Compiler* Create(CompilerDriver* driver, Kind kind, const std::string& platform_name, InstructionSet instruction_set, const std::string& target_dir);
+#endif
 
   virtual void Init() = 0;
 
@@ -59,6 +67,7 @@ class Compiler {
                                      uint32_t method_idx,
                                      const DexFile& dex_file) const = 0;
 
+#ifndef MOE
   virtual bool JitCompile(Thread* self ATTRIBUTE_UNUSED,
                           jit::JitCodeCache* code_cache ATTRIBUTE_UNUSED,
                           ArtMethod* method ATTRIBUTE_UNUSED,
@@ -66,6 +75,11 @@ class Compiler {
       SHARED_REQUIRES(Locks::mutator_lock_) {
     return false;
   }
+#endif
+
+#ifdef MOE
+  virtual void WriteNativeFiles() = 0;
+#endif
 
   virtual uintptr_t GetEntryPointOf(ArtMethod* method) const
      SHARED_REQUIRES(Locks::mutator_lock_) = 0;

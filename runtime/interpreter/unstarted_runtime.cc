@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -484,8 +485,13 @@ static void GetResourceAsStream(Thread* self,
     return;
   }
 
+#ifndef MOE
   uint32_t args[1];
   args[0] = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(h_array.Get()));
+#else
+  uintptr_t args[1];
+  args[0] = reinterpret_cast<uintptr_t>(h_array.Get());
+#endif
   EnterInterpreterFromInvoke(self, constructor, h_obj.Get(), args, nullptr);
 
   if (self->IsExceptionPending()) {
@@ -1416,10 +1422,19 @@ void UnstartedRuntime::UnstartedMethodInvoke(
 
 void UnstartedRuntime::UnstartedJNIVMRuntimeNewUnpaddedArray(
     Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver ATTRIBUTE_UNUSED,
+#ifndef MOE
     uint32_t* args, JValue* result) {
+#else
+    uintptr_t* args, JValue* result) {
+#endif
   int32_t length = args[1];
   DCHECK_GE(length, 0);
+#ifndef MOE
   mirror::Class* element_class = reinterpret_cast<mirror::Object*>(args[0])->AsClass();
+#else
+  mirror::Class* element_class =
+      reinterpret_cast<mirror::ObjectReference<false, mirror::Class>*>(&args[0])->AsMirrorPtr();
+#endif
   Runtime* runtime = Runtime::Current();
   mirror::Class* array_class = runtime->GetClassLinker()->FindArrayClass(self, &element_class);
   DCHECK(array_class != nullptr);
@@ -1430,13 +1445,21 @@ void UnstartedRuntime::UnstartedJNIVMRuntimeNewUnpaddedArray(
 
 void UnstartedRuntime::UnstartedJNIVMStackGetCallingClassLoader(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
+#ifndef MOE
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#else
+    mirror::Object* receiver ATTRIBUTE_UNUSED, uintptr_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#endif
   result->SetL(nullptr);
 }
 
 void UnstartedRuntime::UnstartedJNIVMStackGetStackClass2(
     Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver ATTRIBUTE_UNUSED,
+#ifndef MOE
     uint32_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#else
+    uintptr_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#endif
   NthCallerVisitor visitor(self, 3);
   visitor.WalkStack();
   if (visitor.caller != nullptr) {
@@ -1446,7 +1469,11 @@ void UnstartedRuntime::UnstartedJNIVMStackGetStackClass2(
 
 void UnstartedRuntime::UnstartedJNIMathLog(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
+#ifndef MOE
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result) {
+#else
+    mirror::Object* receiver ATTRIBUTE_UNUSED, uintptr_t* args, JValue* result) {
+#endif
   JValue value;
   value.SetJ((static_cast<uint64_t>(args[1]) << 32) | args[0]);
   result->SetD(log(value.GetD()));
@@ -1454,7 +1481,11 @@ void UnstartedRuntime::UnstartedJNIMathLog(
 
 void UnstartedRuntime::UnstartedJNIMathExp(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
+#ifndef MOE
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result) {
+#else
+    mirror::Object* receiver ATTRIBUTE_UNUSED, uintptr_t* args, JValue* result) {
+#endif
   JValue value;
   value.SetJ((static_cast<uint64_t>(args[1]) << 32) | args[0]);
   result->SetD(exp(value.GetD()));
@@ -1464,7 +1495,11 @@ void UnstartedRuntime::UnstartedJNIAtomicLongVMSupportsCS8(
     Thread* self ATTRIBUTE_UNUSED,
     ArtMethod* method ATTRIBUTE_UNUSED,
     mirror::Object* receiver ATTRIBUTE_UNUSED,
+#ifndef MOE
     uint32_t* args ATTRIBUTE_UNUSED,
+#else
+    uintptr_t* args ATTRIBUTE_UNUSED,
+#endif
     JValue* result) {
   result->SetZ(QuasiAtomic::LongAtomicsUseMutexes(Runtime::Current()->GetInstructionSet())
                    ? 0
@@ -1473,46 +1508,78 @@ void UnstartedRuntime::UnstartedJNIAtomicLongVMSupportsCS8(
 
 void UnstartedRuntime::UnstartedJNIClassGetNameNative(
     Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver,
+#ifndef MOE
     uint32_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#else
+    uintptr_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#endif
   StackHandleScope<1> hs(self);
   result->SetL(mirror::Class::ComputeName(hs.NewHandle(receiver->AsClass())));
 }
 
 void UnstartedRuntime::UnstartedJNIDoubleLongBitsToDouble(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
+#ifndef MOE
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result) {
+#else
+    mirror::Object* receiver ATTRIBUTE_UNUSED, uintptr_t* args, JValue* result) {
+#endif
   uint64_t long_input = args[0] | (static_cast<uint64_t>(args[1]) << 32);
   result->SetD(bit_cast<double>(long_input));
 }
 
 void UnstartedRuntime::UnstartedJNIFloatFloatToRawIntBits(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
+#ifndef MOE
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result) {
+#else
+    mirror::Object* receiver ATTRIBUTE_UNUSED, uintptr_t* args, JValue* result) {
+#endif
   result->SetI(args[0]);
 }
 
 void UnstartedRuntime::UnstartedJNIFloatIntBitsToFloat(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
+#ifndef MOE
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result) {
+#else
+    mirror::Object* receiver ATTRIBUTE_UNUSED, uintptr_t* args, JValue* result) {
+#endif
   result->SetI(args[0]);
 }
 
 void UnstartedRuntime::UnstartedJNIObjectInternalClone(
     Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver,
+#ifndef MOE
     uint32_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#else
+    uintptr_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#endif
   result->SetL(receiver->Clone(self));
 }
 
 void UnstartedRuntime::UnstartedJNIObjectNotifyAll(
     Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver,
+#ifndef MOE
     uint32_t* args ATTRIBUTE_UNUSED, JValue* result ATTRIBUTE_UNUSED) {
+#else
+    uintptr_t* args ATTRIBUTE_UNUSED, JValue* result ATTRIBUTE_UNUSED) {
+#endif
   receiver->NotifyAll(self);
 }
 
 void UnstartedRuntime::UnstartedJNIStringCompareTo(
+#ifndef MOE
     Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver, uint32_t* args,
+#else
+    Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver, uintptr_t* args,
+#endif
     JValue* result) {
+#ifndef MOE
   mirror::String* rhs = reinterpret_cast<mirror::Object*>(args[0])->AsString();
+#else
+  mirror::String* rhs = reinterpret_cast<mirror::ObjectReference<false, mirror::String>*>(&args[0])->AsMirrorPtr();
+#endif
   if (rhs == nullptr) {
     AbortTransactionOrFail(self, "String.compareTo with null object");
   }
@@ -1521,34 +1588,59 @@ void UnstartedRuntime::UnstartedJNIStringCompareTo(
 
 void UnstartedRuntime::UnstartedJNIStringIntern(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver,
+#ifndef MOE
     uint32_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#else
+    uintptr_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#endif
   result->SetL(receiver->AsString()->Intern());
 }
 
 void UnstartedRuntime::UnstartedJNIStringFastIndexOf(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver,
+#ifndef MOE
     uint32_t* args, JValue* result) {
+#else
+    uintptr_t* args, JValue* result) {
+#endif
   result->SetI(receiver->AsString()->FastIndexOf(args[0], args[1]));
 }
 
 void UnstartedRuntime::UnstartedJNIArrayCreateMultiArray(
     Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver ATTRIBUTE_UNUSED,
+#ifndef MOE
     uint32_t* args, JValue* result) {
+#else
+    uintptr_t* args, JValue* result) {
+#endif
   StackHandleScope<2> hs(self);
+#ifndef MOE
   auto h_class(hs.NewHandle(reinterpret_cast<mirror::Class*>(args[0])->AsClass()));
   auto h_dimensions(hs.NewHandle(reinterpret_cast<mirror::IntArray*>(args[1])->AsIntArray()));
+#else
+  auto h_class(hs.NewHandle(reinterpret_cast<mirror::ObjectReference<false, mirror::Class>*>(&args[0])->AsMirrorPtr()));
+  auto h_dimensions(hs.NewHandle(reinterpret_cast<mirror::ObjectReference<false, mirror::IntArray>*>(&args[1])->AsMirrorPtr()));
+#endif
   result->SetL(mirror::Array::CreateMultiArray(self, h_class, h_dimensions));
 }
 
 void UnstartedRuntime::UnstartedJNIArrayCreateObjectArray(
     Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver ATTRIBUTE_UNUSED,
+#ifndef MOE
     uint32_t* args, JValue* result) {
+#else
+    uintptr_t* args, JValue* result) {
+#endif
   int32_t length = static_cast<int32_t>(args[1]);
   if (length < 0) {
     ThrowNegativeArraySizeException(length);
     return;
   }
+#ifndef MOE
   mirror::Class* element_class = reinterpret_cast<mirror::Class*>(args[0])->AsClass();
+#else
+  mirror::Class* element_class = reinterpret_cast<mirror::ObjectReference<false, mirror::Class>*>(args[0])->AsMirrorPtr();
+#endif
   Runtime* runtime = Runtime::Current();
   ClassLinker* class_linker = runtime->GetClassLinker();
   mirror::Class* array_class = class_linker->FindArrayClass(self, &element_class);
@@ -1564,7 +1656,11 @@ void UnstartedRuntime::UnstartedJNIArrayCreateObjectArray(
 
 void UnstartedRuntime::UnstartedJNIThrowableNativeFillInStackTrace(
     Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver ATTRIBUTE_UNUSED,
+#ifndef MOE
     uint32_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#else
+    uintptr_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#endif
   ScopedObjectAccessUnchecked soa(self);
   if (Runtime::Current()->IsActiveTransaction()) {
     result->SetL(soa.Decode<mirror::Object*>(self->CreateInternalStackTrace<true>(soa)));
@@ -1575,21 +1671,41 @@ void UnstartedRuntime::UnstartedJNIThrowableNativeFillInStackTrace(
 
 void UnstartedRuntime::UnstartedJNISystemIdentityHashCode(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
+#ifndef MOE
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result) {
+#else
+    mirror::Object* receiver ATTRIBUTE_UNUSED, uintptr_t* args, JValue* result) {
+#endif
+#ifndef MOE
   mirror::Object* obj = reinterpret_cast<mirror::Object*>(args[0]);
+#else
+  mirror::Object* obj = reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&args[0])->AsMirrorPtr();
+#endif
   result->SetI((obj != nullptr) ? obj->IdentityHashCode() : 0);
 }
 
 void UnstartedRuntime::UnstartedJNIByteOrderIsLittleEndian(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
+#ifndef MOE
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#else
+    mirror::Object* receiver ATTRIBUTE_UNUSED, uintptr_t* args ATTRIBUTE_UNUSED, JValue* result) {
+#endif
   result->SetZ(JNI_TRUE);
 }
 
 void UnstartedRuntime::UnstartedJNIUnsafeCompareAndSwapInt(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
+#ifndef MOE
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result) {
+#else
+    mirror::Object* receiver ATTRIBUTE_UNUSED, uintptr_t* args, JValue* result) {
+#endif
+#ifndef MOE
   mirror::Object* obj = reinterpret_cast<mirror::Object*>(args[0]);
+#else
+  mirror::Object* obj = reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&args[0])->AsMirrorPtr();
+#endif
   jlong offset = (static_cast<uint64_t>(args[2]) << 32) | args[1];
   jint expectedValue = args[3];
   jint newValue = args[4];
@@ -1606,7 +1722,11 @@ void UnstartedRuntime::UnstartedJNIUnsafeCompareAndSwapInt(
 
 void UnstartedRuntime::UnstartedJNIUnsafeGetIntVolatile(
     Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver ATTRIBUTE_UNUSED,
+#ifndef MOE
     uint32_t* args, JValue* result) {
+#else
+    uintptr_t* args, JValue* result) {
+#endif
   mirror::Object* obj = reinterpret_cast<mirror::Object*>(args[0]);
   if (obj == nullptr) {
     AbortTransactionOrFail(self, "Cannot access null object, retry at runtime.");
@@ -1619,10 +1739,22 @@ void UnstartedRuntime::UnstartedJNIUnsafeGetIntVolatile(
 
 void UnstartedRuntime::UnstartedJNIUnsafePutObject(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
+#ifndef MOE
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result ATTRIBUTE_UNUSED) {
+#else
+    mirror::Object* receiver ATTRIBUTE_UNUSED, uintptr_t* args, JValue* result ATTRIBUTE_UNUSED) {
+#endif
+#ifndef MOE
   mirror::Object* obj = reinterpret_cast<mirror::Object*>(args[0]);
+#else
+  mirror::Object* obj = reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&args[0])->AsMirrorPtr();
+#endif
   jlong offset = (static_cast<uint64_t>(args[2]) << 32) | args[1];
+#ifndef MOE
   mirror::Object* newValue = reinterpret_cast<mirror::Object*>(args[3]);
+#else
+  mirror::Object* newValue = reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&args[3])->AsMirrorPtr();
+#endif
   if (Runtime::Current()->IsActiveTransaction()) {
     obj->SetFieldObject<true>(MemberOffset(offset), newValue);
   } else {
@@ -1632,16 +1764,32 @@ void UnstartedRuntime::UnstartedJNIUnsafePutObject(
 
 void UnstartedRuntime::UnstartedJNIUnsafeGetArrayBaseOffsetForComponentType(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
+#ifndef MOE
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result) {
+#else
+    mirror::Object* receiver ATTRIBUTE_UNUSED, uintptr_t* args, JValue* result) {
+#endif
+#ifndef MOE
   mirror::Class* component = reinterpret_cast<mirror::Object*>(args[0])->AsClass();
+#else
+  mirror::Class* component = reinterpret_cast<mirror::ObjectReference<false, mirror::Class>*>(&args[0])->AsMirrorPtr();
+#endif
   Primitive::Type primitive_type = component->GetPrimitiveType();
   result->SetI(mirror::Array::DataOffset(Primitive::ComponentSize(primitive_type)).Int32Value());
 }
 
 void UnstartedRuntime::UnstartedJNIUnsafeGetArrayIndexScaleForComponentType(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
+#ifndef MOE
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result) {
+#else
+    mirror::Object* receiver ATTRIBUTE_UNUSED, uintptr_t* args, JValue* result) {
+#endif
+#ifndef MOE
   mirror::Class* component = reinterpret_cast<mirror::Object*>(args[0])->AsClass();
+#else
+  mirror::Class* component = reinterpret_cast<mirror::ObjectReference<false, mirror::Class>*>(&args[0])->AsMirrorPtr();
+#endif
   Primitive::Type primitive_type = component->GetPrimitiveType();
   result->SetI(Primitive::ComponentSize(primitive_type));
 }
@@ -1650,7 +1798,11 @@ typedef void (*InvokeHandler)(Thread* self, ShadowFrame* shadow_frame, JValue* r
     size_t arg_size);
 
 typedef void (*JNIHandler)(Thread* self, ArtMethod* method, mirror::Object* receiver,
+#ifndef MOE
     uint32_t* args, JValue* result);
+#else
+    uintptr_t* args, JValue* result);
+#endif
 
 static bool tables_initialized_ = false;
 static std::unordered_map<std::string, InvokeHandler> invoke_handlers_;
@@ -1711,7 +1863,11 @@ void UnstartedRuntime::Invoke(Thread* self, const DexFile::CodeItem* code_item,
 
 // Hand select a number of methods to be run in a not yet started runtime without using JNI.
 void UnstartedRuntime::Jni(Thread* self, ArtMethod* method, mirror::Object* receiver,
+#ifndef MOE
                            uint32_t* args, JValue* result) {
+#else
+                           uintptr_t* args, JValue* result) {
+#endif
   std::string name(PrettyMethod(method));
   const auto& iter = jni_handlers_.find(name);
   if (iter != jni_handlers_.end()) {

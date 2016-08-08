@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +31,9 @@ class Object;
 #define MANAGED PACKED(4)
 
 // Value type representing a reference to a mirror::Object of type MirrorType.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 template<bool kPoisonReferences, class MirrorType>
 class MANAGED ObjectReference {
  public:
@@ -50,9 +54,15 @@ class MANAGED ObjectReference {
     return reference_ == 0;
   }
 
+#ifndef MOE
   uint32_t AsVRegValue() const {
     return reference_;
   }
+#else
+  uintptr_t AsVRegValue() const {
+    return reinterpret_cast<uintptr_t>(reference_);
+  }
+#endif
 
  protected:
   ObjectReference<kPoisonReferences, MirrorType>(MirrorType* mirror_ptr)
@@ -60,25 +70,47 @@ class MANAGED ObjectReference {
       : reference_(Compress(mirror_ptr)) {
   }
 
+#ifndef MOE
   // Compress reference to its bit representation.
   static uint32_t Compress(MirrorType* mirror_ptr) SHARED_REQUIRES(Locks::mutator_lock_) {
     uintptr_t as_bits = reinterpret_cast<uintptr_t>(mirror_ptr);
     return static_cast<uint32_t>(kPoisonReferences ? -as_bits : as_bits);
   }
+#else
+  static MirrorType* Compress(MirrorType* mirror_ptr) SHARED_REQUIRES(Locks::mutator_lock_) {
+    return mirror_ptr;
+  }
+#endif
 
+#ifndef MOE
   // Uncompress an encoded reference from its bit representation.
   MirrorType* UnCompress() const SHARED_REQUIRES(Locks::mutator_lock_) {
     uintptr_t as_bits = kPoisonReferences ? -reference_ : reference_;
     return reinterpret_cast<MirrorType*>(as_bits);
   }
+#else
+  MirrorType* UnCompress() const SHARED_REQUIRES(Locks::mutator_lock_) {
+    return reference_;
+  }
+#endif
 
   friend class Object;
 
+#ifndef MOE
   // The encoded reference to a mirror::Object.
   uint32_t reference_;
+#else
+  MirrorType* reference_;
+#endif
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 // References between objects within the managed heap.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 template<class MirrorType>
 class MANAGED HeapReference : public ObjectReference<kPoisonHeapReferences, MirrorType> {
  public:
@@ -90,12 +122,24 @@ class MANAGED HeapReference : public ObjectReference<kPoisonHeapReferences, Mirr
   HeapReference<MirrorType>(MirrorType* mirror_ptr) SHARED_REQUIRES(Locks::mutator_lock_)
       : ObjectReference<kPoisonHeapReferences, MirrorType>(mirror_ptr) {}
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 // Standard compressed reference used in the runtime. Used for StackReference and GC roots.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 template<class MirrorType>
 class MANAGED CompressedReference : public mirror::ObjectReference<false, MirrorType> {
  public:
+#ifndef MOE_WINDOWS
   CompressedReference<MirrorType>() SHARED_REQUIRES(Locks::mutator_lock_)
+#else
+  // MOE: This is needed to make Atomic<CompressedReference<...>> compatible with MSVC's C++
+  // libraries.
+  CompressedReference<MirrorType>() _NOEXCEPT SHARED_REQUIRES(Locks::mutator_lock_)
+#endif
       : mirror::ObjectReference<false, MirrorType>(nullptr) {}
 
   static CompressedReference<MirrorType> FromMirrorPtr(MirrorType* p)
@@ -107,6 +151,9 @@ class MANAGED CompressedReference : public mirror::ObjectReference<false, Mirror
   CompressedReference<MirrorType>(MirrorType* p) SHARED_REQUIRES(Locks::mutator_lock_)
       : mirror::ObjectReference<false, MirrorType>(p) {}
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

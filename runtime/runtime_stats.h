@@ -59,6 +59,9 @@ enum StatKinds {
  * Memory allocation profiler state.  This is used both globally and
  * per-thread.
  */
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 struct PACKED(4) RuntimeStats {
   RuntimeStats() {
     Clear(~0);
@@ -108,6 +111,9 @@ struct PACKED(4) RuntimeStats {
 
   DISALLOW_COPY_AND_ASSIGN(RuntimeStats);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace art
 

@@ -38,6 +38,13 @@
 #include "utils/array_ref.h"
 #include "utils/intrusive_forward_list.h"
 
+#ifdef MOE
+namespace llvm {
+    class Value;
+    class BasicBlock;
+}
+#endif
+
 namespace art {
 
 class GraphChecker;
@@ -880,6 +887,11 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
   void SetBlockId(int id) { block_id_ = id; }
   uint32_t GetDexPc() const { return dex_pc_; }
 
+#ifdef MOE
+  llvm::BasicBlock* GetLLVMBlock() const { return llvm_block_; }
+  void SetLLVMBlock(llvm::BasicBlock* llvm_block) { llvm_block_ = llvm_block; }
+#endif
+
   HBasicBlock* GetDominator() const { return dominator_; }
   void SetDominator(HBasicBlock* dominator) { dominator_ = dominator; }
   void AddDominatedBlock(HBasicBlock* block) { dominated_blocks_.push_back(block); }
@@ -1151,6 +1163,10 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
   size_t lifetime_start_;
   size_t lifetime_end_;
   TryCatchInformation* try_catch_information_;
+
+#ifdef MOE
+  llvm::BasicBlock* llvm_block_ = nullptr;
+#endif
 
   friend class HGraph;
   friend class HInstruction;
@@ -1853,6 +1869,11 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
     input_use.GetInstruction()->FixUpUserRecordsAfterUseRemoval(before_use_node);
   }
 
+#ifdef MOE
+  llvm::Value* GetLLVMValue() const { return llvm_value_; }
+  void SetLLVMValue(llvm::Value* llvm_value) { llvm_value_ = llvm_value; }
+#endif
+
   const HUseList<HInstruction*>& GetUses() const { return uses_; }
   const HUseList<HEnvironment*>& GetEnvUses() const { return env_uses_; }
 
@@ -2144,6 +2165,10 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
   // The IsExact() flag is stored in packed fields.
   // TODO: for primitive types this should be marked as invalid.
   ReferenceTypeInfo::TypeHandle reference_type_handle_;
+
+#ifdef MOE
+  llvm::Value* llvm_value_ = nullptr;
+#endif
 
   friend class GraphChecker;
   friend class HBasicBlock;

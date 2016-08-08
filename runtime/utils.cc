@@ -21,7 +21,9 @@
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#ifndef MOE_WINDOWS
 #include <sys/wait.h>
+#endif
 #include <unistd.h>
 #include <memory>
 
@@ -54,6 +56,10 @@
 #include <linux/unistd.h>
 #endif
 
+#ifdef MOE_WINDOWS
+#include "cutils/threads.h"
+#endif
+
 namespace art {
 
 #if defined(__linux__)
@@ -65,7 +71,7 @@ pid_t GetTid() {
   uint64_t owner;
   CHECK_PTHREAD_CALL(pthread_threadid_np, (nullptr, &owner), __FUNCTION__);  // Requires Mac OS 10.6
   return owner;
-#elif defined(__BIONIC__)
+#elif defined(__BIONIC__) || defined(MOE_WINDOWS)
   return gettid();
 #else
   return syscall(__NR_gettid);
@@ -83,7 +89,7 @@ std::string GetThreadName(pid_t tid) {
 }
 
 void GetThreadStack(pthread_t thread, void** stack_base, size_t* stack_size, size_t* guard_size) {
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(MOE_WINDOWS)
   *stack_size = pthread_get_stacksize_np(thread);
   void* stack_addr = pthread_get_stackaddr_np(thread);
 
@@ -603,6 +609,11 @@ std::string DescriptorToName(const char* descriptor) {
 }
 
 std::string JniShortName(ArtMethod* m) {
+#ifdef MOE
+  return JniShortNameWithPrefix(m, "Java_");
+}
+std::string JniShortNameWithPrefix(ArtMethod* m, const std::string& prefix) {
+#endif
   std::string class_name(m->GetDeclaringClassDescriptor());
   // Remove the leading 'L' and trailing ';'...
   CHECK_EQ(class_name[0], 'L') << class_name;
@@ -613,7 +624,11 @@ std::string JniShortName(ArtMethod* m) {
   std::string method_name(m->GetName());
 
   std::string short_name;
+#ifndef MOE
   short_name += "Java_";
+#else
+  short_name += prefix;
+#endif
   short_name += MangleForJni(class_name);
   short_name += "_";
   short_name += MangleForJni(method_name);
@@ -621,8 +636,17 @@ std::string JniShortName(ArtMethod* m) {
 }
 
 std::string JniLongName(ArtMethod* m) {
+#ifdef MOE
+  return JniLongNameWithPrefix(m, "Java_");
+}
+std::string JniLongNameWithPrefix(ArtMethod* m, const std::string& prefix) {
+#endif
   std::string long_name;
+#ifndef MOE
   long_name += JniShortName(m);
+#else
+  long_name += JniShortNameWithPrefix(m, prefix);
+#endif
   long_name += "__";
 
   std::string signature(m->GetSignature().ToString());
@@ -980,7 +1004,11 @@ void SetThreadName(const char* thread_name) {
     PLOG(WARNING) << "Unable to set the name of current thread to '" << buf << "'";
   }
 #else  // __APPLE__
+#ifndef MOE_WINDOWS
   pthread_setname_np(thread_name);
+#else
+  pthread_setname_np(pthread_self(), thread_name);
+#endif
 #endif
 }
 
@@ -1014,7 +1042,11 @@ std::string GetSchedulerGroupName(pid_t tid) {
   Split(cgroup_file, '\n', &cgroup_lines);
   for (size_t i = 0; i < cgroup_lines.size(); ++i) {
     std::vector<std::string> cgroup_fields;
+#ifndef MOE_WINDOWS
     Split(cgroup_lines[i], ':', &cgroup_fields);
+#else
+    Split(cgroup_lines[i], ';', &cgroup_fields);
+#endif
     std::vector<std::string> cgroups;
     Split(cgroup_fields[1], ',', &cgroups);
     for (size_t j = 0; j < cgroups.size(); ++j) {
@@ -1187,7 +1219,7 @@ void DumpNativeStack(std::ostream& os, pid_t tid, BacktraceMap* existing_map, co
 #endif
 }
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(MOE_WINDOWS)
 
 // TODO: is there any way to get the kernel stack on Mac OS?
 void DumpKernelStack(std::ostream&, pid_t, const char*, bool) {}
@@ -1353,16 +1385,36 @@ std::string GetDalvikCacheOrDie(const char* subdir, const bool create_if_absent)
 
 bool GetDalvikCacheFilename(const char* location, const char* cache_location,
                             std::string* filename, std::string* error_msg) {
+#ifndef MOE_WINDOWS
   if (location[0] != '/') {
+#else
+  if (!isalpha(location[0]) || location[1] != ':') {
+#endif
     *error_msg = StringPrintf("Expected path in location to be absolute: %s", location);
     return false;
   }
+#ifndef MOE_WINDOWS
   std::string cache_file(&location[1]);  // skip leading slash
+#else
+  if (location[2] != '\\') {
+    *error_msg = StringPrintf("Invalid character in absolute path after colon: %c", location[2]);
+    return false;
+  }
+  std::string cache_file(&location[3]);  // skip leading slash
+#endif
   if (!EndsWith(location, ".dex") && !EndsWith(location, ".art") && !EndsWith(location, ".oat")) {
+#ifndef MOE_WINDOWS
     cache_file += "/";
+#else
+    cache_file += "\\";
+#endif
     cache_file += DexFile::kClassesDex;
   }
+#ifndef MOE_WINDOWS
   std::replace(cache_file.begin(), cache_file.end(), '/', '@');
+#else
+  std::replace(cache_file.begin(), cache_file.end(), '\\', '@');
+#endif
   *filename = StringPrintf("%s/%s", cache_location, cache_file.c_str());
   return true;
 }
@@ -1379,9 +1431,17 @@ std::string GetDalvikCacheFilenameOrDie(const char* location, const char* cache_
 static void InsertIsaDirectory(const InstructionSet isa, std::string* filename) {
   // in = /foo/bar/baz
   // out = /foo/bar/<isa>/baz
+#ifndef MOE_WINDOWS
   size_t pos = filename->rfind('/');
+#else
+  size_t pos = filename->rfind('\\');
+#endif
   CHECK_NE(pos, std::string::npos) << *filename << " " << isa;
+#ifndef MOE_WINDOWS
   filename->insert(pos, "/", 1);
+#else
+  filename->insert(pos, "\\", 1);
+#endif
   filename->insert(pos + 1, GetInstructionSetString(isa));
 }
 
@@ -1394,6 +1454,10 @@ std::string GetSystemImageFilename(const char* location, const InstructionSet is
 }
 
 int ExecAndReturnCode(std::vector<std::string>& arg_vector, std::string* error_msg) {
+#if defined(MOE) && (TARGET_OS_IPHONE || defined(MOE_WINDOWS))
+  PLOG(FATAL) << MOE_UNSUPPORTED_MESSAGE(exec);
+  return false;
+#else
   const std::string command_line(Join(arg_vector, ' '));
   CHECK_GE(arg_vector.size(), 1U) << command_line;
 
@@ -1452,6 +1516,7 @@ bool Exec(std::vector<std::string>& arg_vector, std::string* error_msg) {
     return false;
   }
   return true;
+#endif
 }
 
 bool FileExists(const std::string& filename) {

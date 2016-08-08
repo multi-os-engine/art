@@ -36,6 +36,9 @@ namespace mirror {
 class String;
 
 // C++ mirror of java.lang.DexCache.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED DexCache FINAL : public Object {
  public:
   // Size of java.lang.DexCache.class.
@@ -216,6 +219,10 @@ class MANAGED DexCache FINAL : public Object {
   void VisitReferences(mirror::Class* klass, const Visitor& visitor)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::heap_bitmap_lock_);
 
+#if defined(MOE) && defined(__LP64__)
+  uint32_t num_resolved_fields_;
+#endif
+
   HeapReference<Object> dex_;
   HeapReference<String> location_;
   uint64_t dex_file_;           // const DexFile*
@@ -223,7 +230,9 @@ class MANAGED DexCache FINAL : public Object {
   uint64_t resolved_methods_;   // ArtMethod*, array with num_resolved_methods_ elements.
   uint64_t resolved_types_;     // GcRoot<Class>*, array with num_resolved_types_ elements.
   uint64_t strings_;            // GcRoot<String>*, array with num_strings_ elements.
+#if !defined(MOE) || !defined(__LP64__)
   uint32_t num_resolved_fields_;    // Number of elements in the resolved_fields_ array.
+#endif
   uint32_t num_resolved_methods_;   // Number of elements in the resolved_methods_ array.
   uint32_t num_resolved_types_;     // Number of elements in the resolved_types_ array.
   uint32_t num_strings_;            // Number of elements in the strings_ array.
@@ -232,6 +241,9 @@ class MANAGED DexCache FINAL : public Object {
   friend class Object;  // For VisitReferences
   DISALLOW_IMPLICIT_CONSTRUCTORS(DexCache);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

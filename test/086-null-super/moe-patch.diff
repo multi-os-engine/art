@@ -1,0 +1,19 @@
+diff --git a/test/086-null-super/src/Main.java b/test/086-null-super/src/Main.java
+index 060737f..e6f36e2 100644
+--- a/test/086-null-super/src/Main.java
++++ b/test/086-null-super/src/Main.java
+@@ -51,11 +51,11 @@ public class Main {
+         private static class Inaccessible extends InaccessibleSuper {}
+ 
+         private static final String SUPERCLASS_NAME =
+-                "Main$BrokenDexLoader$InaccessibleSuper";
++                "086_null_super.Main$BrokenDexLoader$InaccessibleSuper";
+         private static final String CLASS_NAME =
+-                "Main$BrokenDexLoader$Inaccessible";
++                "086_null_super.Main$BrokenDexLoader$Inaccessible";
+ 
+-        private static final String DEX_FILE = System.getenv("DEX_LOCATION") + "/086-null-super.jar";
++        private static final String DEX_FILE = System.getenv("DEX_LOCATION");
+ 
+         public BrokenDexLoader(ClassLoader parent) {
+             super(parent);

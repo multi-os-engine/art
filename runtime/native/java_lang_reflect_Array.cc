@@ -27,7 +27,7 @@
 
 namespace art {
 
-static jobject Array_createMultiArray(
+static JNICALL jobject Array_createMultiArray(
     JNIEnv* env, jclass, jclass javaElementClass, jobject javaDimArray) {
   ScopedFastNativeObjectAccess soa(env);
   DCHECK(javaElementClass != nullptr);
@@ -46,7 +46,7 @@ static jobject Array_createMultiArray(
   return soa.AddLocalReference<jobject>(new_array);
 }
 
-static jobject Array_createObjectArray(JNIEnv* env, jclass, jclass javaElementClass, jint length) {
+static JNICALL jobject Array_createObjectArray(JNIEnv* env, jclass, jclass javaElementClass, jint length) {
   ScopedFastNativeObjectAccess soa(env);
   DCHECK(javaElementClass != nullptr);
   if (UNLIKELY(length < 0)) {

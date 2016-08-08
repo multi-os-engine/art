@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Stop if something fails.
+set -e
+
+mkdir classes
+${JAVAC} -d classes `find src -name '*.java'`
+
+rm -f *.cc
+
+cp ../common/* .
+
+perl -i -pe 's/(?<!JNICALL )Java_/Java_aosp_1449_1checker_1bce_/g' *.cc
+perl -i -pe 's/asserts_enabled/asserts_enabled_aosp_449_checker_bce/g' *.cc

@@ -1,0 +1,68 @@
+diff --git a/test/004-JniTest/jni_test.cc b/test/004-JniTest/jni_test.cc
+index be7888b..0b2ab12 100644
+--- a/test/004-JniTest/jni_test.cc
++++ b/test/004-JniTest/jni_test.cc
+@@ -28,15 +28,16 @@
+ 
+ static JavaVM* jvm = nullptr;
+ 
+-extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void*) {
+-  assert(vm != nullptr);
++extern "C" JNIEXPORT void JNICALL Java_Main_init(JNIEnv* env, jclass) {
++  JavaVM* vm;
++  env->GetJavaVM(&vm);
+   assert(jvm == nullptr);
++  assert(vm != nullptr);
+   jvm = vm;
+   std::cout << "JNI_OnLoad called" << std::endl;
+-  return JNI_VERSION_1_6;
+ }
+ 
+-extern "C" JNIEXPORT void JNI_OnUnload(JavaVM*, void*) {
++extern "C" JNIEXPORT void JNICALL Java_Main_deinit(JNIEnv*, jclass) {
+   // std::cout since LOG(INFO) adds extra stuff like pid.
+   std::cout << "JNI_OnUnload called" << std::endl;
+   // Clear jvm for assert in test 004-JniTest.
+@@ -314,15 +314,7 @@ static void testShallowGetCallingClassLoader(JNIEnv* env) {
+     assert(!env->ExceptionCheck());
+ 
+     env->CallStaticVoidMethod(system_clazz, loadLibraryMethodId, library_string);
+-    assert(env->ExceptionCheck());
+-
+-    // We expect UnsatisfiedLinkError.
+-    jthrowable thrown = env->ExceptionOccurred();
+-    env->ExceptionClear();
+-
+-    jclass unsatisfied_link_error_clazz = env->FindClass("java/lang/UnsatisfiedLinkError");
+-    jclass thrown_class = env->GetObjectClass(thrown);
+-    assert(env->IsSameObject(unsatisfied_link_error_clazz, thrown_class));
++    assert(!env->ExceptionCheck());
+   }
+ }
+ 
+diff --git a/test/004-JniTest/src/Main.java b/test/004-JniTest/src/Main.java
+index ee3a3b9..8383031 100644
+--- a/test/004-JniTest/src/Main.java
++++ b/test/004-JniTest/src/Main.java
+@@ -19,6 +19,11 @@ import java.lang.reflect.Method;
+ import java.lang.reflect.Proxy;
+ 
+ public class Main {
++
++    static {
++        init();
++    }
++
+     public static void main(String[] args) {
+         System.loadLibrary(args[0]);
+         testFindClassOnAttachedNativeThread();
+@@ -40,6 +45,9 @@ public class Main {
+         testProxyGetMethodID();
+     }
+ 
++    private static native void init();
++    private static native void deinit();
++
+     private static native void testFindClassOnAttachedNativeThread();
+ 
+     private static boolean testFindFieldOnAttachedNativeThreadField;

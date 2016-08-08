@@ -1,0 +1,20 @@
+diff --git a/test/545-tracing-and-jit/src/Main.java b/test/545-tracing-and-jit/src/Main.java
+index a2d51d5..0ba6c4c 100644
+--- a/test/545-tracing-and-jit/src/Main.java
++++ b/test/545-tracing-and-jit/src/Main.java
+@@ -53,13 +53,8 @@ public class Main {
+         try {
+             return  File.createTempFile(TEMP_FILE_NAME_PREFIX, TEMP_FILE_NAME_SUFFIX);
+         } catch (IOException e) {
+-            System.setProperty("java.io.tmpdir", "/data/local/tmp");
+-            try {
+-                return File.createTempFile(TEMP_FILE_NAME_PREFIX, TEMP_FILE_NAME_SUFFIX);
+-            } catch (IOException e2) {
+-                System.setProperty("java.io.tmpdir", "/sdcard");
+-                return File.createTempFile(TEMP_FILE_NAME_PREFIX, TEMP_FILE_NAME_SUFFIX);
+-            }
++            return File.createTempFile(TEMP_FILE_NAME_PREFIX, TEMP_FILE_NAME_SUFFIX,
++                                       new File(System.getenv("MOE_APP_DOCS_DIR")));
+         }
+     }
+ 

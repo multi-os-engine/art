@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +25,7 @@
 #include "thread-inl.h"
 #include "thread_list.h"
 
+#ifndef MOE
 #if defined(__APPLE__)
 #include <architecture/i386/table.h>
 #include <i386/user_ldt.h>
@@ -37,10 +39,16 @@ struct descriptor_table_entry_t {
 #else
 #include <asm/ldt.h>
 #endif
+#endif
 
 namespace art {
 
 void Thread::InitCpu() {
+  // MOE: Messing around with LDTs is not allowed on iOS
+  // MOE: The code below sets a custom LDT with the Thread object pointer as its base,
+  // MOE: and this way they can present a quick access to the thread specific Thread
+  // MOE: instance through the %fs segment register
+#ifndef MOE
   // Take the ldt lock, Thread::Current isn't yet established.
   MutexLock mu(nullptr, *Locks::modify_ldt_lock_);
 
@@ -147,9 +155,11 @@ void Thread::InitCpu() {
   CHECK_EQ(THREAD_EXCEPTION_OFFSET, ExceptionOffset<4>().Int32Value());
   CHECK_EQ(THREAD_CARD_TABLE_OFFSET, CardTableOffset<4>().Int32Value());
   CHECK_EQ(THREAD_ID_OFFSET, ThinLockIdOffset<4>().Int32Value());
+#endif
 }
 
 void Thread::CleanupCpu() {
+#ifndef MOE
   MutexLock mu(this, *Locks::modify_ldt_lock_);
 
   // Sanity check that reads from %fs point to this Thread*.
@@ -187,6 +197,7 @@ void Thread::CleanupCpu() {
   // gdt_entry.read_exec_only = 1;
   // syscall(__NR_set_thread_area, &gdt_entry);
   UNUSED(selector);
+#endif
 #endif
 }
 

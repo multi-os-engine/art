@@ -42,7 +42,7 @@
 
 namespace art {
 
-static jobjectArray VMDebug_getVmFeatureList(JNIEnv* env, jclass) {
+static JNICALL jobjectArray VMDebug_getVmFeatureList(JNIEnv* env, jclass) {
   static const char* features[] = {
     "method-trace-profiling",
     "method-trace-profiling-streaming",
@@ -65,30 +65,30 @@ static jobjectArray VMDebug_getVmFeatureList(JNIEnv* env, jclass) {
   return result;
 }
 
-static void VMDebug_startAllocCounting(JNIEnv*, jclass) {
+static JNICALL void VMDebug_startAllocCounting(JNIEnv*, jclass) {
   Runtime::Current()->SetStatsEnabled(true);
 }
 
-static void VMDebug_stopAllocCounting(JNIEnv*, jclass) {
+static JNICALL void VMDebug_stopAllocCounting(JNIEnv*, jclass) {
   Runtime::Current()->SetStatsEnabled(false);
 }
 
-static jint VMDebug_getAllocCount(JNIEnv*, jclass, jint kind) {
+static JNICALL jint VMDebug_getAllocCount(JNIEnv*, jclass, jint kind) {
   return Runtime::Current()->GetStat(kind);
 }
 
-static void VMDebug_resetAllocCount(JNIEnv*, jclass, jint kinds) {
+static JNICALL void VMDebug_resetAllocCount(JNIEnv*, jclass, jint kinds) {
   Runtime::Current()->ResetStats(kinds);
 }
 
-static void VMDebug_startMethodTracingDdmsImpl(JNIEnv*, jclass, jint bufferSize, jint flags,
+static JNICALL void VMDebug_startMethodTracingDdmsImpl(JNIEnv*, jclass, jint bufferSize, jint flags,
                                                jboolean samplingEnabled, jint intervalUs) {
   Trace::Start("[DDMS]", -1, bufferSize, flags, Trace::TraceOutputMode::kDDMS,
                samplingEnabled ? Trace::TraceMode::kSampling : Trace::TraceMode::kMethodTracing,
                intervalUs);
 }
 
-static void VMDebug_startMethodTracingFd(JNIEnv* env, jclass, jstring javaTraceFilename,
+static JNICALL void VMDebug_startMethodTracingFd(JNIEnv* env, jclass, jstring javaTraceFilename,
                                          jobject javaFd, jint bufferSize, jint flags,
                                          jboolean samplingEnabled, jint intervalUs) {
   int originalFd = jniGetFDFromFileDescriptor(env, javaFd);
@@ -113,7 +113,7 @@ static void VMDebug_startMethodTracingFd(JNIEnv* env, jclass, jstring javaTraceF
                intervalUs);
 }
 
-static void VMDebug_startMethodTracingFilename(JNIEnv* env, jclass, jstring javaTraceFilename,
+static JNICALL void VMDebug_startMethodTracingFilename(JNIEnv* env, jclass, jstring javaTraceFilename,
                                                jint bufferSize, jint flags,
                                                jboolean samplingEnabled, jint intervalUs) {
   ScopedUtfChars traceFilename(env, javaTraceFilename);
@@ -125,33 +125,33 @@ static void VMDebug_startMethodTracingFilename(JNIEnv* env, jclass, jstring java
                intervalUs);
 }
 
-static jint VMDebug_getMethodTracingMode(JNIEnv*, jclass) {
+static JNICALL jint VMDebug_getMethodTracingMode(JNIEnv*, jclass) {
   return Trace::GetMethodTracingMode();
 }
 
-static void VMDebug_stopMethodTracing(JNIEnv*, jclass) {
+static JNICALL void VMDebug_stopMethodTracing(JNIEnv*, jclass) {
   Trace::Stop();
 }
 
-static void VMDebug_startEmulatorTracing(JNIEnv*, jclass) {
+static JNICALL void VMDebug_startEmulatorTracing(JNIEnv*, jclass) {
   UNIMPLEMENTED(WARNING);
   // dvmEmulatorTraceStart();
 }
 
-static void VMDebug_stopEmulatorTracing(JNIEnv*, jclass) {
+static JNICALL void VMDebug_stopEmulatorTracing(JNIEnv*, jclass) {
   UNIMPLEMENTED(WARNING);
   // dvmEmulatorTraceStop();
 }
 
-static jboolean VMDebug_isDebuggerConnected(JNIEnv*, jclass) {
+static JNICALL jboolean VMDebug_isDebuggerConnected(JNIEnv*, jclass) {
   return Dbg::IsDebuggerActive();
 }
 
-static jboolean VMDebug_isDebuggingEnabled(JNIEnv*, jclass) {
+static JNICALL jboolean VMDebug_isDebuggingEnabled(JNIEnv*, jclass) {
   return Dbg::IsJdwpConfigured();
 }
 
-static jlong VMDebug_lastDebuggerActivity(JNIEnv*, jclass) {
+static JNICALL jlong VMDebug_lastDebuggerActivity(JNIEnv*, jclass) {
   return Dbg::LastDebuggerActivity();
 }
 
@@ -160,28 +160,28 @@ static void ThrowUnsupportedOperationException(JNIEnv* env) {
   soa.Self()->ThrowNewException("Ljava/lang/UnsupportedOperationException;", nullptr);
 }
 
-static void VMDebug_startInstructionCounting(JNIEnv* env, jclass) {
+static JNICALL void VMDebug_startInstructionCounting(JNIEnv* env, jclass) {
   ThrowUnsupportedOperationException(env);
 }
 
-static void VMDebug_stopInstructionCounting(JNIEnv* env, jclass) {
+static JNICALL void VMDebug_stopInstructionCounting(JNIEnv* env, jclass) {
   ThrowUnsupportedOperationException(env);
 }
 
-static void VMDebug_getInstructionCount(JNIEnv* env, jclass, jintArray /*javaCounts*/) {
+static JNICALL void VMDebug_getInstructionCount(JNIEnv* env, jclass, jintArray /*javaCounts*/) {
   ThrowUnsupportedOperationException(env);
 }
 
-static void VMDebug_resetInstructionCount(JNIEnv* env, jclass) {
+static JNICALL void VMDebug_resetInstructionCount(JNIEnv* env, jclass) {
   ThrowUnsupportedOperationException(env);
 }
 
-static void VMDebug_printLoadedClasses(JNIEnv* env, jclass, jint flags) {
+static JNICALL void VMDebug_printLoadedClasses(JNIEnv* env, jclass, jint flags) {
   ScopedFastNativeObjectAccess soa(env);
   return Runtime::Current()->GetClassLinker()->DumpAllClasses(flags);
 }
 
-static jint VMDebug_getLoadedClassCount(JNIEnv* env, jclass) {
+static JNICALL jint VMDebug_getLoadedClassCount(JNIEnv* env, jclass) {
   ScopedFastNativeObjectAccess soa(env);
   return Runtime::Current()->GetClassLinker()->NumLoadedClasses();
 }
@@ -190,7 +190,7 @@ static jint VMDebug_getLoadedClassCount(JNIEnv* env, jclass) {
  * Returns the thread-specific CPU-time clock value for the current thread,
  * or -1 if the feature isn't supported.
  */
-static jlong VMDebug_threadCpuTimeNanos(JNIEnv*, jclass) {
+static JNICALL jlong VMDebug_threadCpuTimeNanos(JNIEnv*, jclass) {
   return ThreadCpuNanoTime();
 }
 
@@ -200,7 +200,7 @@ static jlong VMDebug_threadCpuTimeNanos(JNIEnv*, jclass) {
  * Cause "hprof" data to be dumped.  We can throw an IOException if an
  * error occurs during file handling.
  */
-static void VMDebug_dumpHprofData(JNIEnv* env, jclass, jstring javaFilename, jobject javaFd) {
+static JNICALL void VMDebug_dumpHprofData(JNIEnv* env, jclass, jstring javaFilename, jobject javaFd) {
   // Only one of these may be null.
   if (javaFilename == nullptr && javaFd == nullptr) {
     ScopedObjectAccess soa(env);
@@ -232,11 +232,11 @@ static void VMDebug_dumpHprofData(JNIEnv* env, jclass, jstring javaFilename, job
   hprof::DumpHeap(filename.c_str(), fd, false);
 }
 
-static void VMDebug_dumpHprofDataDdms(JNIEnv*, jclass) {
+static JNICALL void VMDebug_dumpHprofDataDdms(JNIEnv*, jclass) {
   hprof::DumpHeap("[DDMS]", -1, true);
 }
 
-static void VMDebug_dumpReferenceTables(JNIEnv* env, jclass) {
+static JNICALL void VMDebug_dumpReferenceTables(JNIEnv* env, jclass) {
   ScopedObjectAccess soa(env);
   LOG(INFO) << "--- reference table dump ---";
 
@@ -246,15 +246,15 @@ static void VMDebug_dumpReferenceTables(JNIEnv* env, jclass) {
   LOG(INFO) << "---";
 }
 
-static void VMDebug_crash(JNIEnv*, jclass) {
+static JNICALL void VMDebug_crash(JNIEnv*, jclass) {
   LOG(FATAL) << "Crashing runtime on request";
 }
 
-static void VMDebug_infopoint(JNIEnv*, jclass, jint id) {
+static JNICALL void VMDebug_infopoint(JNIEnv*, jclass, jint id) {
   LOG(INFO) << "VMDebug infopoint " << id << " hit";
 }
 
-static jlong VMDebug_countInstancesOfClass(JNIEnv* env, jclass, jclass javaClass,
+static JNICALL jlong VMDebug_countInstancesOfClass(JNIEnv* env, jclass, jclass javaClass,
                                            jboolean countAssignable) {
   ScopedObjectAccess soa(env);
   gc::Heap* const heap = Runtime::Current()->GetHeap();
@@ -269,7 +269,7 @@ static jlong VMDebug_countInstancesOfClass(JNIEnv* env, jclass, jclass javaClass
   return count;
 }
 
-static jlongArray VMDebug_countInstancesOfClasses(JNIEnv* env, jclass, jobjectArray javaClasses,
+static JNICALL jlongArray VMDebug_countInstancesOfClasses(JNIEnv* env, jclass, jobjectArray javaClasses,
                                                   jboolean countAssignable) {
   ScopedObjectAccess soa(env);
   gc::Heap* const heap = Runtime::Current()->GetHeap();
@@ -301,7 +301,7 @@ static jlongArray VMDebug_countInstancesOfClasses(JNIEnv* env, jclass, jobjectAr
 // object space for dumpsys meminfo. The other memory region data such
 // as PSS, private/shared dirty/shared data are available via
 // /proc/<pid>/smaps.
-static void VMDebug_getHeapSpaceStats(JNIEnv* env, jclass, jlongArray data) {
+static JNICALL void VMDebug_getHeapSpaceStats(JNIEnv* env, jclass, jlongArray data) {
   jlong* arr = reinterpret_cast<jlong*>(env->GetPrimitiveArrayCritical(data, 0));
   if (arr == nullptr || env->GetArrayLength(data) < 9) {
     return;
@@ -371,7 +371,7 @@ enum class VMDebugRuntimeStatId {
   kNumRuntimeStats,
 };
 
-static jobject VMDebug_getRuntimeStatInternal(JNIEnv* env, jclass, jint statId) {
+static JNICALL jobject VMDebug_getRuntimeStatInternal(JNIEnv* env, jclass, jint statId) {
   gc::Heap* heap = Runtime::Current()->GetHeap();
   switch (static_cast<VMDebugRuntimeStatId>(statId)) {
     case VMDebugRuntimeStatId::kArtGcGcCount: {
@@ -423,7 +423,7 @@ static bool SetRuntimeStatValue(JNIEnv* env, jobjectArray result, VMDebugRuntime
   return true;
 }
 
-static jobjectArray VMDebug_getRuntimeStatsInternal(JNIEnv* env, jclass) {
+static JNICALL jobjectArray VMDebug_getRuntimeStatsInternal(JNIEnv* env, jclass) {
   jobjectArray result = env->NewObjectArray(
       static_cast<jint>(VMDebugRuntimeStatId::kNumRuntimeStats),
       WellKnownClasses::java_lang_String,

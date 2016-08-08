@@ -1,0 +1,7 @@
+diff --git a/test/449-checker-bce/expected.txt b/test/449-checker-bce/expected.txt
+index 4665d7a..e114c50 100644
+--- a/test/449-checker-bce/expected.txt
++++ b/test/449-checker-bce/expected.txt
+@@ -1,2 +1 @@
+-JNI_OnLoad called
+ java.lang.ArrayIndexOutOfBoundsException: length=5; index=82

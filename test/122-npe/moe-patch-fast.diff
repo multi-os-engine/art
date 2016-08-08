@@ -1,0 +1,17 @@
+diff --git a/test/122-npe/src/Main.java b/test/122-npe/src/Main.java
+index 8f68205..ee9d3b6 100644
+--- a/test/122-npe/src/Main.java
++++ b/test/122-npe/src/Main.java
+@@ -557,9 +557,9 @@ public class Main {
+       System.out.println();
+     }
+     StackTraceElement[] trace = npe.getStackTrace();
+-    checkElement(trace[0], "Main", "methodTwo", "Main.java", firstLine);
+-    checkElement(trace[1], "Main", "methodOne", "Main.java", 27);
+-    checkElement(trace[2], "Main", "main", "Main.java", 23);
++    checkElement(trace[0], "aosp_122_npe.Main", "methodTwo", "Main.java", firstLine);
++    checkElement(trace[1], "aosp_122_npe.Main", "methodOne", "Main.java", 27);
++    checkElement(trace[2], "aosp_122_npe.Main", "main", "Main.java", 23);
+   }
+ 
+   static void checkElement(StackTraceElement element,

@@ -44,6 +44,7 @@ void ImmuneSpaces::CreateLargestImmuneRegion() {
   for (space::ContinuousSpace* space : GetSpaces()) {
     uintptr_t space_begin = reinterpret_cast<uintptr_t>(space->Begin());
     uintptr_t space_end = reinterpret_cast<uintptr_t>(space->Limit());
+#ifndef MOE
     if (space->IsImageSpace()) {
       // For the boot image, the boot oat file is always directly after. For app images it may not
       // be if the app image was mapped at a random address.
@@ -59,6 +60,7 @@ void ImmuneSpaces::CreateLargestImmuneRegion() {
                                      /*image*/false));
       }
     }
+#endif
     intervals.push_back(Interval(space_begin, space_end, /*is_heap*/true));
   }
   std::sort(intervals.begin(), intervals.end());

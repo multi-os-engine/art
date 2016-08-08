@@ -116,8 +116,10 @@ class InternTable {
   // Adds all of the resolved image strings from the image spaces into the intern table. The
   // advantage of doing this is preventing expensive DexFile::FindStringId calls. Sets
   // images_added_to_intern_table_ to true.
+#ifndef MOE
   void AddImagesStringsToTable(const std::vector<gc::space::ImageSpace*>& image_spaces)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Locks::intern_table_lock_);
+#endif
 
   // Add a new intern table for inserting to, previous intern tables are still there but no
   // longer inserted into and ideally unmodified. This is done to prevent dirty pages.
@@ -238,8 +240,10 @@ class InternTable {
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
 
   // Transaction rollback access.
+#ifndef MOE
   mirror::String* LookupStringFromImage(mirror::String* s)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
+#endif
   mirror::String* InsertStrongFromTransaction(mirror::String* s)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
   mirror::String* InsertWeakFromTransaction(mirror::String* s)

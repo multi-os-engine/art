@@ -23,12 +23,20 @@
 
 namespace art {
 
+#ifndef MOE
 Compiler* Compiler::Create(CompilerDriver* driver, Compiler::Kind kind) {
+#else
+Compiler* Compiler::Create(CompilerDriver* driver, Compiler::Kind kind, const std::string& platform_name, InstructionSet instruction_set, const std::string& target_dir) {
+#endif
   switch (kind) {
     case kQuick:
       // TODO: Remove Quick in options.
     case kOptimizing:
+#ifndef MOE
       return CreateOptimizingCompiler(driver);
+#else
+      return CreateOptimizingCompiler(driver, platform_name, instruction_set, target_dir);
+#endif
 
     default:
       LOG(FATAL) << "UNREACHABLE";

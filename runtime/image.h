@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +42,12 @@ class ArtFieldVisitor {
   virtual void Visit(ArtField* method) = 0;
 };
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+class __declspec(align(4)) ImageSection {
+#else
 class PACKED(4) ImageSection {
+#endif 
  public:
   ImageSection() : offset_(0), size_(0) { }
   ImageSection(uint32_t offset, uint32_t size) : offset_(offset), size_(size) { }
@@ -68,9 +74,17 @@ class PACKED(4) ImageSection {
   uint32_t offset_;
   uint32_t size_;
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 // header of image files written by ImageWriter, read and validated by Space.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+class __declspec(align(4)) ImageHeader {
+#else
 class PACKED(4) ImageHeader {
+#endif 
  public:
   enum StorageMode : uint32_t {
     kStorageModeUncompressed,
@@ -100,11 +114,20 @@ class PACKED(4) ImageHeader {
         storage_mode_(kDefaultStorageMode),
         data_size_(0) {}
 
+#ifndef MOE
   ImageHeader(uint32_t image_begin,
+#else
+  ImageHeader(uint64_t image_begin,
+#endif
               uint32_t image_size,
               ImageSection* sections,
+#ifndef MOE
               uint32_t image_roots,
+#else
+              uint64_t image_roots,
+#endif
               uint32_t oat_checksum,
+#ifndef MOE
               uint32_t oat_file_begin,
               uint32_t oat_data_begin,
               uint32_t oat_data_end,
@@ -113,6 +136,16 @@ class PACKED(4) ImageHeader {
               uint32_t boot_image_size,
               uint32_t boot_oat_begin,
               uint32_t boot_oat_size,
+#else
+              uint64_t oat_file_begin,
+              uint64_t oat_data_begin,
+              uint64_t oat_data_end,
+              uint64_t oat_file_end,
+              uint64_t boot_image_begin,
+              uint64_t boot_image_size,
+              uint64_t boot_oat_begin,
+              uint64_t boot_oat_size,
+#endif
               uint32_t pointer_size,
               bool compile_pic,
               bool is_pic,
@@ -291,7 +324,11 @@ class PACKED(4) ImageHeader {
   uint8_t version_[4];
 
   // Required base address for mapping the image.
+#ifndef MOE
   uint32_t image_begin_;
+#else
+  uint64_t image_begin_;
+#endif
 
   // Image size, not page aligned.
   uint32_t image_size_;
@@ -300,17 +337,33 @@ class PACKED(4) ImageHeader {
   uint32_t oat_checksum_;
 
   // Start address for oat file. Will be before oat_data_begin_ for .so files.
+#ifndef MOE
   uint32_t oat_file_begin_;
+#else
+  uint64_t oat_file_begin_;
+#endif
 
   // Required oat address expected by image Method::GetCode() pointers.
+#ifndef MOE
   uint32_t oat_data_begin_;
+#else
+  uint64_t oat_data_begin_;
+#endif
 
   // End of oat data address range for this image file.
+#ifndef MOE
   uint32_t oat_data_end_;
+#else
+  uint64_t oat_data_end_;
+#endif
 
   // End of oat file address range. will be after oat_data_end_ for
   // .so files. Used for positioning a following alloc spaces.
+#ifndef MOE
   uint32_t oat_file_end_;
+#else
+  uint64_t oat_file_end_;
+#endif
 
   // Boot image begin and end (app image headers only).
   uint32_t boot_image_begin_;
@@ -323,10 +376,18 @@ class PACKED(4) ImageHeader {
   // TODO: We should probably insert a boot image checksum for app images.
 
   // The total delta that this image has been patched.
+#ifndef MOE
   int32_t patch_delta_;
+#else
+  int64_t patch_delta_;
+#endif
 
   // Absolute address of an Object[] of objects needed to reinitialize from an image.
+#ifndef MOE
   uint32_t image_roots_;
+#else
+  uint64_t image_roots_;
+#endif
 
   // Pointer size, this affects the size of the ArtMethods.
   uint32_t pointer_size_;
@@ -354,6 +415,9 @@ class PACKED(4) ImageHeader {
 
   friend class ImageWriter;
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 std::ostream& operator<<(std::ostream& os, const ImageHeader::ImageMethod& policy);
 std::ostream& operator<<(std::ostream& os, const ImageHeader::ImageRoot& policy);

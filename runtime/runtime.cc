@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +65,9 @@
 #include "elf_file.h"
 #include "entrypoints/runtime_asm_entrypoints.h"
 #include "experimental_flags.h"
+#ifndef MOE_WINDOWS
 #include "fault_handler.h"
+#endif
 #include "gc/accounting/card_table-inl.h"
 #include "gc/heap.h"
 #include "gc/space/image_space.h"
@@ -113,9 +116,11 @@
 #include "native/org_apache_harmony_dalvik_ddmc_DdmServer.h"
 #include "native/org_apache_harmony_dalvik_ddmc_DdmVmInternal.h"
 #include "native/sun_misc_Unsafe.h"
+#ifndef MOE
 #include "native_bridge_art_interface.h"
 #include "oat_file.h"
 #include "oat_file_manager.h"
+#endif
 #include "os.h"
 #include "parsed_options.h"
 #include "profiler.h"
@@ -125,9 +130,11 @@
 #include "runtime_options.h"
 #include "ScopedLocalRef.h"
 #include "scoped_thread_state_change.h"
+#ifndef MOE_WINDOWS
 #include "sigchain.h"
 #include "signal_catcher.h"
 #include "signal_set.h"
+#endif
 #include "thread.h"
 #include "thread_list.h"
 #include "trace.h"
@@ -135,6 +142,59 @@
 #include "utils.h"
 #include "verifier/method_verifier.h"
 #include "well_known_classes.h"
+
+#if defined(MOE) && !defined(MOE_WINDOWS)
+#include <mach-o/getsect.h>
+#include <mach-o/dyld.h>
+#include <TargetConditionals.h>
+
+uint8_t* get_slided_section_data(const char* seg, const char* sect, size_t* size) {
+  for (unsigned i = 0, n = _dyld_image_count(); i < n; i++) {
+    const mach_header* header = _dyld_get_image_header(i);
+    if (header->filetype == MH_EXECUTE) {
+#if __LP64__
+      return getsectiondata((mach_header_64*)header, seg, sect, size);
+#else
+      return getsectiondata(header, seg, sect, size);
+#endif
+    }
+  }
+
+  return nullptr;
+}
+
+uint8_t* get_art_data(size_t* size) {
+  static struct Loader {
+    void* data;
+    size_t size;
+    Loader() {
+      data = get_slided_section_data("__ARTDATA", "__artdata", &size);
+    }
+  } loader;
+
+  if (size) {
+    *size = loader.size;
+  }
+
+  return static_cast<uint8_t*>(loader.data);
+}
+
+uint8_t* get_oat_data(size_t* size) {
+  static struct Loader {
+    void* data;
+    size_t size;
+    Loader() {
+      data = get_slided_section_data("__OATDATA", "__oatdata", &size);
+    }
+  } loader;
+
+  if (size) {
+    *size = loader.size;
+  }
+
+  return static_cast<uint8_t*>(loader.data);
+}
+#endif
 
 namespace art {
 
@@ -175,7 +235,9 @@ Runtime::Runtime()
       thread_list_(nullptr),
       intern_table_(nullptr),
       class_linker_(nullptr),
+#ifndef MOE_WINDOWS
       signal_catcher_(nullptr),
+#endif
       java_vm_(nullptr),
       fault_message_lock_("Fault message lock"),
       fault_message_(""),
@@ -208,7 +270,9 @@ Runtime::Runtime()
       is_native_debuggable_(false),
       zygote_max_failed_boots_(0),
       experimental_flags_(ExperimentalFlags::kNone),
+#ifndef MOE
       oat_file_manager_(nullptr),
+#endif
       is_low_memory_mode_(false),
       safe_mode_(false),
       dump_native_stack_on_sig_quit_(true),
@@ -216,16 +280,22 @@ Runtime::Runtime()
       // Initially assume we perceive jank in case the process state is never updated.
       process_state_(kProcessStateJankPerceptible),
       zygote_no_threads_(false) {
+#ifndef MOE
   CheckAsmSupportOffsetsAndSizes();
+#endif
   std::fill(callee_save_methods_, callee_save_methods_ + arraysize(callee_save_methods_), 0u);
+#ifndef MOE
   interpreter::CheckInterpreterAsmConstants();
+#endif
 }
 
 Runtime::~Runtime() {
   ScopedTrace trace("Runtime shutdown");
+#ifndef MOE
   if (is_native_bridge_loaded_) {
     UnloadNativeBridge();
   }
+#endif
 
   if (dump_gc_performance_on_shutdown_) {
     // This can't be called from the Heap destructor below because it
@@ -271,6 +341,7 @@ Runtime::~Runtime() {
   // Make sure to let the GC complete if it is running.
   heap_->WaitForGcToComplete(gc::kGcCauseBackground, self);
   heap_->DeleteThreadPool();
+#ifndef MOE
   if (jit_ != nullptr) {
     ScopedTrace trace2("Delete jit");
     VLOG(jit) << "Deleting jit thread pool";
@@ -280,10 +351,13 @@ Runtime::~Runtime() {
     // Similarly, stop the profile saver thread before deleting the thread list.
     jit_->StopProfileSaver();
   }
+#endif
 
   // Make sure our internal threads are dead before we start tearing down things they're using.
   Dbg::StopJdwp();
+#ifndef MOE_WINDOWS
   delete signal_catcher_;
+#endif
 
   // Make sure all other non-daemon threads have terminated, and all daemon threads are suspended.
   {
@@ -292,13 +366,17 @@ Runtime::~Runtime() {
   }
   // Delete the JIT after thread list to ensure that there is no remaining threads which could be
   // accessing the instrumentation when we delete it.
+#ifndef MOE
   if (jit_ != nullptr) {
     VLOG(jit) << "Deleting jit";
     jit_.reset(nullptr);
   }
+#endif
 
   // Shutdown the fault manager if it was initialized.
+#ifndef MOE_WINDOWS
   fault_manager.Shutdown();
+#endif
 
   ScopedTrace trace2("Delete state");
   delete monitor_list_;
@@ -307,7 +385,9 @@ Runtime::~Runtime() {
   delete heap_;
   delete intern_table_;
   delete java_vm_;
+#ifndef MOE
   delete oat_file_manager_;
+#endif
   Thread::Shutdown();
   QuasiAtomic::Shutdown();
   verifier::MethodVerifier::Shutdown();
@@ -561,6 +641,7 @@ bool Runtime::Start() {
   // TODO(calin): We use the JIT class as a proxy for JIT compilation and for
   // recoding profiles. Maybe we should consider changing the name to be more clear it's
   // not only about compiling. b/28295073.
+#ifndef MOE
   if (jit_options_->UseJitCompilation() || jit_options_->GetSaveProfilingInfo()) {
     std::string error_msg;
     if (!IsZygote()) {
@@ -574,6 +655,7 @@ bool Runtime::Start() {
       }
     }
   }
+#endif
 
   if (!IsImageDex2OatEnabled() || !GetHeap()->HasBootImageSpace()) {
     ScopedObjectAccess soa(self);
@@ -606,9 +688,11 @@ bool Runtime::Start() {
       return false;
     }
   } else {
+#ifndef MOE
     if (is_native_bridge_loaded_) {
       PreInitializeNativeBridge(".");
     }
+#endif
     NativeBridgeAction action = force_native_bridge_
         ? NativeBridgeAction::kInitialize
         : NativeBridgeAction::kUnload;
@@ -692,7 +776,6 @@ bool Runtime::InitZygote() {
       return false;
     }
   }
-
   return true;
 #else
   UNIMPLEMENTED(FATAL);
@@ -704,6 +787,7 @@ void Runtime::InitNonZygoteOrPostFork(
     JNIEnv* env, bool is_system_server, NativeBridgeAction action, const char* isa) {
   is_zygote_ = false;
 
+#ifndef MOE
   if (is_native_bridge_loaded_) {
     switch (action) {
       case NativeBridgeAction::kUnload:
@@ -716,6 +800,7 @@ void Runtime::InitNonZygoteOrPostFork(
         break;
     }
   }
+#endif
 
   // Create the thread pools.
   heap_->CreateThreadPool();
@@ -724,6 +809,7 @@ void Runtime::InitNonZygoteOrPostFork(
   heap_->ResetGcPerformanceInfo();
 
 
+#ifndef MOE
   if (!is_system_server &&
       !safe_mode_ &&
       (jit_options_->UseJitCompilation() || jit_options_->GetSaveProfilingInfo()) &&
@@ -732,19 +818,28 @@ void Runtime::InitNonZygoteOrPostFork(
     // the jit may have already been created.
     CreateJit();
   }
+#endif
 
+#ifndef MOE_WINDOWS
   StartSignalCatcher();
+#else
+  // MOE TODO: Signal catcher is for handling SIGQUIT and SIGUSR1 signals. For SIGQUIT some
+  // very basic information will be dumped and for SIGUSR1 the GC will be called. Neither of them
+  // is really necessary and Windows does not have signals to begin with.
+#endif
 
   // Start the JDWP thread. If the command-line debugger flags specified "suspend=y",
   // this will pause the runtime, so we probably want this to come last.
   Dbg::StartJdwp();
 }
 
+#ifndef MOE_WINDOWS
 void Runtime::StartSignalCatcher() {
   if (!is_zygote_) {
     signal_catcher_ = new SignalCatcher(stack_trace_file_);
   }
 }
+#endif
 
 bool Runtime::IsShuttingDown(Thread* self) {
   MutexLock mu(self, *Locks::runtime_shutdown_lock_);
@@ -752,8 +847,13 @@ bool Runtime::IsShuttingDown(Thread* self) {
 }
 
 bool Runtime::IsDebuggable() const {
+#ifndef MOE
   const OatFile* oat_file = GetOatFileManager().GetPrimaryOatFile();
   return oat_file != nullptr && oat_file->IsDebuggable();
+#else
+  // MOE TODO: implement this for LLVM!
+  return false;
+#endif
 }
 
 void Runtime::StartDaemonThreads() {
@@ -782,6 +882,7 @@ void Runtime::StartDaemonThreads() {
 static bool OpenDexFilesFromImage(const std::string& image_location,
                                   std::vector<std::unique_ptr<const DexFile>>* dex_files,
                                   size_t* failures) {
+#ifndef MOE
   DCHECK(dex_files != nullptr) << "OpenDexFilesFromImage: out-param is nullptr";
 
   // Use a work-list approach, so that we can easily reuse the opening code.
@@ -867,8 +968,10 @@ static bool OpenDexFilesFromImage(const std::string& image_location,
     Runtime::Current()->GetOatFileManager().RegisterOatFile(std::move(oat_file));
   }
   return true;
+#else
+  return false;
+#endif
 }
-
 
 static size_t OpenDexFiles(const std::vector<std::string>& dex_filenames,
                            const std::vector<std::string>& dex_locations,
@@ -915,7 +1018,9 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
 
   QuasiAtomic::Startup();
 
+#ifndef MOE
   oat_file_manager_ = new OatFileManager;
+#endif
 
   Thread::SetSensitiveThreadHook(runtime_options.GetOrDefault(Opt::HookIsSensitiveThread));
   Monitor::Init(runtime_options.GetOrDefault(Opt::LockProfThreshold));
@@ -972,6 +1077,10 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   is_low_memory_mode_ = runtime_options.Exists(Opt::LowMemoryMode);
 
   XGcOption xgc_option = runtime_options.GetOrDefault(Opt::GcOption);
+#ifdef MOE
+  // MOE: We need a class linker for art patching.
+  class_linker_ = new ClassLinker(intern_table_);
+#endif
   heap_ = new gc::Heap(runtime_options.GetOrDefault(Opt::MemoryInitialSize),
                        runtime_options.GetOrDefault(Opt::HeapGrowthLimit),
                        runtime_options.GetOrDefault(Opt::HeapMinFree),
@@ -1014,6 +1123,7 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
     Dbg::ConfigureJdwp(runtime_options.GetOrDefault(Opt::JdwpOptions));
   }
 
+#ifndef MOE
   jit_options_.reset(jit::JitOptions::CreateFromRuntimeArguments(runtime_options));
   if (IsAotCompiler()) {
     // If we are already the compiler at this point, we must be dex2oat. Don't create the jit in
@@ -1023,6 +1133,7 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
     jit_options_->SetUseJitCompilation(false);
     jit_options_->SetSaveProfilingInfo(false);
   }
+#endif
 
   // Allocate a global table of boxed lambda objects <-> closures.
   lambda_box_table_ = MakeUnique<lambda::BoxTable>();
@@ -1052,15 +1163,18 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
     case kX86_64:
     case kMips:
     case kMips64:
+#if !defined(MOE) || (TARGET_OS_IPHONE && TARGET_OS_IOS)
       implicit_null_checks_ = true;
       // Installing stack protection does not play well with valgrind.
       implicit_so_checks_ = !(RUNNING_ON_MEMORY_TOOL && kMemoryToolIsValgrind);
+#endif
       break;
     default:
       // Keep the defaults.
       break;
   }
 
+#ifndef MOE_WINDOWS
   if (!no_sig_chain_) {
     // Dex2Oat's Runtime does not need the signal chain or the fault handler.
 
@@ -1094,6 +1208,7 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
       }
     }
   }
+#endif
 
   java_vm_ = new JavaVMExt(this, runtime_options);
 
@@ -1113,7 +1228,9 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   GetHeap()->EnableObjectValidation();
 
   CHECK_GE(GetHeap()->GetContinuousSpaces().size(), 1U);
+#ifndef MOE
   class_linker_ = new ClassLinker(intern_table_);
+#endif
   if (GetHeap()->HasBootImageSpace()) {
     std::string error_msg;
     bool result = class_linker_->InitFromBootImage(&error_msg);
@@ -1122,9 +1239,11 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
       return false;
     }
     if (kIsDebugBuild) {
+#ifndef MOE
       for (auto image_space : GetHeap()->GetBootImageSpaces()) {
         image_space->VerifyImageAllocations();
       }
+#endif
     }
     if (boot_class_path_string_.empty()) {
       // The bootclasspath is not explicitly specified: construct it from the loaded dex files.
@@ -1134,19 +1253,31 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
       for (const DexFile* dex_file : boot_class_path) {
         dex_locations.push_back(dex_file->GetLocation());
       }
+#ifndef MOE_WINDOWS
       boot_class_path_string_ = Join(dex_locations, ':');
+#else
+      boot_class_path_string_ = Join(dex_locations, ';');
+#endif
     }
+#ifndef MOE
     {
       ScopedTrace trace2("AddImageStringsToTable");
       GetInternTable()->AddImagesStringsToTable(heap_->GetBootImageSpaces());
     }
+#endif
+#ifndef MOE
     {
       ScopedTrace trace2("MoveImageClassesToClassTable");
       GetClassLinker()->AddBootImageClassesToClassTable();
     }
+#endif
   } else {
     std::vector<std::string> dex_filenames;
+#ifndef MOE_WINDOWS
     Split(boot_class_path_string_, ':', &dex_filenames);
+#else
+    Split(boot_class_path_string_, ';', &dex_filenames);
+#endif
 
     std::vector<std::string> dex_locations;
     if (!runtime_options.Exists(Opt::BootClassPathLocations)) {
@@ -1260,10 +1391,12 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   // Runtime::Start():
   //   DidForkFromZygote(kInitialize) -> try to initialize any native bridge given.
   //   No-op wrt native bridge.
+#ifndef MOE
   {
     std::string native_bridge_file_name = runtime_options.ReleaseOrDefault(Opt::NativeBridge);
     is_native_bridge_loaded_ = LoadNativeBridge(native_bridge_file_name);
   }
+#endif
 
   VLOG(startup) << "Runtime::Init exiting";
 
@@ -1294,14 +1427,22 @@ void Runtime::InitNativeMethods() {
   // libcore can't because it's the library that implements System.loadLibrary!
   {
     std::string error_msg;
+#ifndef MOE
     if (!java_vm_->LoadNativeLibrary(env, "libjavacore.so", nullptr, nullptr, &error_msg)) {
+#else
+    if (!java_vm_->LoadNativeLibrary(env, "javacore", nullptr, nullptr, &error_msg)) {
+#endif
       LOG(FATAL) << "LoadNativeLibrary failed for \"libjavacore.so\": " << error_msg;
     }
   }
   {
+#ifndef MOE
     constexpr const char* kOpenJdkLibrary = kIsDebugBuild
                                                 ? "libopenjdkd.so"
                                                 : "libopenjdk.so";
+#else
+    constexpr const char* kOpenJdkLibrary = "openjdk";
+#endif
     std::string error_msg;
     if (!java_vm_->LoadNativeLibrary(env, kOpenJdkLibrary, nullptr, nullptr, &error_msg)) {
       LOG(FATAL) << "LoadNativeLibrary failed for \"" << kOpenJdkLibrary << "\": " << error_msg;
@@ -1353,7 +1494,9 @@ void Runtime::RegisterRuntimeNativeMethods(JNIEnv* env) {
   register_dalvik_system_VMDebug(env);
   register_dalvik_system_VMRuntime(env);
   register_dalvik_system_VMStack(env);
+#ifndef MOE
   register_dalvik_system_ZygoteHooks(env);
+#endif
   register_java_lang_Class(env);
   register_java_lang_DexCache(env);
   register_java_lang_Object(env);
@@ -1388,12 +1531,14 @@ void Runtime::DumpForSigQuit(std::ostream& os) {
   GetInternTable()->DumpForSigQuit(os);
   GetJavaVM()->DumpForSigQuit(os);
   GetHeap()->DumpForSigQuit(os);
+#ifndef MOE
   oat_file_manager_->DumpForSigQuit(os);
   if (GetJit() != nullptr) {
     GetJit()->DumpForSigQuit(os);
   } else {
     os << "Running non JIT\n";
   }
+#endif
   TrackedAllocators::Dump(os);
   os << "\n";
 
@@ -1472,6 +1617,7 @@ int32_t Runtime::GetStat(int kind) {
 }
 
 void Runtime::BlockSignals() {
+#ifndef MOE_WINDOWS
   SignalSet signals;
   signals.Add(SIGPIPE);
   // SIGQUIT is used to dump the runtime's state (including stack traces).
@@ -1479,6 +1625,7 @@ void Runtime::BlockSignals() {
   // SIGUSR1 is used to initiate a GC.
   signals.Add(SIGUSR1);
   signals.Block();
+#endif
 }
 
 bool Runtime::AttachCurrentThread(const char* thread_name, bool as_daemon, jobject thread_group,
@@ -1601,6 +1748,7 @@ void Runtime::VisitRoots(RootVisitor* visitor, VisitRootFlags flags) {
   VisitConcurrentRoots(visitor, flags);
 }
 
+#ifndef MOE
 void Runtime::VisitImageRoots(RootVisitor* visitor) {
   for (auto* space : GetHeap()->GetContinuousSpaces()) {
     if (space->IsImageSpace()) {
@@ -1617,6 +1765,7 @@ void Runtime::VisitImageRoots(RootVisitor* visitor) {
     }
   }
 }
+#endif
 
 ArtMethod* Runtime::CreateImtConflictMethod(LinearAlloc* linear_alloc) {
   ClassLinker* const class_linker = GetClassLinker();
@@ -1647,7 +1796,11 @@ ArtMethod* Runtime::CreateResolutionMethod() {
     size_t pointer_size = GetInstructionSetPointerSize(instruction_set_);
     method->SetEntryPointFromQuickCompiledCodePtrSize(nullptr, pointer_size);
   } else {
+#ifndef MOE
     method->SetEntryPointFromQuickCompiledCode(GetQuickResolutionStub());
+#else
+    method->SetEntryPointFromQuickCompiledCode(nullptr);
+#endif
   }
   return method;
 }
@@ -1737,6 +1890,7 @@ void Runtime::RegisterAppInfo(const std::vector<std::string>& code_paths,
                               const std::string& profile_output_filename,
                               const std::string& foreign_dex_profile_path,
                               const std::string& app_dir) {
+#ifndef MOE
   if (jit_.get() == nullptr) {
     // We are not JITing. Nothing to do.
     return;
@@ -1763,14 +1917,17 @@ void Runtime::RegisterAppInfo(const std::vector<std::string>& code_paths,
                           code_paths,
                           foreign_dex_profile_path,
                           app_dir);
+#endif
 }
 
 void Runtime::NotifyDexLoaded(const std::string& dex_location) {
   VLOG(profiler) << "Notify dex loaded: " << dex_location;
+#ifndef MOE
   // We know that if the ProfileSaver is started then we can record profile information.
   if (ProfileSaver::IsStarted()) {
     ProfileSaver::NotifyDexUse(dex_location);
   }
+#endif
 }
 
 // Transaction support.
@@ -1897,6 +2054,7 @@ void Runtime::SetFaultMessage(const std::string& message) {
   fault_message_ = message;
 }
 
+#ifndef MOE
 void Runtime::AddCurrentRuntimeFeaturesAsDex2OatArguments(std::vector<std::string>* argv)
     const {
   if (GetInstrumentation()->InterpretOnly()) {
@@ -1915,7 +2073,9 @@ void Runtime::AddCurrentRuntimeFeaturesAsDex2OatArguments(std::vector<std::strin
   feature_string += features->GetFeatureString();
   argv->push_back(feature_string);
 }
+#endif
 
+#ifndef MOE
 void Runtime::CreateJit() {
   CHECK(!IsAotCompiler());
   if (kIsDebugBuild && GetInstrumentation()->IsForcedInterpretOnly()) {
@@ -1927,6 +2087,7 @@ void Runtime::CreateJit() {
     LOG(WARNING) << "Failed to create JIT " << error_msg;
   }
 }
+#endif
 
 bool Runtime::CanRelocate() const {
   return !IsAotCompiler() || compiler_callbacks_->IsRelocationPossible();
@@ -2005,13 +2166,17 @@ void Runtime::RegisterSensitiveThread() const {
 }
 
 // Returns true if JIT compilations are enabled. GetJit() will be not null in this case.
+#ifndef MOE
 bool Runtime::UseJitCompilation() const {
   return (jit_ != nullptr) && jit_->UseJitCompilation();
 }
+#endif
 
 // Returns true if profile saving is enabled. GetJit() will be not null in this case.
+#ifndef MOE
 bool Runtime::SaveProfileInfo() const {
   return (jit_ != nullptr) && jit_->SaveProfilingInfo();
 }
+#endif
 
 }  // namespace art

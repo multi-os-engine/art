@@ -1,0 +1,27 @@
+diff --git a/test/543-env-long-ref/env_long_ref.cc b/test/543-env-long-ref/env_long_ref.cc
+index 4108323..be3f31b 100644
+--- a/test/543-env-long-ref/env_long_ref.cc
++++ b/test/543-env-long-ref/env_long_ref.cc
+@@ -42,8 +42,15 @@ class TestVisitor : public StackVisitor {
+       found_ = true;
+       uint32_t value = 0;
+       CHECK(GetVReg(m, 1, kReferenceVReg, &value));
++#ifndef MOE
+       CHECK_EQ(reinterpret_cast<mirror::Object*>(value),
+                soa_.Decode<mirror::Object*>(expected_value_));
++#else
++      mirror::ObjectReference<false, mirror::Object>* value_ref =
++        reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&value);
++      mirror::Object* o = value_ref->AsMirrorPtr();
++      CHECK_EQ(o, soa_.Decode<mirror::Object*>(expected_value_));
++#endif
+     }
+     return true;
+   }
+diff --git a/test/543-env-long-ref/expected.txt b/test/543-env-long-ref/expected.txt
+index 89f155b..d81cc07 100644
+--- a/test/543-env-long-ref/expected.txt
++++ b/test/543-env-long-ref/expected.txt
+@@ -1,2 +1 @@
+-JNI_OnLoad called
+ 42

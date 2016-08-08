@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,9 +111,13 @@ class CatchBlockStackVisitor FINAL : public StackVisitor {
       if (found_dex_pc != DexFile::kDexNoIndex) {
         exception_handler_->SetHandlerMethod(method);
         exception_handler_->SetHandlerDexPc(found_dex_pc);
+#ifndef MOE
         exception_handler_->SetHandlerQuickFramePc(
             GetCurrentOatQuickMethodHeader()->ToNativeQuickPc(
                 method, found_dex_pc, /* is_catch_handler */ true));
+#else
+        // MOE TODO: review this code for LLVM!
+#endif
         exception_handler_->SetHandlerQuickFrame(GetCurrentQuickFrame());
         exception_handler_->SetHandlerMethodHeader(GetCurrentOatQuickMethodHeader());
         return false;  // End stack walk.
@@ -250,7 +255,11 @@ void QuickExceptionHandler::SetCatchEnvironmentForOptimizedHandler(StackVisitor*
     DCHECK(catch_location == DexRegisterLocation::Kind::kInStack);
 
     // Get vreg value from its current location.
+#ifndef MOE
     uint32_t vreg_value;
+#else
+    uintptr_t vreg_value;
+#endif
     VRegKind vreg_kind = ToVRegKind(throw_vreg_map.GetLocationKind(vreg,
                                                                    number_of_vregs,
                                                                    code_info,
@@ -544,13 +553,22 @@ void QuickExceptionHandler::DeoptimizeSingleFrame() {
   // Compiled code made an explicit deoptimization.
   ArtMethod* deopt_method = visitor.GetSingleFrameDeoptMethod();
   DCHECK(deopt_method != nullptr);
+#ifndef MOE
   if (Runtime::Current()->UseJitCompilation()) {
     Runtime::Current()->GetJit()->GetCodeCache()->InvalidateCompiledCodeFor(
         deopt_method, visitor.GetSingleFrameDeoptQuickMethodHeader());
   } else {
+#else
+  {
+#endif
     // Transfer the code to interpreter.
     Runtime::Current()->GetInstrumentation()->UpdateMethodsCode(
+#ifndef MOE
         deopt_method, GetQuickToInterpreterBridge());
+#else
+        deopt_method, Runtime::Current()->GetClassLinker()->
+            GetInterpreterBridgeFromMethod(Thread::Current(), deopt_method));
+#endif
   }
 
   PrepareForLongJumpToInvokeStubOrInterpreterBridge();

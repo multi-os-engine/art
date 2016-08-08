@@ -80,11 +80,19 @@ class DexFile {
   static const uint16_t kDexNoIndex16 = 0xFFFF;
 
   // The separator character in MultiDex locations.
+#ifndef MOE_WINDOWS
   static constexpr char kMultiDexSeparator = ':';
+#else
+  static constexpr char kMultiDexSeparator = ';';
+#endif
 
   // A string version of the previous. This is a define so that we can merge string literals in the
   // preprocessor.
+#ifndef MOE_WINDOWS
   #define kMultiDexSeparatorString ":"
+#else
+  #define kMultiDexSeparatorString ";"
+#endif
 
   // Raw header_item.
   struct Header {

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Stop if something fails.
+set -e
+
+perl -i -pe 's/Class<\?> c = Class\.forName\(tc\.testClass\);/Class<?> c = Class.forName("aosp_800_smali."+tc.testClass);/g' src/Main.java
+
+mkdir classes
+${JAVAC} -d classes `find src -name '*.java'`
+
+${SMALI} --output smali_classes.dex `find smali -name '*.smali'`

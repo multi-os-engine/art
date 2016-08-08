@@ -22,12 +22,12 @@
 
 namespace art {
 
-static jobject Throwable_nativeFillInStackTrace(JNIEnv* env, jclass) {
+static JNICALL jobject Throwable_nativeFillInStackTrace(JNIEnv* env, jclass) {
   ScopedFastNativeObjectAccess soa(env);
   return soa.Self()->CreateInternalStackTrace<false>(soa);
 }
 
-static jobjectArray Throwable_nativeGetStackTrace(JNIEnv* env, jclass, jobject javaStackState) {
+static JNICALL jobjectArray Throwable_nativeGetStackTrace(JNIEnv* env, jclass, jobject javaStackState) {
   if (javaStackState == nullptr) {
       return nullptr;
   }

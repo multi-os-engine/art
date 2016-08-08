@@ -1,0 +1,95 @@
+diff --git a/test/046-reflect/expected.txt b/test/046-reflect/expected.txt
+index d657d44..1e4b838 100644
+--- a/test/046-reflect/expected.txt
++++ b/test/046-reflect/expected.txt
+@@ -1,21 +1,21 @@
+ Method name is myMethod
+- Declaring class is Target
++ Declaring class is aosp_046_reflect.Target
+  Arg 0: int
+  Exc 0: java.lang.NullPointerException
+  Exc 1: java.io.IOException
+  Return type is int
+  Access flags are 0x1
+ Method name is myMethod
+- Declaring class is SuperTarget
++ Declaring class is aosp_046_reflect.SuperTarget
+  Arg 0: float
+  Return type is int
+  Access flags are 0x1
+ Method name is myNoargMethod
+- Declaring class is Target
++ Declaring class is aosp_046_reflect.Target
+  Return type is void
+  Access flags are 0x9
+ Method name is myMethod
+- Declaring class is Target
++ Declaring class is aosp_046_reflect.Target
+  Arg 0: [Ljava.lang.String;
+  Arg 1: float
+  Arg 2: char
+@@ -34,7 +34,7 @@ java.lang.reflect.InvocationTargetException
+ java.lang.NullPointerException: gratuitous throw!
+ 
+ Field name is string1
+- Declaring class is Target
++ Declaring class is aosp_046_reflect.Target
+  Field type is java.lang.String
+  Access flags are 0x1
+   string1 value is 'hey'
+@@ -47,7 +47,7 @@ Field name is string1
+ pubLong initial value is 1122334455667788
+ pubLong new value is 9988776655443322
+ Field name is superInt
+- Declaring class is SuperTarget
++ Declaring class is aosp_046_reflect.SuperTarget
+  Field type is int
+  Access flags are 0x1
+   superInt value is 1010101
+@@ -60,31 +60,31 @@ Field name is superInt
+   got expected string->int failure
+   got expected int->short failure
+ Field name is superClassInt
+- Declaring class is SuperTarget
++ Declaring class is aosp_046_reflect.SuperTarget
+  Field type is int
+  Access flags are 0x9
+   superClassInt value is 1010102
+ Field name is staticDouble
+- Declaring class is Target
++ Declaring class is aosp_046_reflect.Target
+  Field type is double
+  Access flags are 0x9
+   staticDoubleVal value is 3.3
+   got expected double->long failure
+ as expected: aPrivateInt not found
+ Field name is constantString
+- Declaring class is Target
++ Declaring class is aosp_046_reflect.Target
+  Field type is java.lang.String
+  Access flags are 0x19
+   Constant test value is a constant string
+ Field name is cantTouchThis
+- Declaring class is Target
++ Declaring class is aosp_046_reflect.Target
+  Field type is int
+  Access flags are 0x11
+   cantTouchThis is 77
+   as expected: set-final throws exception
+   cantTouchThis is still 77
+-  public final int Target.cantTouchThis accessible=false
+-  public final int Target.cantTouchThis accessible=true
++  public final int aosp_046_reflect.Target.cantTouchThis accessible=false
++  public final int aosp_046_reflect.Target.cantTouchThis accessible=true
+   cantTouchThis is now 87
+   cantTouchThis is now 88
+ cons modifiers=1
+@@ -118,7 +118,7 @@ MethodNoisyInit is initializing
+ 
+ generic field: java.util.List<java.lang.String>
+ generic method fancyMethod params='[1] java.util.ArrayList<java.lang.String>' ret='java.util.Map<java.lang.Integer, java.lang.String>'
+-generic ctor Main params='[1] java.util.ArrayList<java.lang.Integer>'
++generic ctor aosp_046_reflect.Main params='[1] java.util.ArrayList<java.lang.Integer>'
+ fields are unique
+ fields are .equals
+ methods are unique

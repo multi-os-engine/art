@@ -22,6 +22,9 @@
 namespace art {
 namespace mirror {
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 template<class T>
 class MANAGED ObjectArray: public Array {
  public:
@@ -97,6 +100,9 @@ class MANAGED ObjectArray: public Array {
   friend class Object;  // For VisitReferences
   DISALLOW_IMPLICIT_CONSTRUCTORS(ObjectArray);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

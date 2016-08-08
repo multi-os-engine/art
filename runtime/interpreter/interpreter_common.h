@@ -643,6 +643,7 @@ static inline bool DoInvoke(Thread* self, ShadowFrame& shadow_frame, const Instr
     result->SetJ(0);
     return false;
   } else {
+#ifndef MOE
     jit::Jit* jit = Runtime::Current()->GetJit();
     if (jit != nullptr) {
       if (type == kVirtual || type == kInterface) {
@@ -651,6 +652,7 @@ static inline bool DoInvoke(Thread* self, ShadowFrame& shadow_frame, const Instr
       }
       jit->AddSamples(self, sf_method, 1, /*with_backedges*/false);
     }
+#endif
     // TODO: Remove the InvokeVirtualOrInterface instrumentation, as it was only used by the JIT.
     if (type == kVirtual || type == kInterface) {
       instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
@@ -691,12 +693,14 @@ static inline bool DoInvokeVirtualQuick(Thread* self, ShadowFrame& shadow_frame,
     result->SetJ(0);
     return false;
   } else {
+#ifndef MOE
     jit::Jit* jit = Runtime::Current()->GetJit();
     if (jit != nullptr) {
       jit->InvokeVirtualOrInterface(
           self, receiver, shadow_frame.GetMethod(), shadow_frame.GetDexPC(), called_method);
       jit->AddSamples(self, shadow_frame.GetMethod(), 1, /*with_backedges*/false);
     }
+#endif
     instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
     // TODO: Remove the InvokeVirtualOrInterface instrumentation, as it was only used by the JIT.
     if (UNLIKELY(instrumentation->HasInvokeVirtualOrInterfaceListeners())) {

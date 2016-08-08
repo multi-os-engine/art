@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,9 +87,11 @@ class ArenaStack : private DebugStackRefCounter, private ArenaAllocatorMemoryToo
 
   // Private - access via ScopedArenaAllocator or ScopedArenaAllocatorAdapter.
   void* Alloc(size_t bytes, ArenaAllocKind kind) ALWAYS_INLINE {
+#ifndef MOE
     if (UNLIKELY(IsRunningOnMemoryTool())) {
       return AllocWithMemoryTool(bytes, kind);
     }
+#endif
     // Add kArenaAlignment for the free or used tag. Required to preserve alignment.
     size_t rounded_bytes = RoundUp(bytes + (kIsDebugBuild ? kArenaAlignment : 0u), kArenaAlignment);
     uint8_t* ptr = top_ptr_;
@@ -107,7 +110,9 @@ class ArenaStack : private DebugStackRefCounter, private ArenaAllocatorMemoryToo
   uint8_t* AllocateFromNextArena(size_t rounded_bytes);
   void UpdatePeakStatsAndRestore(const ArenaAllocatorStats& restore_stats);
   void UpdateBytesAllocated();
+#ifndef MOE
   void* AllocWithMemoryTool(size_t bytes, ArenaAllocKind kind);
+#endif
 
   StatsAndPool stats_and_pool_;
   Arena* bottom_arena_;

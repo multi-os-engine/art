@@ -130,7 +130,7 @@ ALWAYS_INLINE inline static bool CheckReceiver(const ScopedFastNativeObjectAcces
   return true;
 }
 
-static jobject Field_get(JNIEnv* env, jobject javaField, jobject javaObj) {
+static JNICALL jobject Field_get(JNIEnv* env, jobject javaField, jobject javaObj) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Field* f = soa.Decode<mirror::Field*>(javaField);
   mirror::Object* o = nullptr;
@@ -197,35 +197,35 @@ ALWAYS_INLINE inline static JValue GetPrimitiveField(JNIEnv* env, jobject javaFi
   return wide_value;
 }
 
-static jboolean Field_getBoolean(JNIEnv* env, jobject javaField, jobject javaObj) {
+static JNICALL jboolean Field_getBoolean(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField<Primitive::kPrimBoolean>(env, javaField, javaObj).GetZ();
 }
 
-static jbyte Field_getByte(JNIEnv* env, jobject javaField, jobject javaObj) {
+static JNICALL jbyte Field_getByte(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField<Primitive::kPrimByte>(env, javaField, javaObj).GetB();
 }
 
-static jchar Field_getChar(JNIEnv* env, jobject javaField, jobject javaObj) {
+static JNICALL jchar Field_getChar(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField<Primitive::kPrimChar>(env, javaField, javaObj).GetC();
 }
 
-static jdouble Field_getDouble(JNIEnv* env, jobject javaField, jobject javaObj) {
+static JNICALL jdouble Field_getDouble(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField<Primitive::kPrimDouble>(env, javaField, javaObj).GetD();
 }
 
-static jfloat Field_getFloat(JNIEnv* env, jobject javaField, jobject javaObj) {
+static JNICALL jfloat Field_getFloat(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField<Primitive::kPrimFloat>(env, javaField, javaObj).GetF();
 }
 
-static jint Field_getInt(JNIEnv* env, jobject javaField, jobject javaObj) {
+static JNICALL jint Field_getInt(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField<Primitive::kPrimInt>(env, javaField, javaObj).GetI();
 }
 
-static jlong Field_getLong(JNIEnv* env, jobject javaField, jobject javaObj) {
+static JNICALL jlong Field_getLong(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField<Primitive::kPrimLong>(env, javaField, javaObj).GetJ();
 }
 
-static jshort Field_getShort(JNIEnv* env, jobject javaField, jobject javaObj) {
+static JNICALL jshort Field_getShort(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField<Primitive::kPrimShort>(env, javaField, javaObj).GetS();
 }
 
@@ -300,7 +300,7 @@ ALWAYS_INLINE inline static void SetFieldValue(mirror::Object* o, mirror::Field*
   }
 }
 
-static void Field_set(JNIEnv* env, jobject javaField, jobject javaObj, jobject javaValue) {
+static JNICALL void Field_set(JNIEnv* env, jobject javaField, jobject javaObj, jobject javaValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Field* f = soa.Decode<mirror::Field*>(javaField);
   // Check that the receiver is non-null and an instance of the field's declaring class.
@@ -367,55 +367,55 @@ static void SetPrimitiveField(JNIEnv* env, jobject javaField, jobject javaObj,
   SetFieldValue(o, f, field_type, false, wide_value);
 }
 
-static void Field_setBoolean(JNIEnv* env, jobject javaField, jobject javaObj, jboolean z) {
+static JNICALL void Field_setBoolean(JNIEnv* env, jobject javaField, jobject javaObj, jboolean z) {
   JValue value;
   value.SetZ(z);
   SetPrimitiveField<Primitive::kPrimBoolean>(env, javaField, javaObj, value);
 }
 
-static void Field_setByte(JNIEnv* env, jobject javaField, jobject javaObj, jbyte b) {
+static JNICALL void Field_setByte(JNIEnv* env, jobject javaField, jobject javaObj, jbyte b) {
   JValue value;
   value.SetB(b);
   SetPrimitiveField<Primitive::kPrimByte>(env, javaField, javaObj, value);
 }
 
-static void Field_setChar(JNIEnv* env, jobject javaField, jobject javaObj, jchar c) {
+static JNICALL void Field_setChar(JNIEnv* env, jobject javaField, jobject javaObj, jchar c) {
   JValue value;
   value.SetC(c);
   SetPrimitiveField<Primitive::kPrimChar>(env, javaField, javaObj, value);
 }
 
-static void Field_setDouble(JNIEnv* env, jobject javaField, jobject javaObj, jdouble d) {
+static JNICALL void Field_setDouble(JNIEnv* env, jobject javaField, jobject javaObj, jdouble d) {
   JValue value;
   value.SetD(d);
   SetPrimitiveField<Primitive::kPrimDouble>(env, javaField, javaObj, value);
 }
 
-static void Field_setFloat(JNIEnv* env, jobject javaField, jobject javaObj, jfloat f) {
+static JNICALL void Field_setFloat(JNIEnv* env, jobject javaField, jobject javaObj, jfloat f) {
   JValue value;
   value.SetF(f);
   SetPrimitiveField<Primitive::kPrimFloat>(env, javaField, javaObj, value);
 }
 
-static void Field_setInt(JNIEnv* env, jobject javaField, jobject javaObj, jint i) {
+static JNICALL void Field_setInt(JNIEnv* env, jobject javaField, jobject javaObj, jint i) {
   JValue value;
   value.SetI(i);
   SetPrimitiveField<Primitive::kPrimInt>(env, javaField, javaObj, value);
 }
 
-static void Field_setLong(JNIEnv* env, jobject javaField, jobject javaObj, jlong j) {
+static JNICALL void Field_setLong(JNIEnv* env, jobject javaField, jobject javaObj, jlong j) {
   JValue value;
   value.SetJ(j);
   SetPrimitiveField<Primitive::kPrimLong>(env, javaField, javaObj, value);
 }
 
-static void Field_setShort(JNIEnv* env, jobject javaField, jobject javaObj, jshort s) {
+static JNICALL void Field_setShort(JNIEnv* env, jobject javaField, jobject javaObj, jshort s) {
   JValue value;
   value.SetS(s);
   SetPrimitiveField<Primitive::kPrimShort>(env, javaField, javaObj, value);
 }
 
-static jobject Field_getAnnotationNative(JNIEnv* env, jobject javaField, jclass annotationType) {
+static JNICALL jobject Field_getAnnotationNative(JNIEnv* env, jobject javaField, jclass annotationType) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   ArtField* field = soa.Decode<mirror::Field*>(javaField)->GetArtField();
@@ -426,7 +426,7 @@ static jobject Field_getAnnotationNative(JNIEnv* env, jobject javaField, jclass 
   return soa.AddLocalReference<jobject>(field->GetDexFile()->GetAnnotationForField(field, klass));
 }
 
-static jobjectArray Field_getDeclaredAnnotations(JNIEnv* env, jobject javaField) {
+static JNICALL jobjectArray Field_getDeclaredAnnotations(JNIEnv* env, jobject javaField) {
   ScopedFastNativeObjectAccess soa(env);
   ArtField* field = soa.Decode<mirror::Field*>(javaField)->GetArtField();
   if (field->GetDeclaringClass()->IsProxyClass()) {
@@ -440,7 +440,7 @@ static jobjectArray Field_getDeclaredAnnotations(JNIEnv* env, jobject javaField)
   return soa.AddLocalReference<jobjectArray>(field->GetDexFile()->GetAnnotationsForField(field));
 }
 
-static jobjectArray Field_getSignatureAnnotation(JNIEnv* env, jobject javaField) {
+static JNICALL jobjectArray Field_getSignatureAnnotation(JNIEnv* env, jobject javaField) {
   ScopedFastNativeObjectAccess soa(env);
   ArtField* field = soa.Decode<mirror::Field*>(javaField)->GetArtField();
   if (field->GetDeclaringClass()->IsProxyClass()) {
@@ -450,7 +450,7 @@ static jobjectArray Field_getSignatureAnnotation(JNIEnv* env, jobject javaField)
       field->GetDexFile()->GetSignatureAnnotationForField(field));
 }
 
-static jboolean Field_isAnnotationPresentNative(JNIEnv* env, jobject javaField,
+static JNICALL jboolean Field_isAnnotationPresentNative(JNIEnv* env, jobject javaField,
                                                 jclass annotationType) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());

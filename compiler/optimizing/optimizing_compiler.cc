@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +20,10 @@
 #include <fstream>
 #include <memory>
 #include <stdint.h>
+
+#ifdef MOE
+#include "llvm_compiler.hpp"
+#endif
 
 #ifdef ART_ENABLE_CODEGEN_arm
 #include "dex_cache_array_fixups_arm.h"
@@ -53,7 +58,9 @@
 #include "driver/compiler_driver-inl.h"
 #include "driver/compiler_options.h"
 #include "driver/dex_compilation_unit.h"
+#ifndef MOE
 #include "elf_writer_quick.h"
+#endif
 #include "graph_checker.h"
 #include "graph_visualizer.h"
 #include "gvn.h"
@@ -256,7 +263,11 @@ class PassScope : public ValueObject {
 
 class OptimizingCompiler FINAL : public Compiler {
  public:
+#ifndef MOE
   explicit OptimizingCompiler(CompilerDriver* driver);
+#else
+  explicit OptimizingCompiler(CompilerDriver* driver, const std::string& platform_name, InstructionSet instruction_set, const std::string& target_dir);
+#endif
   ~OptimizingCompiler();
 
   bool CanCompileMethod(uint32_t method_idx, const DexFile& dex_file) const OVERRIDE;
@@ -273,8 +284,23 @@ class OptimizingCompiler FINAL : public Compiler {
   CompiledMethod* JniCompile(uint32_t access_flags,
                              uint32_t method_idx,
                              const DexFile& dex_file) const OVERRIDE {
+#ifndef MOE
     return ArtQuickJniCompileMethod(GetCompilerDriver(), access_flags, method_idx, dex_file);
+#else
+    if (llvm_compiler_) {
+      llvm_compiler_->CompileStub(Thread::Current(), dex_file, method_idx, access_flags);
+      return nullptr;
+    } else {
+      return nullptr;
+    }
+#endif
   }
+
+#ifdef MOE
+  void WriteNativeFiles() OVERRIDE {
+    llvm_compiler_->WriteNativeFiles();
+  }
+#endif
 
   uintptr_t GetEntryPointOf(ArtMethod* method) const OVERRIDE
       SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -292,9 +318,11 @@ class OptimizingCompiler FINAL : public Compiler {
     }
   }
 
+#ifndef MOE
   bool JitCompile(Thread* self, jit::JitCodeCache* code_cache, ArtMethod* method, bool osr)
       OVERRIDE
       SHARED_REQUIRES(Locks::mutator_lock_);
+#endif
 
  private:
   // Create a 'CompiledMethod' for an optimized graph.
@@ -326,14 +354,27 @@ class OptimizingCompiler FINAL : public Compiler {
   std::unique_ptr<OptimizingCompilerStats> compilation_stats_;
 
   std::unique_ptr<std::ostream> visualizer_output_;
+  
+#ifdef MOE
+  LLVMCompiler* llvm_compiler_;
+#endif
 
   DISALLOW_COPY_AND_ASSIGN(OptimizingCompiler);
 };
 
 static const int kMaximumCompilationTimeBeforeWarning = 100; /* ms */
 
+#ifndef MOE
 OptimizingCompiler::OptimizingCompiler(CompilerDriver* driver)
     : Compiler(driver, kMaximumCompilationTimeBeforeWarning) {}
+#else
+OptimizingCompiler::OptimizingCompiler(CompilerDriver* driver, const std::string& platform_name, InstructionSet instruction_set, const std::string& target_dir)
+    : Compiler(driver, kMaximumCompilationTimeBeforeWarning) {
+  if (!target_dir.empty()) {
+    llvm_compiler_ = new LLVMCompiler(instruction_set, platform_name, target_dir);
+  }
+}
+#endif
 
 void OptimizingCompiler::Init() {
   // Enable C1visualizer output. Must be done in Init() because the compiler
@@ -360,6 +401,11 @@ OptimizingCompiler::~OptimizingCompiler() {
   if (compilation_stats_.get() != nullptr) {
     compilation_stats_->Log();
   }
+#ifdef MOE
+  if (llvm_compiler_ != nullptr) {
+    delete llvm_compiler_;
+  }
+#endif
 }
 
 bool OptimizingCompiler::CanCompileMethod(uint32_t method_idx ATTRIBUTE_UNUSED,
@@ -396,7 +442,9 @@ static void RunOptimizations(HOptimization* optimizations[],
 }
 
 static void MaybeRunInliner(HGraph* graph,
+#ifndef MOE
                             CodeGenerator* codegen,
+#endif
                             CompilerDriver* driver,
                             OptimizingCompilerStats* stats,
                             const DexCompilationUnit& dex_compilation_unit,
@@ -412,7 +460,9 @@ static void MaybeRunInliner(HGraph* graph,
   HInliner* inliner = new (graph->GetArena()) HInliner(
       graph,
       graph,
+#ifndef MOE
       codegen,
+#endif
       dex_compilation_unit,
       dex_compilation_unit,
       driver,
@@ -498,11 +548,16 @@ static void AllocateRegisters(HGraph* graph,
 }
 
 static void RunOptimizations(HGraph* graph,
+#ifndef MOE
                              CodeGenerator* codegen,
+#endif
                              CompilerDriver* driver,
                              OptimizingCompilerStats* stats,
                              const DexCompilationUnit& dex_compilation_unit,
                              PassObserver* pass_observer,
+#ifdef MOE
+                             bool is_native,
+#endif
                              StackHandleScopeCollection* handles) {
   ArenaAllocator* arena = graph->GetArena();
   HDeadCodeElimination* dce1 = new (arena) HDeadCodeElimination(
@@ -520,7 +575,11 @@ static void RunOptimizations(HGraph* graph,
   LoadStoreElimination* lse = new (arena) LoadStoreElimination(graph, *side_effects);
   HInductionVarAnalysis* induction = new (arena) HInductionVarAnalysis(graph);
   BoundsCheckElimination* bce = new (arena) BoundsCheckElimination(graph, *side_effects, induction);
+#ifndef MOE
   HSharpening* sharpening = new (arena) HSharpening(graph, codegen, dex_compilation_unit, driver);
+#else
+  HSharpening* sharpening = new (arena) HSharpening(graph, graph, dex_compilation_unit, driver);
+#endif
   InstructionSimplifier* simplify2 = new (arena) InstructionSimplifier(
       graph, stats, "instruction_simplifier_after_bce");
   InstructionSimplifier* simplify3 = new (arena) InstructionSimplifier(
@@ -536,7 +595,11 @@ static void RunOptimizations(HGraph* graph,
   };
   RunOptimizations(optimizations1, arraysize(optimizations1), pass_observer);
 
+#ifndef MOE
   MaybeRunInliner(graph, codegen, driver, stats, dex_compilation_unit, pass_observer, handles);
+#else
+  MaybeRunInliner(graph, driver, stats, dex_compilation_unit, pass_observer, handles);
+#endif
 
   HOptimization* optimizations2[] = {
     // SelectGenerator depends on the InstructionSimplifier removing
@@ -559,8 +622,10 @@ static void RunOptimizations(HGraph* graph,
   };
   RunOptimizations(optimizations2, arraysize(optimizations2), pass_observer);
 
+#ifndef MOE
   RunArchOptimizations(driver->GetInstructionSet(), graph, codegen, stats, pass_observer);
   AllocateRegisters(graph, codegen, pass_observer);
+#endif
 }
 
 static ArenaVector<LinkerPatch> EmitAndSortLinkerPatches(CodeGenerator* codegen) {
@@ -689,10 +754,15 @@ CodeGenerator* OptimizingCompiler::TryCompile(ArenaAllocator* arena,
     // We may not get a method, for example if its class is erroneous.
     if (art_method != nullptr) {
       graph->SetArtMethod(art_method);
+#ifndef MOE
       interpreter_metadata = art_method->GetQuickenedInfo();
+#else
+      // MOE TODO: revisit this code for LLVM!
+#endif
     }
   }
 
+#ifndef MOE
   std::unique_ptr<CodeGenerator> codegen(
       CodeGenerator::Create(graph,
                             instruction_set,
@@ -705,9 +775,14 @@ CodeGenerator* OptimizingCompiler::TryCompile(ArenaAllocator* arena,
   }
   codegen->GetAssembler()->cfi().SetEnabled(
       compiler_driver->GetCompilerOptions().GenerateAnyDebugInfo());
+#endif
 
   PassObserver pass_observer(graph,
+#ifndef MOE
                              codegen.get(),
+#else
+                             nullptr,
+#endif
                              visualizer_output_.get(),
                              compiler_driver);
 
@@ -755,18 +830,31 @@ CodeGenerator* OptimizingCompiler::TryCompile(ArenaAllocator* arena,
     }
 
     RunOptimizations(graph,
+#ifndef MOE
                      codegen.get(),
+#endif
                      compiler_driver,
                      compilation_stats_.get(),
                      dex_compilation_unit,
                      &pass_observer,
+#ifdef MOE
+                     llvm_compiler_ != nullptr,
+#endif
                      &handles);
 
+#ifndef MOE
     codegen->Compile(code_allocator);
     pass_observer.DumpDisassembly();
+#else
+    llvm_compiler_->CompileDexGraph(graph, compiler_driver->GetCompilerOptions(), compilation_stats_.get());
+#endif
   }
 
+#ifndef MOE
   return codegen.release();
+#else
+  return nullptr;
+#endif
 }
 
 CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
@@ -777,6 +865,11 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
                                             jobject jclass_loader,
                                             const DexFile& dex_file,
                                             Handle<mirror::DexCache> dex_cache) const {
+#ifdef MOE
+  if (llvm_compiler_ != nullptr) {
+    llvm_compiler_->CompileStub(Thread::Current(), dex_file, method_idx, access_flags);
+  }
+#endif
   CompilerDriver* compiler_driver = GetCompilerDriver();
   CompiledMethod* method = nullptr;
   DCHECK(Runtime::Current()->IsAotCompiler());
@@ -799,7 +892,11 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
                    dex_file,
                    dex_cache,
                    /* osr */ false));
+#ifndef MOE
     if (codegen.get() != nullptr) {
+#else
+    if (codegen.get() != nullptr && llvm_compiler_ == nullptr) {
+#endif
       MaybeRecordStat(MethodCompilationStat::kCompiled);
       method = Emit(&arena, &code_allocator, codegen.get(), compiler_driver, code_item);
 
@@ -836,9 +933,15 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
   return method;
 }
 
+#ifndef MOE
 Compiler* CreateOptimizingCompiler(CompilerDriver* driver) {
   return new OptimizingCompiler(driver);
 }
+#else
+Compiler* CreateOptimizingCompiler(CompilerDriver* driver, const std::string& platform_name, InstructionSet instruction_set, const std::string& target_dir) {
+  return new OptimizingCompiler(driver, platform_name, instruction_set, target_dir);
+}
+#endif
 
 bool IsCompilingWithCoreImage() {
   const std::string& image = Runtime::Current()->GetImageLocation();
@@ -849,6 +952,7 @@ bool IsCompilingWithCoreImage() {
   return false;
 }
 
+#ifndef MOE
 bool OptimizingCompiler::JitCompile(Thread* self,
                                     jit::JitCodeCache* code_cache,
                                     ArtMethod* method,
@@ -952,5 +1056,6 @@ bool OptimizingCompiler::JitCompile(Thread* self,
 
   return true;
 }
+#endif
 
 }  // namespace art

@@ -147,6 +147,18 @@ class Thread {
  public:
   static const size_t kStackOverflowImplicitCheckSize;
 
+  // [XRT] Begin
+  static Thread* FindThread(pthread_t thread);
+  
+  pthread_t GetPthread()
+  {
+    return tlsPtr_.pthread_self;
+  }
+  static inline pthread_key_t GetPthreadKey(void){
+        return pthread_key_self_;
+  }
+  // [XRT] End
+  
   // Creates a new native thread corresponding to the given managed peer.
   // Used to implement Thread.start.
   static void CreateNativeThread(JNIEnv* env, jobject peer, size_t stack_size, bool daemon);
@@ -1196,6 +1208,9 @@ class Thread {
 
   // 32 bits of atomically changed state and flags. Keeping as 32 bits allows and atomic CAS to
   // change from being Suspended to Runnable without a suspend request occurring.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
   union PACKED(4) StateAndFlags {
     StateAndFlags() {}
     struct PACKED(4) {
@@ -1216,6 +1231,9 @@ class Thread {
     // See http://gcc.gnu.org/bugzilla/show_bug.cgi?id=47409
     DISALLOW_COPY_AND_ASSIGN(StateAndFlags);
   };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
   static_assert(sizeof(StateAndFlags) == sizeof(int32_t), "Weird state_and_flags size");
 
   static void ThreadExitCallback(void* arg);
@@ -1248,6 +1266,9 @@ class Thread {
   // first if possible.
   /***********************************************************************************************/
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
   struct PACKED(4) tls_32bit_sized_values {
     // We have no control over the size of 'bool', but want our boolean fields
     // to be 4-byte quantities.
@@ -1332,8 +1353,16 @@ class Thread {
     // critical section enter.
     uint32_t disable_thread_flip_count;
   } tls32_;
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+  struct __declspec(align(8)) tls_64bit_sized_values {
+#else
   struct PACKED(8) tls_64bit_sized_values {
+#endif 
     tls_64bit_sized_values() : trace_clock_base(0) {
     }
 
@@ -1342,8 +1371,16 @@ class Thread {
 
     RuntimeStats stats;
   } tls64_;
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+  struct __declspec(align(sizeof(void*))) tls_ptr_sized_values {
+#else
   struct PACKED(sizeof(void*)) tls_ptr_sized_values {
+#endif 
       tls_ptr_sized_values() : card_table(nullptr), exception(nullptr), stack_end(nullptr),
       managed_stack(), suspend_trigger(nullptr), jni_env(nullptr), tmp_jni_env(nullptr),
       self(nullptr), opeer(nullptr), jpeer(nullptr), stack_begin(nullptr), stack_size(0),
@@ -1502,6 +1539,9 @@ class Thread {
     // Thread-local mark stack for the concurrent copying collector.
     gc::accounting::AtomicStack<mirror::Object>* thread_local_mark_stack;
   } tlsPtr_;
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
   // Guards the 'interrupted_' and 'wait_monitor_' members.
   Mutex* wait_mutex_ DEFAULT_MUTEX_ACQUIRED_AFTER;

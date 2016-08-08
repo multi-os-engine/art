@@ -29,6 +29,9 @@ struct StackTraceElementOffsets;
 namespace mirror {
 
 // C++ mirror of java.lang.StackTraceElement
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED StackTraceElement FINAL : public Object {
  public:
   String* GetDeclaringClass() SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -62,11 +65,17 @@ class MANAGED StackTraceElement FINAL : public Object {
   }
 
  private:
+#if defined(MOE) && defined(__LP64__)
+  int32_t line_number_;
+#endif
+
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
   HeapReference<String> declaring_class_;
   HeapReference<String> file_name_;
   HeapReference<String> method_name_;
+#if !defined(MOE) || !defined(__LP64__)
   int32_t line_number_;
+#endif
 
   template<bool kTransactionActive>
   void Init(Handle<String> declaring_class, Handle<String> method_name, Handle<String> file_name,
@@ -78,6 +87,9 @@ class MANAGED StackTraceElement FINAL : public Object {
   friend struct art::StackTraceElementOffsets;  // for verifying offset information
   DISALLOW_IMPLICIT_CONSTRUCTORS(StackTraceElement);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

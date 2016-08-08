@@ -142,11 +142,19 @@ enum HprofBasicType {
   hprof_basic_long = 11,
 };
 
+#ifndef MOE
 typedef uint32_t HprofStringId;
 typedef uint32_t HprofClassObjectId;
 typedef uint32_t HprofClassSerialNumber;
 typedef uint32_t HprofStackTraceSerialNumber;
 typedef uint32_t HprofStackFrameId;
+#else
+typedef uintptr_t HprofStringId;
+typedef uintptr_t HprofClassObjectId;
+typedef uint32_t HprofClassSerialNumber;
+typedef uint32_t HprofStackTraceSerialNumber;
+typedef uintptr_t HprofStackFrameId;
+#endif
 static constexpr HprofStackTraceSerialNumber kHprofNullStackTrace = 0;
 
 class EndianOutput {
@@ -193,9 +201,23 @@ class EndianOutput {
   void AddU8(uint64_t value) {
     AddU8List(&value, 1);
   }
+  
+#ifdef MOE
+  void AddId(uintptr_t value) {
+# ifdef __LP64__
+    AddU8(value);
+# else
+    AddU4(value);
+# endif
+  }
+#endif
 
   void AddObjectId(const mirror::Object* value) {
+#ifndef MOE
     AddU4(PointerToLowMemUInt32(value));
+#else
+    AddId(reinterpret_cast<uintptr_t>(value));
+#endif
   }
 
   void AddStackTraceSerialNumber(HprofStackTraceSerialNumber value) {
@@ -204,20 +226,42 @@ class EndianOutput {
 
   // The ID for the synthetic object generated to account for class static overhead.
   void AddClassStaticsId(const mirror::Class* value) {
+#ifndef MOE
     AddU4(1 | PointerToLowMemUInt32(value));
+#else
+    AddId(1 | reinterpret_cast<uintptr_t>(value));
+#endif
   }
 
   void AddJniGlobalRefId(jobject value) {
+#ifndef MOE
     AddU4(PointerToLowMemUInt32(value));
+#else
+    AddId(reinterpret_cast<uintptr_t>(value));
+#endif
   }
 
   void AddClassId(HprofClassObjectId value) {
+#ifndef MOE
     AddU4(value);
+#else
+    AddId(value);
+#endif
   }
 
   void AddStringId(HprofStringId value) {
+#ifndef MOE
     AddU4(value);
+#else
+    AddId(value);
+#endif
   }
+
+#ifdef MOE
+  void AddFrameId(HprofStackFrameId value) {
+    AddId(value);
+  }
+#endif
 
   void AddU1List(const uint8_t* values, size_t count) {
     HandleU1List(values, count);
@@ -507,7 +551,9 @@ class Hprof : public SingleRootVisitor {
 
     simple_roots_.clear();
     runtime->VisitRoots(this);
+#ifndef MOE
     runtime->VisitImageRoots(this);
+#endif
     runtime->GetHeap()->VisitObjectsPaused(VisitObjectCallback, this);
 
     output_->StartNewRecord(HPROF_TAG_HEAP_DUMP_END, kHprofTime);
@@ -562,7 +608,11 @@ class Hprof : public SingleRootVisitor {
       // ID:  ID for this string
       // U1*: UTF8 characters for string (NOT null terminated)
       //      (the record format encodes the length)
+#ifndef MOE
       __ AddU4(id);
+#else
+      __ AddStringId(id);
+#endif
       __ AddUtf8String(string.c_str());
     }
   }
@@ -597,7 +647,11 @@ class Hprof : public SingleRootVisitor {
         LookupClassNameId(c);
       }
     }
+#ifndef MOE
     return PointerToLowMemUInt32(c);
+#else
+    return reinterpret_cast<HprofClassObjectId>(c);
+#endif
   }
 
   HprofStackTraceSerialNumber LookupStackTraceSerialNumber(const mirror::Object* obj)
@@ -644,9 +698,15 @@ class Hprof : public SingleRootVisitor {
     // U4: size of identifiers.  We're using addresses as IDs and our heap references are stored
     // as uint32_t.
     // Note of warning: hprof-conv hard-codes the size of identifiers to 4.
+#ifndef MOE
     static_assert(sizeof(mirror::HeapReference<mirror::Object>) == sizeof(uint32_t),
                   "Unexpected HeapReference size");
     __ AddU4(sizeof(uint32_t));
+#else
+    static_assert(sizeof(mirror::HeapReference<mirror::Object>) == sizeof(void*),
+                  "Unexpected HeapReference size");
+    __ AddU4(sizeof(void*));
+#endif
 
     // The current time, in milliseconds since 0:00 GMT, 1/1/70.
     timeval now;
@@ -688,7 +748,11 @@ class Hprof : public SingleRootVisitor {
         // U4: >0, line number; 0, no line information available; -1, unknown location
         auto frame_result = frames_.find(frame);
         CHECK(frame_result != frames_.end());
+#ifndef MOE
         __ AddU4(frame_result->second);
+#else
+        __ AddFrameId(frame_result->second);
+#endif
         __ AddStringId(LookupStringId(method->GetName()));
         __ AddStringId(LookupStringId(method->GetSignature().ToString()));
         const char* source_file = method->GetDeclaringClassSourceFile();
@@ -716,7 +780,11 @@ class Hprof : public SingleRootVisitor {
         const gc::AllocRecordStackTraceElement* frame = &trace->GetStackElement(i);
         auto frame_result = frames_.find(frame);
         CHECK(frame_result != frames_.end());
+#ifndef MOE
         __ AddU4(frame_result->second);
+#else
+        __ AddFrameId(frame_result->second);
+#endif
       }
     }
   }
@@ -891,7 +959,19 @@ class Hprof : public SingleRootVisitor {
   // id. A pair of root type and object id is packed into a uint64_t, with
   // the root type in the upper 32 bits and the object id in the lower 32
   // bits.
+#ifndef MOE
   std::unordered_set<uint64_t> simple_roots_;
+#else
+  struct RootHash {
+    inline std::size_t operator()(const std::pair<HprofHeapTag,const mirror::Object*> & v) const {
+      std::hash<uint8_t> tag_hasher;
+      std::hash<const mirror::Object*> obj_hasher;
+      return tag_hasher(v.first) + obj_hasher(v.second);
+    }
+  };
+
+  std::unordered_set<std::pair<HprofHeapTag, const mirror::Object*>, RootHash> simple_roots_;
+#endif
 
   friend class GcRootVisitor;
   DISALLOW_COPY_AND_ASSIGN(Hprof);
@@ -906,7 +986,11 @@ static HprofBasicType SignatureToBasicTypeAndSize(const char* sig, size_t* size_
     case '[':
     case 'L':
       ret = hprof_basic_object;
+#ifndef MOE
       size = 4;
+#else
+      size = 8;
+#endif
       break;
     case 'Z':
       ret = hprof_basic_boolean;
@@ -972,8 +1056,12 @@ void Hprof::MarkRootObject(const mirror::Object* obj, jobject jni_obj, HprofHeap
     case HPROF_ROOT_INTERNED_STRING:
     case HPROF_ROOT_DEBUGGER:
     case HPROF_ROOT_VM_INTERNAL: {
+#ifndef MOE
       uint64_t key = (static_cast<uint64_t>(heap_tag) << 32) | PointerToLowMemUInt32(obj);
       if (simple_roots_.insert(key).second) {
+#else
+      if (simple_roots_.emplace(heap_tag, obj).second) {
+#endif
         __ AddU1(heap_tag);
         __ AddObjectId(obj);
       }
@@ -1226,13 +1314,20 @@ void Hprof::DumpHeapClass(mirror::Class* klass) {
           break;
         case hprof_basic_float:
         case hprof_basic_int:
+#ifndef MOE
         case hprof_basic_object:
+#endif
           __ AddU4(f->Get32(klass));
           break;
         case hprof_basic_double:
         case hprof_basic_long:
           __ AddU8(f->Get64(klass));
           break;
+#ifdef MOE
+        case hprof_basic_object:
+          __ AddObjectId(f->GetObj(klass));
+          break;
+#endif
         default:
           LOG(FATAL) << "Unexpected size " << size;
           UNREACHABLE();
@@ -1337,13 +1432,20 @@ void Hprof::DumpHeapInstanceObject(mirror::Object* obj, mirror::Class* klass) {
         break;
       case hprof_basic_float:
       case hprof_basic_int:
+#ifndef MOE
       case hprof_basic_object:
+#endif
         __ AddU4(f->Get32(obj));
         break;
       case hprof_basic_double:
       case hprof_basic_long:
         __ AddU8(f->Get64(obj));
         break;
+#ifdef MOE
+      case hprof_basic_object:
+        __ AddObjectId(f->GetObj(obj));
+        break;
+#endif
       }
     }
     // Add value field for String if necessary.

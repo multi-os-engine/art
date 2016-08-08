@@ -48,6 +48,10 @@
 #include "utils.h"
 #include "handle_scope-inl.h"
 
+#ifdef MOE_WINDOWS
+#undef CONST
+#endif
+
 namespace art {
 namespace verifier {
 

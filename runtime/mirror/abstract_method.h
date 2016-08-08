@@ -31,6 +31,9 @@ class ArtMethod;
 namespace mirror {
 
 // C++ mirror of java.lang.reflect.AbstractMethod.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED AbstractMethod : public AccessibleObject {
  public:
   // Called from Constructor::CreateFromArtMethod, Method::CreateFromArtMethod.
@@ -63,13 +66,21 @@ class MANAGED AbstractMethod : public AccessibleObject {
 
   HeapReference<mirror::Class> declaring_class_;
   HeapReference<mirror::Class> declaring_class_of_overridden_method_;
+#if !defined(MOE) || !defined(__LP64__)
   uint32_t access_flags_;
+#endif
   uint64_t art_method_;
+#if defined(MOE) && defined(__LP64__)
+  uint32_t access_flags_;
+#endif
   uint32_t dex_method_index_;
 
   friend struct art::AbstractMethodOffsets;  // for verifying offset information
   DISALLOW_IMPLICIT_CONSTRUCTORS(AbstractMethod);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

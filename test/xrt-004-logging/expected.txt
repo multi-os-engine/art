@@ -1,0 +1,22 @@
+INFO: START
+WARNING: warning1
+WARNING: warning2
+SEVERE: severe
+INFO: FINISH
+SEVERE: severe
+
+Start looging in file
+INFO: START
+WARNING: warning1
+WARNING: warning2
+SEVERE: severe
+INFO: FINISH
+SEVERE: severe
+
+File output:
+INFO: START
+WARNING: warning1
+WARNING: warning2
+SEVERE: severe
+INFO: FINISH
+SEVERE: severe

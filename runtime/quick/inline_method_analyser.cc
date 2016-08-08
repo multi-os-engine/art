@@ -27,6 +27,10 @@
 #include "mirror/dex_cache-inl.h"
 #include "verifier/method_verifier-inl.h"
 
+#ifdef MOE_WINDOWS
+#undef CONST
+#endif
+
 /*
  * NOTE: This code is part of the quick compiler. It lives in the runtime
  * only to allow the debugger to check whether a method has been inlined.
@@ -434,9 +438,13 @@ static_assert(InlineMethodAnalyser::IGetVariant(Instruction::IGET_SHORT) ==
 bool InlineMethodAnalyser::AnalyseMethodCode(verifier::MethodVerifier* verifier,
                                              InlineMethod* result) {
   DCHECK(verifier != nullptr);
+#ifndef MOE
   if (!Runtime::Current()->UseJitCompilation()) {
+#endif
     DCHECK_EQ(verifier->CanLoadClasses(), result != nullptr);
+#ifndef MOE
   }
+#endif
 
   // Note: verifier->GetMethod() may be null.
   return AnalyseMethodCode(verifier->CodeItem(),

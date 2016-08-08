@@ -23,8 +23,13 @@
 #include "base/logging.h"
 #include "base/stringprintf.h"
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(MOE_WINDOWS)
 #include <sys/time.h>
+#endif
+
+#ifdef MOE_WINDOWS
+#include <pthread.h>
+#include <pthread_time.h>
 #endif
 
 namespace art {
@@ -176,7 +181,7 @@ void NanoSleep(uint64_t ns) {
 
 void InitTimeSpec(bool absolute, int clock, int64_t ms, int32_t ns, timespec* ts) {
   if (absolute) {
-#if !defined(__APPLE__)
+#if !defined(__APPLE__) && !defined(MOE_WINDOWS)
     clock_gettime(clock, ts);
 #else
     UNUSED(clock);

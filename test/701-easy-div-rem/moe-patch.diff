@@ -1,0 +1,12 @@
+diff --git a/test/701-easy-div-rem/build b/test/701-easy-div-rem/build
+old mode 100644
+new mode 100755
+index 666fe89..925880e
+--- a/test/701-easy-div-rem/build
++++ b/test/701-easy-div-rem/build
+@@ -29,4 +29,4 @@ if [ ${USE_JACK} = "false" ]; then
+   ulimit -S 4096
+ fi
+ 
+-./default-build
++../etc/default-build-moe

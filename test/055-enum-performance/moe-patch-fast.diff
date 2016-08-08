@@ -1,0 +1,13 @@
+diff --git a/test/055-enum-performance/expected.txt b/test/055-enum-performance/expected.txt
+index ceb6bc4..9f90bde 100644
+--- a/test/055-enum-performance/expected.txt
++++ b/test/055-enum-performance/expected.txt
+@@ -4,7 +4,7 @@ FOURTEEN
+ NINE
+ FIVE
+ TWELVE
+-SamePackagePublicEnum
++aosp_055_enum_performance.SamePackagePublicEnum
+ basis: performed 10000 iterations
+ test1: performed 10000 iterations
+ test2: performed 10000 iterations

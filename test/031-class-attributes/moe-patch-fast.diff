@@ -1,0 +1,242 @@
+diff --git a/test/031-class-attributes/expected.txt b/test/031-class-attributes/expected.txt
+index de99872..28d410f 100644
+--- a/test/031-class-attributes/expected.txt
++++ b/test/031-class-attributes/expected.txt
+@@ -2,27 +2,27 @@ public abstract final int
+ public abstract final [I
+ public java.lang.Object
+ public abstract final [Ljava.lang.Object;
+-public ClassAttrs$PublicInnerClass
+-public abstract final [LClassAttrs$PublicInnerClass;
+-protected ClassAttrs$ProtectedInnerClass
+-protected abstract final [LClassAttrs$ProtectedInnerClass;
+-private ClassAttrs$PrivateInnerClass
+-private abstract final [LClassAttrs$PrivateInnerClass;
+- ClassAttrs$PackagePrivateInnerClass
+-abstract final [LClassAttrs$PackagePrivateInnerClass;
++public aosp_031_class_attributes.ClassAttrs$PublicInnerClass
++public abstract final [Laosp_031_class_attributes.ClassAttrs$PublicInnerClass;
++protected aosp_031_class_attributes.ClassAttrs$ProtectedInnerClass
++protected abstract final [Laosp_031_class_attributes.ClassAttrs$ProtectedInnerClass;
++private aosp_031_class_attributes.ClassAttrs$PrivateInnerClass
++private abstract final [Laosp_031_class_attributes.ClassAttrs$PrivateInnerClass;
++ aosp_031_class_attributes.ClassAttrs$PackagePrivateInnerClass
++abstract final [Laosp_031_class_attributes.ClassAttrs$PackagePrivateInnerClass;
+ public abstract interface java.io.Serializable
+ public abstract final [Ljava.io.Serializable;
+-public abstract static interface ClassAttrs$PublicInnerInterface
+-public abstract final [LClassAttrs$PublicInnerInterface;
+-protected abstract static interface ClassAttrs$ProtectedInnerInterface
+-protected abstract final [LClassAttrs$ProtectedInnerInterface;
+-private abstract static interface ClassAttrs$PrivateInnerInterface
+-private abstract final [LClassAttrs$PrivateInnerInterface;
+-abstract static interface ClassAttrs$PackagePrivateInnerInterface
+-abstract final [LClassAttrs$PackagePrivateInnerInterface;
+-***** class ClassAttrs:
+-  name: ClassAttrs
+-  canonical: ClassAttrs
++public abstract static interface aosp_031_class_attributes.ClassAttrs$PublicInnerInterface
++public abstract final [Laosp_031_class_attributes.ClassAttrs$PublicInnerInterface;
++protected abstract static interface aosp_031_class_attributes.ClassAttrs$ProtectedInnerInterface
++protected abstract final [Laosp_031_class_attributes.ClassAttrs$ProtectedInnerInterface;
++private abstract static interface aosp_031_class_attributes.ClassAttrs$PrivateInnerInterface
++private abstract final [Laosp_031_class_attributes.ClassAttrs$PrivateInnerInterface;
++abstract static interface aosp_031_class_attributes.ClassAttrs$PackagePrivateInnerInterface
++abstract final [Laosp_031_class_attributes.ClassAttrs$PackagePrivateInnerInterface;
++***** class aosp_031_class_attributes.ClassAttrs:
++  name: aosp_031_class_attributes.ClassAttrs
++  canonical: aosp_031_class_attributes.ClassAttrs
+   simple: ClassAttrs
+   genericSignature: null
+   super: class java.lang.Object
+@@ -32,9 +32,9 @@ abstract final [LClassAttrs$PackagePrivateInnerInterface;
+   enclosingCon: null
+   enclosingMeth: null
+   modifiers: 1
+-  package: null
+-  declaredClasses: [10] class ClassAttrs$MemberClass, class ClassAttrs$PackagePrivateInnerClass, class ClassAttrs$PrivateInnerClass, class ClassAttrs$ProtectedInnerClass, class ClassAttrs$PublicInnerClass, class ClassAttrs$PublicMemberClass, interface ClassAttrs$PackagePrivateInnerInterface, interface ClassAttrs$PrivateInnerInterface, interface ClassAttrs$ProtectedInnerInterface, interface ClassAttrs$PublicInnerInterface
+-  member classes: [3] class ClassAttrs$PublicInnerClass, class ClassAttrs$PublicMemberClass, interface ClassAttrs$PublicInnerInterface
++  package: package aosp_031_class_attributes, Unknown, version 0.0
++  declaredClasses: [10] class aosp_031_class_attributes.ClassAttrs$MemberClass, class aosp_031_class_attributes.ClassAttrs$PackagePrivateInnerClass, class aosp_031_class_attributes.ClassAttrs$PrivateInnerClass, class aosp_031_class_attributes.ClassAttrs$ProtectedInnerClass, class aosp_031_class_attributes.ClassAttrs$PublicInnerClass, class aosp_031_class_attributes.ClassAttrs$PublicMemberClass, interface aosp_031_class_attributes.ClassAttrs$PackagePrivateInnerInterface, interface aosp_031_class_attributes.ClassAttrs$PrivateInnerInterface, interface aosp_031_class_attributes.ClassAttrs$ProtectedInnerInterface, interface aosp_031_class_attributes.ClassAttrs$PublicInnerInterface
++  member classes: [3] class aosp_031_class_attributes.ClassAttrs$PublicInnerClass, class aosp_031_class_attributes.ClassAttrs$PublicMemberClass, interface aosp_031_class_attributes.ClassAttrs$PublicInnerInterface
+   isAnnotation: false
+   isAnonymous: false
+   isArray: false
+@@ -46,9 +46,9 @@ abstract final [LClassAttrs$PackagePrivateInnerInterface;
+   isSynthetic: false
+   genericInterfaces: [0]
+   typeParameters: [0]
+-***** class OtherClass:
+-  name: OtherClass
+-  canonical: OtherClass
++***** class aosp_031_class_attributes.OtherClass:
++  name: aosp_031_class_attributes.OtherClass
++  canonical: aosp_031_class_attributes.OtherClass
+   simple: OtherClass
+   genericSignature: null
+   super: class java.lang.Object
+@@ -58,7 +58,7 @@ abstract final [LClassAttrs$PackagePrivateInnerInterface;
+   enclosingCon: null
+   enclosingMeth: null
+   modifiers: 0
+-  package: null
++  package: package aosp_031_class_attributes, Unknown, version 0.0
+   declaredClasses: [0]
+   member classes: [0]
+   isAnnotation: false
+@@ -72,9 +72,9 @@ abstract final [LClassAttrs$PackagePrivateInnerInterface;
+   isSynthetic: false
+   genericInterfaces: [0]
+   typeParameters: [0]
+-***** class otherpackage.OtherPackageClass:
+-  name: otherpackage.OtherPackageClass
+-  canonical: otherpackage.OtherPackageClass
++***** class aosp_031_class_attributes.otherpackage.OtherPackageClass:
++  name: aosp_031_class_attributes.otherpackage.OtherPackageClass
++  canonical: aosp_031_class_attributes.otherpackage.OtherPackageClass
+   simple: OtherPackageClass
+   genericSignature: null
+   super: class java.lang.Object
+@@ -84,7 +84,7 @@ abstract final [LClassAttrs$PackagePrivateInnerInterface;
+   enclosingCon: null
+   enclosingMeth: null
+   modifiers: 1
+-  package: package otherpackage, Unknown, version 0.0
++  package: package aosp_031_class_attributes.otherpackage, Unknown, version 0.0
+   declaredClasses: [0]
+   member classes: [0]
+   isAnnotation: false
+@@ -98,19 +98,19 @@ abstract final [LClassAttrs$PackagePrivateInnerInterface;
+   isSynthetic: false
+   genericInterfaces: [0]
+   typeParameters: [0]
+-***** class ClassAttrs$1InnerNamed:
+-  name: ClassAttrs$1InnerNamed
++***** class aosp_031_class_attributes.ClassAttrs$1InnerNamed:
++  name: aosp_031_class_attributes.ClassAttrs$1InnerNamed
+   canonical: null
+   simple: InnerNamed
+   genericSignature: null
+   super: class java.lang.Object
+   genericSuperclass: class java.lang.Object
+   declaring: null
+-  enclosing: class ClassAttrs
++  enclosing: class aosp_031_class_attributes.ClassAttrs
+   enclosingCon: null
+-  enclosingMeth: public static void ClassAttrs.main()
++  enclosingMeth: public static void aosp_031_class_attributes.ClassAttrs.main()
+   modifiers: 0
+-  package: null
++  package: package aosp_031_class_attributes, Unknown, version 0.0
+   declaredClasses: [0]
+   member classes: [0]
+   isAnnotation: false
+@@ -124,19 +124,19 @@ abstract final [LClassAttrs$PackagePrivateInnerInterface;
+   isSynthetic: false
+   genericInterfaces: [0]
+   typeParameters: [0]
+-***** class ClassAttrs$1ConsInnerNamed:
+-  name: ClassAttrs$1ConsInnerNamed
++***** class aosp_031_class_attributes.ClassAttrs$1ConsInnerNamed:
++  name: aosp_031_class_attributes.ClassAttrs$1ConsInnerNamed
+   canonical: null
+   simple: ConsInnerNamed
+   genericSignature: null
+   super: class java.lang.Object
+   genericSuperclass: class java.lang.Object
+   declaring: null
+-  enclosing: class ClassAttrs
+-  enclosingCon: ClassAttrs()
++  enclosing: class aosp_031_class_attributes.ClassAttrs
++  enclosingCon: aosp_031_class_attributes.ClassAttrs()
+   enclosingMeth: null
+   modifiers: 0
+-  package: null
++  package: package aosp_031_class_attributes, Unknown, version 0.0
+   declaredClasses: [0]
+   member classes: [0]
+   isAnnotation: false
+@@ -150,19 +150,19 @@ abstract final [LClassAttrs$PackagePrivateInnerInterface;
+   isSynthetic: false
+   genericInterfaces: [0]
+   typeParameters: [0]
+-***** class ClassAttrs$1:
+-  name: ClassAttrs$1
++***** class aosp_031_class_attributes.ClassAttrs$1:
++  name: aosp_031_class_attributes.ClassAttrs$1
+   canonical: null
+   simple: 
+   genericSignature: null
+-  super: class OtherClass
+-  genericSuperclass: class OtherClass
++  super: class aosp_031_class_attributes.OtherClass
++  genericSuperclass: class aosp_031_class_attributes.OtherClass
+   declaring: null
+-  enclosing: class ClassAttrs
++  enclosing: class aosp_031_class_attributes.ClassAttrs
+   enclosingCon: null
+-  enclosingMeth: public static void ClassAttrs.main()
++  enclosingMeth: public static void aosp_031_class_attributes.ClassAttrs.main()
+   modifiers: 8
+-  package: null
++  package: package aosp_031_class_attributes, Unknown, version 0.0
+   declaredClasses: [0]
+   member classes: [0]
+   isAnnotation: false
+@@ -176,19 +176,19 @@ abstract final [LClassAttrs$PackagePrivateInnerInterface;
+   isSynthetic: false
+   genericInterfaces: [0]
+   typeParameters: [0]
+-***** class ClassAttrs$MemberClass:
+-  name: ClassAttrs$MemberClass
+-  canonical: ClassAttrs.MemberClass
++***** class aosp_031_class_attributes.ClassAttrs$MemberClass:
++  name: aosp_031_class_attributes.ClassAttrs$MemberClass
++  canonical: aosp_031_class_attributes.ClassAttrs.MemberClass
+   simple: MemberClass
+   genericSignature: <XYZ:Ljava/lang/Object;>Ljava/lang/Object;
+   super: class java.lang.Object
+   genericSuperclass: class java.lang.Object
+-  declaring: class ClassAttrs
+-  enclosing: class ClassAttrs
++  declaring: class aosp_031_class_attributes.ClassAttrs
++  enclosing: class aosp_031_class_attributes.ClassAttrs
+   enclosingCon: null
+   enclosingMeth: null
+   modifiers: 8
+-  package: null
++  package: package aosp_031_class_attributes, Unknown, version 0.0
+   declaredClasses: [0]
+   member classes: [0]
+   isAnnotation: false
+@@ -202,9 +202,9 @@ abstract final [LClassAttrs$PackagePrivateInnerInterface;
+   isSynthetic: false
+   genericInterfaces: [0]
+   typeParameters: [1] XYZ
+-***** class FancyClass:
+-  name: FancyClass
+-  canonical: FancyClass
++***** class aosp_031_class_attributes.FancyClass:
++  name: aosp_031_class_attributes.FancyClass
++  canonical: aosp_031_class_attributes.FancyClass
+   simple: FancyClass
+   genericSignature: <K:Ljava/lang/Object;V:Ljava/lang/Object;>Ljava/util/HashMap<TK;TV;>;Ljava/util/Map<TK;TV;>;
+   super: class java.util.HashMap
+@@ -214,7 +214,7 @@ abstract final [LClassAttrs$PackagePrivateInnerInterface;
+   enclosingCon: null
+   enclosingMeth: null
+   modifiers: 1
+-  package: null
++  package: package aosp_031_class_attributes, Unknown, version 0.0
+   declaredClasses: [0]
+   member classes: [2] class java.util.AbstractMap$SimpleEntry, class java.util.AbstractMap$SimpleImmutableEntry
+   isAnnotation: false
+@@ -228,6 +228,6 @@ abstract final [LClassAttrs$PackagePrivateInnerInterface;
+   isSynthetic: false
+   genericInterfaces: [1] java.util.Map<K, V>
+   typeParameters: [2] K, V
+-constructor signature: (LClassAttrs$MemberClass<TXYZ;>;)V
++constructor signature: (Laosp_031_class_attributes/ClassAttrs$MemberClass<TXYZ;>;)V
+ method signature: ()Ljava/lang/Class<TXYZ;>;
+-field signature: LClassAttrs$MemberClass<TXYZ;>;
++field signature: Laosp_031_class_attributes/ClassAttrs$MemberClass<TXYZ;>;

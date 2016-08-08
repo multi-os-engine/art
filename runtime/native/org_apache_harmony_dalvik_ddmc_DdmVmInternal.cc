@@ -28,16 +28,16 @@
 
 namespace art {
 
-static void DdmVmInternal_enableRecentAllocations(JNIEnv*, jclass, jboolean enable) {
+static JNICALL void DdmVmInternal_enableRecentAllocations(JNIEnv*, jclass, jboolean enable) {
   Dbg::SetAllocTrackingEnabled(enable);
 }
 
-static jbyteArray DdmVmInternal_getRecentAllocations(JNIEnv* env, jclass) {
+static JNICALL jbyteArray DdmVmInternal_getRecentAllocations(JNIEnv* env, jclass) {
   ScopedFastNativeObjectAccess soa(env);
   return Dbg::GetRecentAllocations();
 }
 
-static jboolean DdmVmInternal_getRecentAllocationStatus(JNIEnv*, jclass) {
+static JNICALL jboolean DdmVmInternal_getRecentAllocationStatus(JNIEnv*, jclass) {
   return Runtime::Current()->GetHeap()->IsAllocTrackingEnabled();
 }
 
@@ -45,7 +45,7 @@ static jboolean DdmVmInternal_getRecentAllocationStatus(JNIEnv*, jclass) {
  * Get a stack trace as an array of StackTraceElement objects.  Returns
  * nullptr on failure, e.g. if the threadId couldn't be found.
  */
-static jobjectArray DdmVmInternal_getStackTraceById(JNIEnv* env, jclass, jint thin_lock_id) {
+static JNICALL jobjectArray DdmVmInternal_getStackTraceById(JNIEnv* env, jclass, jint thin_lock_id) {
   jobjectArray trace = nullptr;
   Thread* const self = Thread::Current();
   if (static_cast<uint32_t>(thin_lock_id) == self->GetThreadId()) {
@@ -127,7 +127,7 @@ static void ThreadStatsGetterCallback(Thread* t, void* context) {
   JDWP::Append1BE(bytes, t->IsDaemon());
 }
 
-static jbyteArray DdmVmInternal_getThreadStats(JNIEnv* env, jclass) {
+static JNICALL jbyteArray DdmVmInternal_getThreadStats(JNIEnv* env, jclass) {
   std::vector<uint8_t> bytes;
   Thread* self = static_cast<JNIEnvExt*>(env)->self;
   {
@@ -151,16 +151,16 @@ static jbyteArray DdmVmInternal_getThreadStats(JNIEnv* env, jclass) {
   return result;
 }
 
-static jint DdmVmInternal_heapInfoNotify(JNIEnv* env, jclass, jint when) {
+static JNICALL jint DdmVmInternal_heapInfoNotify(JNIEnv* env, jclass, jint when) {
   ScopedFastNativeObjectAccess soa(env);
   return Dbg::DdmHandleHpifChunk(static_cast<Dbg::HpifWhen>(when));
 }
 
-static jboolean DdmVmInternal_heapSegmentNotify(JNIEnv*, jclass, jint when, jint what, jboolean native) {
+static JNICALL jboolean DdmVmInternal_heapSegmentNotify(JNIEnv*, jclass, jint when, jint what, jboolean native) {
   return Dbg::DdmHandleHpsgNhsgChunk(static_cast<Dbg::HpsgWhen>(when), static_cast<Dbg::HpsgWhat>(what), native);
 }
 
-static void DdmVmInternal_threadNotify(JNIEnv*, jclass, jboolean enable) {
+static JNICALL void DdmVmInternal_threadNotify(JNIEnv*, jclass, jboolean enable) {
   Dbg::DdmSetThreadNotification(enable);
 }
 

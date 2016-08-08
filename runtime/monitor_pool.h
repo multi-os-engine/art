@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +27,10 @@
 #include "runtime.h"
 #else
 #include "base/stl_util.h"     // STLDeleteElements
+#endif
+
+#if defined(MOE) && !defined(__LP64__)
+#include "monitor.h"
 #endif
 
 namespace art {
@@ -197,7 +202,11 @@ class MonitorPool {
   static constexpr size_t kInitialChunkStorage = kIsDebugBuild ? 1U : 256U;
   static_assert(IsPowerOfTwo(kInitialChunkStorage), "kInitialChunkStorage must be power of 2");
   // The number of lists, each containing pointers to storage chunks.
+#ifndef MOE
   static constexpr size_t kMaxChunkLists = 8;  //  Dictated by 3 bit index. Don't increase above 8.
+#else
+  static constexpr size_t kMaxChunkLists = kChunkSize > 4096 ? 4 : 8;
+#endif
   static_assert(IsPowerOfTwo(kMaxChunkLists), "kMaxChunkLists must be power of 2");
   static constexpr size_t kMaxListSize = kInitialChunkStorage << (kMaxChunkLists - 1);
   // We lose 3 bits in monitor id due to 3 bit monitor_chunks_ index, and gain it back from

@@ -62,9 +62,15 @@ enum VRegKind {
 std::ostream& operator<<(std::ostream& os, const VRegKind& rhs);
 
 // A reference from the shadow stack to a MirrorType object within the Java heap.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 template<class MirrorType>
 class MANAGED StackReference : public mirror::CompressedReference<MirrorType> {
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 // Forward declaration. Just calls the destructor.
 struct ShadowFrameDeleter;
@@ -116,8 +122,13 @@ class ShadowFrame {
  public:
   // Compute size of ShadowFrame in bytes assuming it has a reference array.
   static size_t ComputeSize(uint32_t num_vregs) {
+#ifndef MOE
     return sizeof(ShadowFrame) + (sizeof(uint32_t) * num_vregs) +
            (sizeof(StackReference<mirror::Object>) * num_vregs);
+#else
+    return sizeof(ShadowFrame) + (sizeof(uintptr_t) * num_vregs) +
+           (sizeof(StackReference<mirror::Object>) * num_vregs);
+#endif
   }
 
   // Create ShadowFrame in heap for deoptimization.
@@ -149,11 +160,19 @@ class ShadowFrame {
   // TODO(iam): Clean references array up since they're always there,
   // we don't need to do conditionals.
   bool HasReferenceArray() const {
+#ifdef MOE
+    return (number_of_vregs_ & kHasReferenceArray) != 0;
+#else
     return true;
+#endif
   }
 
   uint32_t NumberOfVRegs() const {
+#ifdef MOE
+    return number_of_vregs_ & ~kHasReferenceArray;
+#else
     return number_of_vregs_;
+#endif
   }
 
   uint32_t GetDexPC() const {
@@ -192,15 +211,27 @@ class ShadowFrame {
 
   int32_t GetVReg(size_t i) const {
     DCHECK_LT(i, NumberOfVRegs());
+#ifndef MOE
     const uint32_t* vreg = &vregs_[i];
+#else
+    const uintptr_t* vreg = &vregs_[i];
+#endif
     return *reinterpret_cast<const int32_t*>(vreg);
   }
 
+#ifndef MOE
   uint32_t* GetVRegAddr(size_t i) {
+#else
+  uintptr_t* GetVRegAddr(size_t i) {
+#endif
     return &vregs_[i];
   }
 
+#ifndef MOE
   uint32_t* GetShadowRefAddr(size_t i) {
+#else
+  uintptr_t* GetShadowRefAddr(size_t i) {
+#endif
     DCHECK(HasReferenceArray());
     DCHECK_LT(i, NumberOfVRegs());
     return &vregs_[i + NumberOfVRegs()];
@@ -213,24 +244,53 @@ class ShadowFrame {
   float GetVRegFloat(size_t i) const {
     DCHECK_LT(i, NumberOfVRegs());
     // NOTE: Strict-aliasing?
+#ifndef MOE
     const uint32_t* vreg = &vregs_[i];
+#else
+    const uintptr_t* vreg = &vregs_[i];
+#endif
     return *reinterpret_cast<const float*>(vreg);
   }
 
   int64_t GetVRegLong(size_t i) const {
     DCHECK_LT(i, NumberOfVRegs());
+#ifndef MOE
     const uint32_t* vreg = &vregs_[i];
     // Alignment attribute required for GCC 4.8
     typedef const int64_t unaligned_int64 __attribute__ ((aligned (4)));
     return *reinterpret_cast<unaligned_int64*>(vreg);
+#else
+    if (sizeof(uintptr_t) > sizeof(uint32_t)) {
+      const uintptr_t* vreg1 = &vregs_[i];
+      const uintptr_t* vreg2 = &vregs_[i + 1];
+      return static_cast<uint64_t>(*reinterpret_cast<const uint32_t*>(vreg1)) |
+          (static_cast<uint64_t>(*reinterpret_cast<const uint32_t*>(vreg2)) << 32);
+    } else {
+      const uintptr_t* vreg = &vregs_[i];
+      return *reinterpret_cast<const uint64_t*>(vreg);
+    }
+#endif
   }
 
   double GetVRegDouble(size_t i) const {
     DCHECK_LT(i, NumberOfVRegs());
+#ifndef MOE
     const uint32_t* vreg = &vregs_[i];
     // Alignment attribute required for GCC 4.8
     typedef const double unaligned_double __attribute__ ((aligned (4)));
     return *reinterpret_cast<unaligned_double*>(vreg);
+#else
+    if (sizeof(uintptr_t) > sizeof(uint32_t)) {
+      const uintptr_t* vreg1 = &vregs_[i];
+      const uintptr_t* vreg2 = &vregs_[i + 1];
+      uint64_t wide_value = static_cast<uint64_t>(*reinterpret_cast<const uint32_t*>(vreg1)) |
+          (static_cast<uint64_t>(*reinterpret_cast<const uint32_t*>(vreg2)) << 32);
+      return *reinterpret_cast<double*>(&wide_value);
+    } else {
+      const uintptr_t* vreg = &vregs_[i];
+      return *reinterpret_cast<const double*>(vreg);
+    }
+#endif
   }
 
   // Look up the reference given its virtual register number.
@@ -243,7 +303,11 @@ class ShadowFrame {
     if (HasReferenceArray()) {
       ref = References()[i].AsMirrorPtr();
     } else {
+#ifndef MOE
       const uint32_t* vreg_ptr = &vregs_[i];
+#else
+      const uintptr_t* vreg_ptr = &vregs_[i];
+#endif
       ref = reinterpret_cast<const StackReference<mirror::Object>*>(vreg_ptr)->AsMirrorPtr();
     }
     if (kUseReadBarrier) {
@@ -256,13 +320,24 @@ class ShadowFrame {
   }
 
   // Get view of vregs as range of consecutive arguments starting at i.
+#ifndef MOE
   uint32_t* GetVRegArgs(size_t i) {
+#else
+  uintptr_t* GetVRegArgs(size_t i) {
+#endif
     return &vregs_[i];
   }
 
   void SetVReg(size_t i, int32_t val) {
     DCHECK_LT(i, NumberOfVRegs());
+#ifndef MOE
     uint32_t* vreg = &vregs_[i];
+#else
+    uintptr_t* vreg = &vregs_[i];
+    if (sizeof(uintptr_t) > sizeof(val)) {
+      *vreg = 0;
+    }
+#endif
     *reinterpret_cast<int32_t*>(vreg) = val;
     // This is needed for moving collectors since these can update the vreg references if they
     // happen to agree with references in the reference array.
@@ -273,7 +348,14 @@ class ShadowFrame {
 
   void SetVRegFloat(size_t i, float val) {
     DCHECK_LT(i, NumberOfVRegs());
+#ifndef MOE
     uint32_t* vreg = &vregs_[i];
+#else
+    uintptr_t* vreg = &vregs_[i];
+    if (sizeof(uintptr_t) > sizeof(val)) {
+      *vreg = 0;
+    }
+#endif
     *reinterpret_cast<float*>(vreg) = val;
     // This is needed for moving collectors since these can update the vreg references if they
     // happen to agree with references in the reference array.
@@ -284,10 +366,24 @@ class ShadowFrame {
 
   void SetVRegLong(size_t i, int64_t val) {
     DCHECK_LT(i, NumberOfVRegs());
+#ifndef MOE
     uint32_t* vreg = &vregs_[i];
-    // Alignment attribute required for GCC 4.8
+     // Alignment attribute required for GCC 4.8
     typedef int64_t unaligned_int64 __attribute__ ((aligned (4)));
     *reinterpret_cast<unaligned_int64*>(vreg) = val;
+#else
+    if (sizeof(uintptr_t) > sizeof(uint32_t)) {
+      uintptr_t* vreg1 = &vregs_[i];
+      uintptr_t* vreg2 = &vregs_[i + 1];
+      *vreg1 = 0;
+      *vreg2 = 0;
+      *reinterpret_cast<uint32_t*>(vreg1) = reinterpret_cast<uint32_t*>(&val)[0];
+      *reinterpret_cast<uint32_t*>(vreg2) = reinterpret_cast<uint32_t*>(&val)[1];
+    } else {
+      uintptr_t* vreg = &vregs_[i];
+      *reinterpret_cast<uint64_t*>(vreg) = val;
+    }
+#endif
     // This is needed for moving collectors since these can update the vreg references if they
     // happen to agree with references in the reference array.
     if (kMovingCollector && HasReferenceArray()) {
@@ -298,10 +394,24 @@ class ShadowFrame {
 
   void SetVRegDouble(size_t i, double val) {
     DCHECK_LT(i, NumberOfVRegs());
+#ifndef MOE
     uint32_t* vreg = &vregs_[i];
     // Alignment attribute required for GCC 4.8
     typedef double unaligned_double __attribute__ ((aligned (4)));
     *reinterpret_cast<unaligned_double*>(vreg) = val;
+#else
+    if (sizeof(uintptr_t) > sizeof(uint32_t)) {
+      uintptr_t* vreg1 = &vregs_[i];
+      uintptr_t* vreg2 = &vregs_[i + 1];
+      *vreg1 = 0;
+      *vreg2 = 0;
+      *reinterpret_cast<uint32_t*>(vreg1) = reinterpret_cast<uint32_t*>(&val)[0];
+      *reinterpret_cast<uint32_t*>(vreg2) = reinterpret_cast<uint32_t*>(&val)[1];
+    } else {
+      uintptr_t* vreg = &vregs_[i];
+      *reinterpret_cast<double*>(vreg) = val;
+    }
+#endif
     // This is needed for moving collectors since these can update the vreg references if they
     // happen to agree with references in the reference array.
     if (kMovingCollector && HasReferenceArray()) {
@@ -319,7 +429,11 @@ class ShadowFrame {
     if (kUseReadBarrier) {
       ReadBarrier::AssertToSpaceInvariant(val);
     }
+#ifndef MOE
     uint32_t* vreg = &vregs_[i];
+#else
+    uintptr_t* vreg = &vregs_[i];
+#endif
     reinterpret_cast<StackReference<mirror::Object>*>(vreg)->Assign(val);
     if (HasReferenceArray()) {
       References()[i].Assign(val);
@@ -340,7 +454,11 @@ class ShadowFrame {
       return ((&References()[0] <= shadow_frame_entry_obj) &&
               (shadow_frame_entry_obj <= (&References()[NumberOfVRegs() - 1])));
     } else {
+#ifndef MOE
       uint32_t* shadow_frame_entry = reinterpret_cast<uint32_t*>(shadow_frame_entry_obj);
+#else
+      uintptr_t* shadow_frame_entry = reinterpret_cast<uintptr_t*>(shadow_frame_entry_obj);
+#endif
       return ((&vregs_[0] <= shadow_frame_entry) &&
               (shadow_frame_entry <= (&vregs_[NumberOfVRegs() - 1])));
     }
@@ -418,16 +536,30 @@ class ShadowFrame {
         code_item_(nullptr), number_of_vregs_(num_vregs), dex_pc_(dex_pc) {
     // TODO(iam): Remove this parameter, it's an an artifact of portable removal
     DCHECK(has_reference_array);
+#ifndef MOE
     if (has_reference_array) {
       memset(vregs_, 0, num_vregs * (sizeof(uint32_t) + sizeof(StackReference<mirror::Object>)));
     } else {
       memset(vregs_, 0, num_vregs * sizeof(uint32_t));
     }
+#else
+    if (has_reference_array) {
+      CHECK_LT(num_vregs, static_cast<uint32_t>(kHasReferenceArray));
+      number_of_vregs_ |= kHasReferenceArray;
+      memset(vregs_, 0, num_vregs * (sizeof(uintptr_t) + sizeof(StackReference<mirror::Object>)));
+    } else {
+      memset(vregs_, 0, num_vregs * sizeof(uintptr_t));
+    }
+#endif
   }
 
   const StackReference<mirror::Object>* References() const {
     DCHECK(HasReferenceArray());
+#ifndef MOE
     const uint32_t* vreg_end = &vregs_[NumberOfVRegs()];
+#else
+    const uintptr_t* vreg_end = &vregs_[NumberOfVRegs()];
+#endif
     return reinterpret_cast<const StackReference<mirror::Object>*>(vreg_end);
   }
 
@@ -443,7 +575,16 @@ class ShadowFrame {
   const uint16_t* dex_pc_ptr_;
   const DexFile::CodeItem* code_item_;
   LockCountData lock_count_data_;  // This may contain GC roots when lock counting is active.
+#ifdef MOE
+  #define SKIP_THIS_ENUM enum
+  SKIP_THIS_ENUM ShadowFrameFlag : uint32_t {
+    kHasReferenceArray = 1ul << 31
+  };
+  #undef SKIP_THIS_ENUM
+  uint32_t number_of_vregs_;
+#else
   const uint32_t number_of_vregs_;
+#endif
   uint32_t dex_pc_;
   int16_t cached_hotness_countdown_;
   int16_t hotness_countdown_;
@@ -456,7 +597,11 @@ class ShadowFrame {
   // In other words when a primitive is stored in vX, the second (reference) part of the array will
   // be null. When a reference is stored in vX, the second (reference) part of the array will be a
   // copy of vX.
+#ifndef MOE
   uint32_t vregs_[0];
+#else
+  uintptr_t vregs_[0];
+#endif
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(ShadowFrame);
 };
@@ -486,6 +631,9 @@ class JavaFrameRootInfo : public RootInfo {
 // may either be shadow frames or lists of frames using fixed frame sizes. Transition records are
 // necessary for transitions between code using different frame layouts and transitions into native
 // code.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class PACKED(4) ManagedStack {
  public:
   ManagedStack()
@@ -561,6 +709,9 @@ class PACKED(4) ManagedStack {
   ManagedStack* link_;
   ShadowFrame* top_shadow_frame_;
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 class StackVisitor {
  public:
@@ -633,7 +784,11 @@ class StackVisitor {
   bool GetNextMethodAndDexPc(ArtMethod** next_method, uint32_t* next_dex_pc)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+#ifndef MOE
   bool GetVReg(ArtMethod* m, uint16_t vreg, VRegKind kind, uint32_t* val) const
+#else
+  bool GetVReg(ArtMethod* m, uint16_t vreg, VRegKind kind, uintptr_t* val) const
+#endif
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   bool GetVRegPair(ArtMethod* m, uint16_t vreg, VRegKind kind_lo, VRegKind kind_hi,
@@ -642,7 +797,11 @@ class StackVisitor {
 
   // Values will be set in debugger shadow frames. Debugger will make sure deoptimization
   // is triggered to make the values effective.
+#ifndef MOE
   bool SetVReg(ArtMethod* m, uint16_t vreg, uint32_t new_value, VRegKind kind)
+#else
+  bool SetVReg(ArtMethod* m, uint16_t vreg, uintptr_t new_value, VRegKind kind)
+#endif
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Values will be set in debugger shadow frames. Debugger will make sure deoptimization
@@ -792,7 +951,11 @@ class StackVisitor {
   bool IsAccessibleFPR(uint32_t reg) const;
   uintptr_t GetFPR(uint32_t reg) const;
 
+#ifndef MOE
   bool GetVRegFromDebuggerShadowFrame(uint16_t vreg, VRegKind kind, uint32_t* val) const
+#else
+  bool GetVRegFromDebuggerShadowFrame(uint16_t vreg, VRegKind kind, uintptr_t* val) const
+#endif
       SHARED_REQUIRES(Locks::mutator_lock_);
   bool GetVRegFromOptimizedCode(ArtMethod* m, uint16_t vreg, VRegKind kind,
                                 uint32_t* val) const

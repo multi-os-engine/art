@@ -1612,7 +1612,7 @@ const char* const GuardedCopy::kCanary = "JNI BUFFER RED ZONE";
 
 class CheckJNI {
  public:
-  static jint GetVersion(JNIEnv* env) {
+  static JNICALL jint GetVersion(JNIEnv* env) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[1] = {{.E = env }};
@@ -1626,7 +1626,7 @@ class CheckJNI {
     return JNI_ERR;
   }
 
-  static jint GetJavaVM(JNIEnv *env, JavaVM **vm) {
+  static JNICALL jint GetJavaVM(JNIEnv *env, JavaVM **vm) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[2] = {{.E = env }, {.p = vm}};
@@ -1640,7 +1640,7 @@ class CheckJNI {
     return JNI_ERR;
   }
 
-  static jint RegisterNatives(JNIEnv* env, jclass c, const JNINativeMethod* methods, jint nMethods) {
+  static JNICALL jint RegisterNatives(JNIEnv* env, jclass c, const JNINativeMethod* methods, jint nMethods) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[4] = {{.E = env }, {.c = c}, {.p = methods}, {.I = nMethods}};
@@ -1654,7 +1654,7 @@ class CheckJNI {
     return JNI_ERR;
   }
 
-  static jint UnregisterNatives(JNIEnv* env, jclass c) {
+  static JNICALL jint UnregisterNatives(JNIEnv* env, jclass c) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[2] = {{.E = env }, {.c = c}};
@@ -1668,7 +1668,7 @@ class CheckJNI {
     return JNI_ERR;
   }
 
-  static jobjectRefType GetObjectRefType(JNIEnv* env, jobject obj) {
+  static JNICALL jobjectRefType GetObjectRefType(JNIEnv* env, jobject obj) {
     // Note: we use "EL" here but "Ep" has been used in the past on the basis that we'd like to
     // know the object is invalid. The spec says that passing invalid objects or even ones that
     // are deleted isn't supported.
@@ -1685,7 +1685,7 @@ class CheckJNI {
     return JNIInvalidRefType;
   }
 
-  static jclass DefineClass(JNIEnv* env, const char* name, jobject loader, const jbyte* buf,
+  static JNICALL jclass DefineClass(JNIEnv* env, const char* name, jobject loader, const jbyte* buf,
                             jsize bufLen) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
@@ -1700,7 +1700,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jclass FindClass(JNIEnv* env, const char* name) {
+  static JNICALL jclass FindClass(JNIEnv* env, const char* name) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.u = name}};
@@ -1714,7 +1714,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jclass GetSuperclass(JNIEnv* env, jclass c) {
+  static JNICALL jclass GetSuperclass(JNIEnv* env, jclass c) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.c = c}};
@@ -1728,7 +1728,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jboolean IsAssignableFrom(JNIEnv* env, jclass c1, jclass c2) {
+  static JNICALL jboolean IsAssignableFrom(JNIEnv* env, jclass c1, jclass c2) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[3] = {{.E = env}, {.c = c1}, {.c = c2}};
@@ -1742,7 +1742,7 @@ class CheckJNI {
     return JNI_FALSE;
   }
 
-  static jmethodID FromReflectedMethod(JNIEnv* env, jobject method) {
+  static JNICALL jmethodID FromReflectedMethod(JNIEnv* env, jobject method) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.L = method}};
@@ -1756,7 +1756,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jfieldID FromReflectedField(JNIEnv* env, jobject field) {
+  static JNICALL jfieldID FromReflectedField(JNIEnv* env, jobject field) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.L = field}};
@@ -1770,7 +1770,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jobject ToReflectedMethod(JNIEnv* env, jclass cls, jmethodID mid, jboolean isStatic) {
+  static JNICALL jobject ToReflectedMethod(JNIEnv* env, jclass cls, jmethodID mid, jboolean isStatic) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[4] = {{.E = env}, {.c = cls}, {.m = mid}, {.b = isStatic}};
@@ -1785,7 +1785,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jobject ToReflectedField(JNIEnv* env, jclass cls, jfieldID fid, jboolean isStatic) {
+  static JNICALL jobject ToReflectedField(JNIEnv* env, jclass cls, jfieldID fid, jboolean isStatic) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[4] = {{.E = env}, {.c = cls}, {.f = fid}, {.b = isStatic}};
@@ -1800,7 +1800,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jint Throw(JNIEnv* env, jthrowable obj) {
+  static JNICALL jint Throw(JNIEnv* env, jthrowable obj) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.t = obj}};
@@ -1814,7 +1814,7 @@ class CheckJNI {
     return JNI_ERR;
   }
 
-  static jint ThrowNew(JNIEnv* env, jclass c, const char* message) {
+  static JNICALL jint ThrowNew(JNIEnv* env, jclass c, const char* message) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_NullableUtf, __FUNCTION__);
     JniValueType args[3] = {{.E = env}, {.c = c}, {.u = message}};
@@ -1828,7 +1828,7 @@ class CheckJNI {
     return JNI_ERR;
   }
 
-  static jthrowable ExceptionOccurred(JNIEnv* env) {
+  static JNICALL jthrowable ExceptionOccurred(JNIEnv* env) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_ExcepOkay, __FUNCTION__);
     JniValueType args[1] = {{.E = env}};
@@ -1842,7 +1842,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static void ExceptionDescribe(JNIEnv* env) {
+  static JNICALL void ExceptionDescribe(JNIEnv* env) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_ExcepOkay, __FUNCTION__);
     JniValueType args[1] = {{.E = env}};
@@ -1854,7 +1854,7 @@ class CheckJNI {
     }
   }
 
-  static void ExceptionClear(JNIEnv* env) {
+  static JNICALL void ExceptionClear(JNIEnv* env) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_ExcepOkay, __FUNCTION__);
     JniValueType args[1] = {{.E = env}};
@@ -1866,7 +1866,7 @@ class CheckJNI {
     }
   }
 
-  static jboolean ExceptionCheck(JNIEnv* env) {
+  static JNICALL jboolean ExceptionCheck(JNIEnv* env) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_CritOkay | kFlag_ExcepOkay, __FUNCTION__);
     JniValueType args[1] = {{.E = env}};
@@ -1880,7 +1880,7 @@ class CheckJNI {
     return JNI_FALSE;
   }
 
-  static void FatalError(JNIEnv* env, const char* msg) {
+  static JNICALL void FatalError(JNIEnv* env, const char* msg) {
     // The JNI specification doesn't say it's okay to call FatalError with a pending exception,
     // but you're about to abort anyway, and it's quite likely that you have a pending exception,
     // and it's not unimaginable that you don't know that you do. So we allow it.
@@ -1896,7 +1896,7 @@ class CheckJNI {
     }
   }
 
-  static jint PushLocalFrame(JNIEnv* env, jint capacity) {
+  static JNICALL jint PushLocalFrame(JNIEnv* env, jint capacity) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_ExcepOkay, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.I = capacity}};
@@ -1910,7 +1910,7 @@ class CheckJNI {
     return JNI_ERR;
   }
 
-  static jobject PopLocalFrame(JNIEnv* env, jobject res) {
+  static JNICALL jobject PopLocalFrame(JNIEnv* env, jobject res) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_ExcepOkay, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.L = res}};
@@ -1923,31 +1923,31 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jobject NewGlobalRef(JNIEnv* env, jobject obj) {
+  static JNICALL jobject NewGlobalRef(JNIEnv* env, jobject obj) {
     return NewRef(__FUNCTION__, env, obj, kGlobal);
   }
 
-  static jobject NewLocalRef(JNIEnv* env, jobject obj) {
+  static JNICALL jobject NewLocalRef(JNIEnv* env, jobject obj) {
     return NewRef(__FUNCTION__, env, obj, kLocal);
   }
 
-  static jweak NewWeakGlobalRef(JNIEnv* env, jobject obj) {
+  static JNICALL jweak NewWeakGlobalRef(JNIEnv* env, jobject obj) {
     return NewRef(__FUNCTION__, env, obj, kWeakGlobal);
   }
 
-  static void DeleteGlobalRef(JNIEnv* env, jobject obj) {
+  static JNICALL void DeleteGlobalRef(JNIEnv* env, jobject obj) {
     DeleteRef(__FUNCTION__, env, obj, kGlobal);
   }
 
-  static void DeleteWeakGlobalRef(JNIEnv* env, jweak obj) {
+  static JNICALL void DeleteWeakGlobalRef(JNIEnv* env, jweak obj) {
     DeleteRef(__FUNCTION__, env, obj, kWeakGlobal);
   }
 
-  static void DeleteLocalRef(JNIEnv* env, jobject obj) {
+  static JNICALL void DeleteLocalRef(JNIEnv* env, jobject obj) {
     DeleteRef(__FUNCTION__, env, obj, kLocal);
   }
 
-  static jint EnsureLocalCapacity(JNIEnv *env, jint capacity) {
+  static JNICALL jint EnsureLocalCapacity(JNIEnv *env, jint capacity) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.I = capacity}};
@@ -1961,7 +1961,7 @@ class CheckJNI {
     return JNI_ERR;
   }
 
-  static jboolean IsSameObject(JNIEnv* env, jobject ref1, jobject ref2) {
+  static JNICALL jboolean IsSameObject(JNIEnv* env, jobject ref1, jobject ref2) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[3] = {{.E = env}, {.L = ref1}, {.L = ref2}};
@@ -1975,7 +1975,7 @@ class CheckJNI {
     return JNI_FALSE;
   }
 
-  static jobject AllocObject(JNIEnv* env, jclass c) {
+  static JNICALL jobject AllocObject(JNIEnv* env, jclass c) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.c = c}};
@@ -1989,7 +1989,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jobject NewObjectV(JNIEnv* env, jclass c, jmethodID mid, va_list vargs) {
+  static JNICALL jobject NewObjectV(JNIEnv* env, jclass c, jmethodID mid, va_list vargs) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     VarArgs rest(mid, vargs);
@@ -2005,7 +2005,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jobject NewObject(JNIEnv* env, jclass c, jmethodID mid, ...) {
+  static JNICALL jobject NewObject(JNIEnv* env, jclass c, jmethodID mid, ...) {
     va_list args;
     va_start(args, mid);
     jobject result = NewObjectV(env, c, mid, args);
@@ -2013,7 +2013,7 @@ class CheckJNI {
     return result;
   }
 
-  static jobject NewObjectA(JNIEnv* env, jclass c, jmethodID mid, jvalue* vargs) {
+  static JNICALL jobject NewObjectA(JNIEnv* env, jclass c, jmethodID mid, jvalue* vargs) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     VarArgs rest(mid, vargs);
@@ -2029,7 +2029,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jclass GetObjectClass(JNIEnv* env, jobject obj) {
+  static JNICALL jclass GetObjectClass(JNIEnv* env, jobject obj) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.L = obj}};
@@ -2043,7 +2043,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jboolean IsInstanceOf(JNIEnv* env, jobject obj, jclass c) {
+  static JNICALL jboolean IsInstanceOf(JNIEnv* env, jobject obj, jclass c) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[3] = {{.E = env}, {.L = obj}, {.c = c}};
@@ -2057,38 +2057,38 @@ class CheckJNI {
     return JNI_FALSE;
   }
 
-  static jmethodID GetMethodID(JNIEnv* env, jclass c, const char* name, const char* sig) {
+  static JNICALL jmethodID GetMethodID(JNIEnv* env, jclass c, const char* name, const char* sig) {
     return GetMethodIDInternal(__FUNCTION__, env, c, name, sig, false);
   }
 
-  static jmethodID GetStaticMethodID(JNIEnv* env, jclass c, const char* name, const char* sig) {
+  static JNICALL jmethodID GetStaticMethodID(JNIEnv* env, jclass c, const char* name, const char* sig) {
     return GetMethodIDInternal(__FUNCTION__, env, c, name, sig, true);
   }
 
-  static jfieldID GetFieldID(JNIEnv* env, jclass c, const char* name, const char* sig) {
+  static JNICALL jfieldID GetFieldID(JNIEnv* env, jclass c, const char* name, const char* sig) {
     return GetFieldIDInternal(__FUNCTION__, env, c, name, sig, false);
   }
 
-  static jfieldID GetStaticFieldID(JNIEnv* env, jclass c, const char* name, const char* sig) {
+  static JNICALL jfieldID GetStaticFieldID(JNIEnv* env, jclass c, const char* name, const char* sig) {
     return GetFieldIDInternal(__FUNCTION__, env, c, name, sig, true);
   }
 
 #define FIELD_ACCESSORS(jtype, name, ptype, shorty) \
-  static jtype GetStatic##name##Field(JNIEnv* env, jclass c, jfieldID fid) { \
+  static JNICALL jtype GetStatic##name##Field(JNIEnv* env, jclass c, jfieldID fid) { \
     return GetField(__FUNCTION__, env, c, fid, true, ptype).shorty; \
   } \
   \
-  static jtype Get##name##Field(JNIEnv* env, jobject obj, jfieldID fid) { \
+  static JNICALL jtype Get##name##Field(JNIEnv* env, jobject obj, jfieldID fid) { \
     return GetField(__FUNCTION__, env, obj, fid, false, ptype).shorty; \
   } \
   \
-  static void SetStatic##name##Field(JNIEnv* env, jclass c, jfieldID fid, jtype v) { \
+  static JNICALL void SetStatic##name##Field(JNIEnv* env, jclass c, jfieldID fid, jtype v) { \
     JniValueType value; \
     value.shorty = v; \
     SetField(__FUNCTION__, env, c, fid, true, ptype, value); \
   } \
   \
-  static void Set##name##Field(JNIEnv* env, jobject obj, jfieldID fid, jtype v) { \
+  static JNICALL void Set##name##Field(JNIEnv* env, jobject obj, jfieldID fid, jtype v) { \
     JniValueType value; \
     value.shorty = v; \
     SetField(__FUNCTION__, env, obj, fid, false, ptype, value); \
@@ -2105,47 +2105,47 @@ class CheckJNI {
   FIELD_ACCESSORS(jdouble, Double, Primitive::kPrimDouble, D)
 #undef FIELD_ACCESSORS
 
-  static void CallVoidMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* vargs) {
+  static JNICALL void CallVoidMethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* vargs) {
     CallMethodA(__FUNCTION__, env, obj, nullptr, mid, vargs, Primitive::kPrimVoid, kVirtual);
   }
 
-  static void CallNonvirtualVoidMethodA(JNIEnv* env, jobject obj, jclass c, jmethodID mid,
+  static JNICALL void CallNonvirtualVoidMethodA(JNIEnv* env, jobject obj, jclass c, jmethodID mid,
                                         jvalue* vargs) {
     CallMethodA(__FUNCTION__, env, obj, c, mid, vargs, Primitive::kPrimVoid, kDirect);
   }
 
-  static void CallStaticVoidMethodA(JNIEnv* env, jclass c, jmethodID mid, jvalue* vargs) {
+  static JNICALL void CallStaticVoidMethodA(JNIEnv* env, jclass c, jmethodID mid, jvalue* vargs) {
     CallMethodA(__FUNCTION__, env, nullptr, c, mid, vargs, Primitive::kPrimVoid, kStatic);
   }
 
-  static void CallVoidMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list vargs) {
+  static JNICALL void CallVoidMethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list vargs) {
     CallMethodV(__FUNCTION__, env, obj, nullptr, mid, vargs, Primitive::kPrimVoid, kVirtual);
   }
 
-  static void CallNonvirtualVoidMethodV(JNIEnv* env, jobject obj, jclass c, jmethodID mid,
+  static JNICALL void CallNonvirtualVoidMethodV(JNIEnv* env, jobject obj, jclass c, jmethodID mid,
                                         va_list vargs) {
     CallMethodV(__FUNCTION__, env, obj, c, mid, vargs, Primitive::kPrimVoid, kDirect);
   }
 
-  static void CallStaticVoidMethodV(JNIEnv* env, jclass c, jmethodID mid, va_list vargs) {
+  static JNICALL void CallStaticVoidMethodV(JNIEnv* env, jclass c, jmethodID mid, va_list vargs) {
     CallMethodV(__FUNCTION__, env, nullptr, c, mid, vargs, Primitive::kPrimVoid, kStatic);
   }
 
-  static void CallVoidMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
+  static JNICALL void CallVoidMethod(JNIEnv* env, jobject obj, jmethodID mid, ...) {
     va_list vargs;
     va_start(vargs, mid);
     CallMethodV(__FUNCTION__, env, obj, nullptr, mid, vargs, Primitive::kPrimVoid, kVirtual);
     va_end(vargs);
   }
 
-  static void CallNonvirtualVoidMethod(JNIEnv* env, jobject obj, jclass c, jmethodID mid, ...) {
+  static JNICALL void CallNonvirtualVoidMethod(JNIEnv* env, jobject obj, jclass c, jmethodID mid, ...) {
     va_list vargs;
     va_start(vargs, mid);
     CallMethodV(__FUNCTION__, env, obj, c, mid, vargs, Primitive::kPrimVoid, kDirect);
     va_end(vargs);
   }
 
-  static void CallStaticVoidMethod(JNIEnv* env, jclass c, jmethodID mid, ...) {
+  static JNICALL void CallStaticVoidMethod(JNIEnv* env, jclass c, jmethodID mid, ...) {
     va_list vargs;
     va_start(vargs, mid);
     CallMethodV(__FUNCTION__, env, nullptr, c, mid, vargs, Primitive::kPrimVoid, kStatic);
@@ -2153,33 +2153,33 @@ class CheckJNI {
   }
 
 #define CALL(rtype, name, ptype, shorty) \
-  static rtype Call##name##MethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* vargs) { \
+  static JNICALL rtype Call##name##MethodA(JNIEnv* env, jobject obj, jmethodID mid, jvalue* vargs) { \
     return CallMethodA(__FUNCTION__, env, obj, nullptr, mid, vargs, ptype, kVirtual).shorty; \
   } \
   \
-  static rtype CallNonvirtual##name##MethodA(JNIEnv* env, jobject obj, jclass c, jmethodID mid, \
+  static JNICALL rtype CallNonvirtual##name##MethodA(JNIEnv* env, jobject obj, jclass c, jmethodID mid, \
                                              jvalue* vargs) { \
     return CallMethodA(__FUNCTION__, env, obj, c, mid, vargs, ptype, kDirect).shorty; \
   } \
   \
-  static rtype CallStatic##name##MethodA(JNIEnv* env, jclass c, jmethodID mid, jvalue* vargs) { \
+  static JNICALL rtype CallStatic##name##MethodA(JNIEnv* env, jclass c, jmethodID mid, jvalue* vargs) { \
     return CallMethodA(__FUNCTION__, env, nullptr, c, mid, vargs, ptype, kStatic).shorty; \
   } \
   \
-  static rtype Call##name##MethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list vargs) { \
+  static JNICALL rtype Call##name##MethodV(JNIEnv* env, jobject obj, jmethodID mid, va_list vargs) { \
     return CallMethodV(__FUNCTION__, env, obj, nullptr, mid, vargs, ptype, kVirtual).shorty; \
   } \
   \
-  static rtype CallNonvirtual##name##MethodV(JNIEnv* env, jobject obj, jclass c, jmethodID mid, \
+  static JNICALL rtype CallNonvirtual##name##MethodV(JNIEnv* env, jobject obj, jclass c, jmethodID mid, \
                                              va_list vargs) { \
     return CallMethodV(__FUNCTION__, env, obj, c, mid, vargs, ptype, kDirect).shorty; \
   } \
   \
-  static rtype CallStatic##name##MethodV(JNIEnv* env, jclass c, jmethodID mid, va_list vargs) { \
+  static JNICALL rtype CallStatic##name##MethodV(JNIEnv* env, jclass c, jmethodID mid, va_list vargs) { \
     return CallMethodV(__FUNCTION__, env, nullptr, c, mid, vargs, ptype, kStatic).shorty; \
   } \
   \
-  static rtype Call##name##Method(JNIEnv* env, jobject obj, jmethodID mid, ...) { \
+  static JNICALL rtype Call##name##Method(JNIEnv* env, jobject obj, jmethodID mid, ...) { \
     va_list vargs; \
     va_start(vargs, mid); \
     rtype result = \
@@ -2188,7 +2188,7 @@ class CheckJNI {
     return result; \
   } \
   \
-  static rtype CallNonvirtual##name##Method(JNIEnv* env, jobject obj, jclass c, jmethodID mid, \
+  static JNICALL rtype CallNonvirtual##name##Method(JNIEnv* env, jobject obj, jclass c, jmethodID mid, \
                                             ...) { \
     va_list vargs; \
     va_start(vargs, mid); \
@@ -2198,7 +2198,7 @@ class CheckJNI {
     return result; \
   } \
   \
-  static rtype CallStatic##name##Method(JNIEnv* env, jclass c, jmethodID mid, ...) { \
+  static JNICALL rtype CallStatic##name##Method(JNIEnv* env, jclass c, jmethodID mid, ...) { \
     va_list vargs; \
     va_start(vargs, mid); \
     rtype result = \
@@ -2218,7 +2218,7 @@ class CheckJNI {
   CALL(jdouble, Double, Primitive::kPrimDouble, D)
 #undef CALL
 
-  static jstring NewString(JNIEnv* env, const jchar* unicode_chars, jsize len) {
+  static JNICALL jstring NewString(JNIEnv* env, const jchar* unicode_chars, jsize len) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[3] = {{.E = env}, {.p = unicode_chars}, {.z = len}};
@@ -2232,7 +2232,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jstring NewStringUTF(JNIEnv* env, const char* chars) {
+  static JNICALL jstring NewStringUTF(JNIEnv* env, const char* chars) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_NullableUtf, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.u = chars}};
@@ -2247,7 +2247,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jsize GetStringLength(JNIEnv* env, jstring string) {
+  static JNICALL jsize GetStringLength(JNIEnv* env, jstring string) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_CritOkay, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.s = string}};
@@ -2261,7 +2261,7 @@ class CheckJNI {
     return JNI_ERR;
   }
 
-  static jsize GetStringUTFLength(JNIEnv* env, jstring string) {
+  static JNICALL jsize GetStringUTFLength(JNIEnv* env, jstring string) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_CritOkay, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.s = string}};
@@ -2275,34 +2275,34 @@ class CheckJNI {
     return JNI_ERR;
   }
 
-  static const jchar* GetStringChars(JNIEnv* env, jstring string, jboolean* is_copy) {
+  static JNICALL const jchar* GetStringChars(JNIEnv* env, jstring string, jboolean* is_copy) {
     return reinterpret_cast<const jchar*>(GetStringCharsInternal(__FUNCTION__, env, string,
                                                                  is_copy, false, false));
   }
 
-  static const char* GetStringUTFChars(JNIEnv* env, jstring string, jboolean* is_copy) {
+  static JNICALL const char* GetStringUTFChars(JNIEnv* env, jstring string, jboolean* is_copy) {
     return reinterpret_cast<const char*>(GetStringCharsInternal(__FUNCTION__, env, string,
                                                                 is_copy, true, false));
   }
 
-  static const jchar* GetStringCritical(JNIEnv* env, jstring string, jboolean* is_copy) {
+  static JNICALL const jchar* GetStringCritical(JNIEnv* env, jstring string, jboolean* is_copy) {
     return reinterpret_cast<const jchar*>(GetStringCharsInternal(__FUNCTION__, env, string,
                                                                  is_copy, false, true));
   }
 
-  static void ReleaseStringChars(JNIEnv* env, jstring string, const jchar* chars) {
+  static JNICALL void ReleaseStringChars(JNIEnv* env, jstring string, const jchar* chars) {
     ReleaseStringCharsInternal(__FUNCTION__, env, string, chars, false, false);
   }
 
-  static void ReleaseStringUTFChars(JNIEnv* env, jstring string, const char* utf) {
+  static JNICALL void ReleaseStringUTFChars(JNIEnv* env, jstring string, const char* utf) {
     ReleaseStringCharsInternal(__FUNCTION__, env, string, utf, true, false);
   }
 
-  static void ReleaseStringCritical(JNIEnv* env, jstring string, const jchar* chars) {
+  static JNICALL void ReleaseStringCritical(JNIEnv* env, jstring string, const jchar* chars) {
     ReleaseStringCharsInternal(__FUNCTION__, env, string, chars, false, true);
   }
 
-  static void GetStringRegion(JNIEnv* env, jstring string, jsize start, jsize len, jchar* buf) {
+  static JNICALL void GetStringRegion(JNIEnv* env, jstring string, jsize start, jsize len, jchar* buf) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_CritOkay, __FUNCTION__);
     JniValueType args[5] = {{.E = env}, {.s = string}, {.z = start}, {.z = len}, {.p = buf}};
@@ -2316,7 +2316,7 @@ class CheckJNI {
     }
   }
 
-  static void GetStringUTFRegion(JNIEnv* env, jstring string, jsize start, jsize len, char* buf) {
+  static JNICALL void GetStringUTFRegion(JNIEnv* env, jstring string, jsize start, jsize len, char* buf) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_CritOkay, __FUNCTION__);
     JniValueType args[5] = {{.E = env}, {.s = string}, {.z = start}, {.z = len}, {.p = buf}};
@@ -2330,7 +2330,7 @@ class CheckJNI {
     }
   }
 
-  static jsize GetArrayLength(JNIEnv* env, jarray array) {
+  static JNICALL jsize GetArrayLength(JNIEnv* env, jarray array) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_CritOkay, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.a = array}};
@@ -2344,7 +2344,7 @@ class CheckJNI {
     return JNI_ERR;
   }
 
-  static jobjectArray NewObjectArray(JNIEnv* env, jsize length, jclass element_class,
+  static JNICALL jobjectArray NewObjectArray(JNIEnv* env, jsize length, jclass element_class,
                                      jobject initial_element) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
@@ -2361,7 +2361,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jobject GetObjectArrayElement(JNIEnv* env, jobjectArray array, jsize index) {
+  static JNICALL jobject GetObjectArrayElement(JNIEnv* env, jobjectArray array, jsize index) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[3] = {{.E = env}, {.a = array}, {.z = index}};
@@ -2375,7 +2375,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static void SetObjectArrayElement(JNIEnv* env, jobjectArray array, jsize index, jobject value) {
+  static JNICALL void SetObjectArrayElement(JNIEnv* env, jobjectArray array, jsize index, jobject value) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[4] = {{.E = env}, {.a = array}, {.z = index}, {.L = value}};
@@ -2390,63 +2390,63 @@ class CheckJNI {
     }
   }
 
-  static jbooleanArray NewBooleanArray(JNIEnv* env, jsize length) {
+  static JNICALL jbooleanArray NewBooleanArray(JNIEnv* env, jsize length) {
     return down_cast<jbooleanArray>(NewPrimitiveArray(__FUNCTION__, env, length,
                                                       Primitive::kPrimBoolean));
   }
 
-  static jbyteArray NewByteArray(JNIEnv* env, jsize length) {
+  static JNICALL jbyteArray NewByteArray(JNIEnv* env, jsize length) {
     return down_cast<jbyteArray>(NewPrimitiveArray(__FUNCTION__, env, length,
                                                    Primitive::kPrimByte));
   }
 
-  static jcharArray NewCharArray(JNIEnv* env, jsize length) {
+  static JNICALL jcharArray NewCharArray(JNIEnv* env, jsize length) {
     return down_cast<jcharArray>(NewPrimitiveArray(__FUNCTION__, env, length,
                                                    Primitive::kPrimChar));
   }
 
-  static jshortArray NewShortArray(JNIEnv* env, jsize length) {
+  static JNICALL jshortArray NewShortArray(JNIEnv* env, jsize length) {
     return down_cast<jshortArray>(NewPrimitiveArray(__FUNCTION__, env, length,
                                                     Primitive::kPrimShort));
   }
 
-  static jintArray NewIntArray(JNIEnv* env, jsize length) {
+  static JNICALL jintArray NewIntArray(JNIEnv* env, jsize length) {
     return down_cast<jintArray>(NewPrimitiveArray(__FUNCTION__, env, length, Primitive::kPrimInt));
   }
 
-  static jlongArray NewLongArray(JNIEnv* env, jsize length) {
+  static JNICALL jlongArray NewLongArray(JNIEnv* env, jsize length) {
     return down_cast<jlongArray>(NewPrimitiveArray(__FUNCTION__, env, length,
                                                    Primitive::kPrimLong));
   }
 
-  static jfloatArray NewFloatArray(JNIEnv* env, jsize length) {
+  static JNICALL jfloatArray NewFloatArray(JNIEnv* env, jsize length) {
     return down_cast<jfloatArray>(NewPrimitiveArray(__FUNCTION__, env, length,
                                                     Primitive::kPrimFloat));
   }
 
-  static jdoubleArray NewDoubleArray(JNIEnv* env, jsize length) {
+  static JNICALL jdoubleArray NewDoubleArray(JNIEnv* env, jsize length) {
     return down_cast<jdoubleArray>(NewPrimitiveArray(__FUNCTION__, env, length,
                                                      Primitive::kPrimDouble));
   }
 
 // NOLINT added to avoid wrong warning/fix from clang-tidy.
 #define PRIMITIVE_ARRAY_FUNCTIONS(ctype, name, ptype) \
-  static ctype* Get##name##ArrayElements(JNIEnv* env, ctype##Array array, jboolean* is_copy) { /* NOLINT */ \
+  static JNICALL ctype* Get##name##ArrayElements(JNIEnv* env, ctype##Array array, jboolean* is_copy) { /* NOLINT */ \
     return reinterpret_cast<ctype*>( /* NOLINT */ \
         GetPrimitiveArrayElements(__FUNCTION__, ptype, env, array, is_copy)); \
   } \
   \
-  static void Release##name##ArrayElements(JNIEnv* env, ctype##Array array, ctype* elems, /* NOLINT */ \
+  static JNICALL void Release##name##ArrayElements(JNIEnv* env, ctype##Array array, ctype* elems, /* NOLINT */ \
                                            jint mode) { \
     ReleasePrimitiveArrayElements(__FUNCTION__, ptype, env, array, elems, mode); \
   } \
   \
-  static void Get##name##ArrayRegion(JNIEnv* env, ctype##Array array, jsize start, jsize len, \
+  static JNICALL void Get##name##ArrayRegion(JNIEnv* env, ctype##Array array, jsize start, jsize len, \
                                      ctype* buf) { /* NOLINT */ \
     GetPrimitiveArrayRegion(__FUNCTION__, ptype, env, array, start, len, buf); \
   } \
   \
-  static void Set##name##ArrayRegion(JNIEnv* env, ctype##Array array, jsize start, jsize len, \
+  static JNICALL void Set##name##ArrayRegion(JNIEnv* env, ctype##Array array, jsize start, jsize len, \
                                      const ctype* buf) { \
     SetPrimitiveArrayRegion(__FUNCTION__, ptype, env, array, start, len, buf); \
   }
@@ -2461,7 +2461,7 @@ class CheckJNI {
   PRIMITIVE_ARRAY_FUNCTIONS(jdouble, Double, Primitive::kPrimDouble)
 #undef PRIMITIVE_ARRAY_FUNCTIONS
 
-  static jint MonitorEnter(JNIEnv* env, jobject obj) {
+  static JNICALL jint MonitorEnter(JNIEnv* env, jobject obj) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.L = obj}};
@@ -2478,7 +2478,7 @@ class CheckJNI {
     return JNI_ERR;
   }
 
-  static jint MonitorExit(JNIEnv* env, jobject obj) {
+  static JNICALL jint MonitorExit(JNIEnv* env, jobject obj) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_ExcepOkay, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.L = obj}};
@@ -2495,7 +2495,7 @@ class CheckJNI {
     return JNI_ERR;
   }
 
-  static void* GetPrimitiveArrayCritical(JNIEnv* env, jarray array, jboolean* is_copy) {
+  static JNICALL void* GetPrimitiveArrayCritical(JNIEnv* env, jarray array, jboolean* is_copy) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_CritGet, __FUNCTION__);
     JniValueType args[3] = {{.E = env}, {.a = array}, {.p = is_copy}};
@@ -2513,7 +2513,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static void ReleasePrimitiveArrayCritical(JNIEnv* env, jarray array, void* carray, jint mode) {
+  static JNICALL void ReleasePrimitiveArrayCritical(JNIEnv* env, jarray array, void* carray, jint mode) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_CritRelease | kFlag_ExcepOkay, __FUNCTION__);
     sc.CheckNonNull(carray);
@@ -2529,7 +2529,7 @@ class CheckJNI {
     }
   }
 
-  static jobject NewDirectByteBuffer(JNIEnv* env, void* address, jlong capacity) {
+  static JNICALL jobject NewDirectByteBuffer(JNIEnv* env, void* address, jlong capacity) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[3] = {{.E = env}, {.p = address}, {.J = capacity}};
@@ -2544,7 +2544,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static void* GetDirectBufferAddress(JNIEnv* env, jobject buf) {
+  static JNICALL void* GetDirectBufferAddress(JNIEnv* env, jobject buf) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.L = buf}};
@@ -2560,7 +2560,7 @@ class CheckJNI {
     return nullptr;
   }
 
-  static jlong GetDirectBufferCapacity(JNIEnv* env, jobject buf) {
+  static JNICALL jlong GetDirectBufferCapacity(JNIEnv* env, jobject buf) {
     ScopedObjectAccess soa(env);
     ScopedCheck sc(kFlag_Default, __FUNCTION__);
     JniValueType args[2] = {{.E = env}, {.L = buf}};
@@ -3277,6 +3277,10 @@ class CheckJNI {
               reinterpret_cast<const char*>(GuardedCopy::Create(ptr, length_in_bytes, false));
         } else {
           size_t length_in_bytes = baseEnv(env)->GetStringLength(env, string) * 2;
+#ifdef MOE
+          // MOE TODO: We null-terminate always.
+          length_in_bytes++;
+#endif
           result.p =
               reinterpret_cast<const jchar*>(GuardedCopy::Create(ptr, length_in_bytes, false));
         }
@@ -3814,7 +3818,12 @@ const JNINativeInterface* GetCheckJniNativeInterface() {
 
 class CheckJII {
  public:
-  static jint DestroyJavaVM(JavaVM* vm) {
+  static JNICALL jint DestroyJavaVM(JavaVM* vm) {
+#ifdef MOE
+    if (Runtime::Current() == nullptr) {
+      return JNI_ERR;
+    }
+#endif
     ScopedCheck sc(kFlag_Invocation, __FUNCTION__, false);
     JniValueType args[1] = {{.v = vm}};
     sc.CheckNonHeap(reinterpret_cast<JavaVMExt*>(vm), true, "v", args);
@@ -3826,7 +3835,12 @@ class CheckJII {
     return result.i;
   }
 
-  static jint AttachCurrentThread(JavaVM* vm, JNIEnv** p_env, void* thr_args) {
+  static JNICALL jint AttachCurrentThread(JavaVM* vm, JNIEnv** p_env, void* thr_args) {
+#ifdef MOE
+    if (Runtime::Current() == nullptr) {
+      return JNI_ERR;
+    }
+#endif
     ScopedCheck sc(kFlag_Invocation, __FUNCTION__);
     JniValueType args[3] = {{.v = vm}, {.p = p_env}, {.p = thr_args}};
     sc.CheckNonHeap(reinterpret_cast<JavaVMExt*>(vm), true, "vpp", args);
@@ -3836,7 +3850,12 @@ class CheckJII {
     return result.i;
   }
 
-  static jint AttachCurrentThreadAsDaemon(JavaVM* vm, JNIEnv** p_env, void* thr_args) {
+  static JNICALL jint AttachCurrentThreadAsDaemon(JavaVM* vm, JNIEnv** p_env, void* thr_args) {
+#ifdef MOE
+    if (Runtime::Current() == nullptr) {
+      return JNI_ERR;
+    }
+#endif
     ScopedCheck sc(kFlag_Invocation, __FUNCTION__);
     JniValueType args[3] = {{.v = vm}, {.p = p_env}, {.p = thr_args}};
     sc.CheckNonHeap(reinterpret_cast<JavaVMExt*>(vm), true, "vpp", args);
@@ -3846,7 +3865,12 @@ class CheckJII {
     return result.i;
   }
 
-  static jint DetachCurrentThread(JavaVM* vm) {
+  static JNICALL jint DetachCurrentThread(JavaVM* vm) {
+#ifdef MOE
+    if (Runtime::Current() == nullptr) {
+      return JNI_ERR;
+    }
+#endif
     ScopedCheck sc(kFlag_Invocation, __FUNCTION__);
     JniValueType args[1] = {{.v = vm}};
     sc.CheckNonHeap(reinterpret_cast<JavaVMExt*>(vm), true, "v", args);
@@ -3856,7 +3880,12 @@ class CheckJII {
     return result.i;
   }
 
-  static jint GetEnv(JavaVM* vm, void** p_env, jint version) {
+  static JNICALL jint GetEnv(JavaVM* vm, void** p_env, jint version) {
+#ifdef MOE
+    if (Runtime::Current() == nullptr) {
+      return JNI_ERR;
+    }
+#endif
     ScopedCheck sc(kFlag_Invocation, __FUNCTION__);
     JniValueType args[3] = {{.v = vm}, {.p = p_env}, {.I = version}};
     sc.CheckNonHeap(reinterpret_cast<JavaVMExt*>(vm), true, "vpI", args);

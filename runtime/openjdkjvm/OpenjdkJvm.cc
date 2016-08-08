@@ -56,7 +56,14 @@
 #include "ScopedLocalRef.h"
 #include <sys/time.h>
 #include <sys/socket.h>
+#ifndef MOE_WINDOWS
 #include <sys/ioctl.h>
+#endif
+
+#ifdef MOE_WINDOWS
+// MOE TODO: for some reason isnan template function is not present in MinGW environment.
+#define isnan std::isnan
+#endif
 
 #undef LOG_TAG
 #define LOG_TAG "artopenjdk"
@@ -256,9 +263,18 @@ JNIEXPORT jint JVM_GetSockName(jint fd, struct sockaddr* addr, int* addrlen) {
 }
 
 JNIEXPORT jint JVM_SocketAvailable(jint fd, jint* result) {
+#ifndef MOE_WINDOWS
   if (TEMP_FAILURE_RETRY(ioctl(fd, FIONREAD, result)) < 0) {
+#else
+  u_long temp;
+  if (TEMP_FAILURE_RETRY(ioctlsocket(fd, FIONREAD, &temp)) < 0) {
+#endif
       return JNI_FALSE;
   }
+
+#ifdef MOE_WINDOWS
+  *result = temp;
+#endif
 
   return JNI_TRUE;
 }
@@ -344,11 +360,11 @@ JNIEXPORT jstring JVM_NativeLoad(JNIEnv* env,
   return env->NewStringUTF(error_msg.c_str());
 }
 
-JNIEXPORT void JVM_StartThread(JNIEnv* env, jobject jthread, jlong stack_size, jboolean daemon) {
+JNIEXPORT void JNICALL JVM_StartThread(JNIEnv* env, jobject jthread, jlong stack_size, jboolean daemon) {
   art::Thread::CreateNativeThread(env, jthread, stack_size, daemon == JNI_TRUE);
 }
 
-JNIEXPORT void JVM_SetThreadPriority(JNIEnv* env, jobject jthread, jint prio) {
+JNIEXPORT void JNICALL JVM_SetThreadPriority(JNIEnv* env, jobject jthread, jint prio) {
   art::ScopedObjectAccess soa(env);
   art::MutexLock mu(soa.Self(), *art::Locks::thread_list_lock_);
   art::Thread* thread = art::Thread::FromManagedThread(soa, jthread);
@@ -361,19 +377,19 @@ JNIEXPORT void JVM_Yield(JNIEnv* env ATTRIBUTE_UNUSED, jclass threadClass ATTRIB
   sched_yield();
 }
 
-JNIEXPORT void JVM_Sleep(JNIEnv* env, jclass threadClass ATTRIBUTE_UNUSED,
+JNIEXPORT void JNICALL JVM_Sleep(JNIEnv* env, jclass threadClass ATTRIBUTE_UNUSED,
                          jobject java_lock, jlong millis) {
   art::ScopedFastNativeObjectAccess soa(env);
   art::mirror::Object* lock = soa.Decode<art::mirror::Object*>(java_lock);
   art::Monitor::Wait(art::Thread::Current(), lock, millis, 0, true, art::kSleeping);
 }
 
-JNIEXPORT jobject JVM_CurrentThread(JNIEnv* env, jclass unused ATTRIBUTE_UNUSED) {
+JNIEXPORT jobject JNICALL JVM_CurrentThread(JNIEnv* env, jclass unused ATTRIBUTE_UNUSED) {
   art::ScopedFastNativeObjectAccess soa(env);
   return soa.AddLocalReference<jobject>(soa.Self()->GetPeer());
 }
 
-JNIEXPORT void JVM_Interrupt(JNIEnv* env, jobject jthread) {
+JNIEXPORT void JNICALL JVM_Interrupt(JNIEnv* env, jobject jthread) {
   art::ScopedFastNativeObjectAccess soa(env);
   art::MutexLock mu(soa.Self(), *art::Locks::thread_list_lock_);
   art::Thread* thread = art::Thread::FromManagedThread(soa, jthread);
@@ -382,7 +398,7 @@ JNIEXPORT void JVM_Interrupt(JNIEnv* env, jobject jthread) {
   }
 }
 
-JNIEXPORT jboolean JVM_IsInterrupted(JNIEnv* env, jobject jthread, jboolean clearInterrupted) {
+JNIEXPORT jboolean JNICALL JVM_IsInterrupted(JNIEnv* env, jobject jthread, jboolean clearInterrupted) {
   if (clearInterrupted) {
     return static_cast<art::JNIEnvExt*>(env)->self->Interrupted() ? JNI_TRUE : JNI_FALSE;
   } else {
@@ -393,7 +409,7 @@ JNIEXPORT jboolean JVM_IsInterrupted(JNIEnv* env, jobject jthread, jboolean clea
   }
 }
 
-JNIEXPORT jboolean JVM_HoldsLock(JNIEnv* env, jclass unused ATTRIBUTE_UNUSED, jobject jobj) {
+JNIEXPORT jboolean JNICALL JVM_HoldsLock(JNIEnv* env, jclass unused ATTRIBUTE_UNUSED, jobject jobj) {
   art::ScopedObjectAccess soa(env);
   art::mirror::Object* object = soa.Decode<art::mirror::Object*>(jobj);
   if (object == NULL) {
@@ -403,7 +419,7 @@ JNIEXPORT jboolean JVM_HoldsLock(JNIEnv* env, jclass unused ATTRIBUTE_UNUSED, jo
   return soa.Self()->HoldsLock(object);
 }
 
-JNIEXPORT void JVM_SetNativeThreadName(JNIEnv* env, jobject jthread, jstring java_name) {
+JNIEXPORT void JNICALL JVM_SetNativeThreadName(JNIEnv* env, jobject jthread, jstring java_name) {
   ScopedUtfChars name(env, java_name);
   {
     art::ScopedObjectAccess soa(env);

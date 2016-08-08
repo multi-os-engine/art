@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#if !defined(__clang__)
+#if !defined(__clang__) || defined(MOE)
 // Clang 3.4 fails to build the goto interpreter implementation.
 
 
@@ -64,6 +64,7 @@ namespace interpreter {
   currentHandlersTable = handlersTable[ \
       Runtime::Current()->GetInstrumentation()->GetInterpreterHandlerTable()]
 
+#ifndef MOE
 #define BRANCH_INSTRUMENTATION(offset)                                                          \
   do {                                                                                          \
     if (UNLIKELY(instrumentation->HasBranchListeners())) {                                      \
@@ -74,6 +75,14 @@ namespace interpreter {
       return result;                                                                            \
     }                                                                                           \
   } while (false)
+#else
+#define BRANCH_INSTRUMENTATION(offset)                                                          \
+  do {                                                                                          \
+    if (UNLIKELY(instrumentation->HasBranchListeners())) {                                      \
+      instrumentation->Branch(self, method, dex_pc, offset);                                    \
+    }                                                                                           \
+  } while (false)
+#endif
 
 #define HOTNESS_UPDATE()                                                                       \
   do {                                                                                         \
@@ -194,7 +203,11 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   size_t lambda_captured_variable_index = 0;
   const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
   ArtMethod* method = shadow_frame.GetMethod();
+#ifndef MOE
   jit::Jit* jit = Runtime::Current()->GetJit();
+#else
+  jit::Jit* jit = nullptr;
+#endif
 
   // Jump to first instruction.
   ADVANCE(0);

@@ -42,10 +42,17 @@
 
 namespace art {
 
+#ifndef MOE
 extern "C" void art_quick_invoke_stub(ArtMethod*, uint32_t*, uint32_t, Thread*, JValue*,
                                       const char*);
 extern "C" void art_quick_invoke_static_stub(ArtMethod*, uint32_t*, uint32_t, Thread*, JValue*,
                                              const char*);
+#else
+extern "C" void art_quick_invoke_stub(ArtMethod*, uintptr_t*, uint32_t, Thread*, JValue*,
+                                      const char*);
+extern "C" void art_quick_invoke_static_stub(ArtMethod*, uintptr_t*, uint32_t, Thread*, JValue*,
+                                             const char*);
+#endif
 
 ArtMethod* ArtMethod::FromReflectedMethod(const ScopedObjectAccessAlreadyRunnable& soa,
                                           jobject jlr_method) {
@@ -233,7 +240,16 @@ uint32_t ArtMethod::FindCatchBlock(Handle<mirror::Class> exception_type,
   return found_dex_pc;
 }
 
+#ifdef MOE
+extern "C" uint64_t artQuickProxyInvokeHandler(ArtMethod* proxy_method, Thread* self,
+                                               uintptr_t* raw_args);
+#endif
+
+#ifndef MOE
 void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue* result,
+#else
+void ArtMethod::Invoke(Thread* self, uintptr_t* args, uint32_t args_size, JValue* result,
+#endif
                        const char* shorty) {
   if (UNLIKELY(__builtin_frame_address(0) < self->GetStackEnd())) {
     ThrowStackOverflowError(self);
@@ -269,8 +285,15 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
     DCHECK_EQ(runtime->GetClassLinker()->GetImagePointerSize(), sizeof(void*));
 
     constexpr bool kLogInvocationStartAndReturn = false;
+#ifdef MOE
+    // MOE TODO: this is a temporal solution, replace it with a proper proxy stub generation.
+    if (IsProxyMethod() && !IsConstructor()) {
+      result->SetJ(artQuickProxyInvokeHandler(this, self, args));
+    } else if (LIKELY(GetEntryPointFromQuickCompiledCode() != nullptr)) {
+#else
     bool have_quick_code = GetEntryPointFromQuickCompiledCode() != nullptr;
     if (LIKELY(have_quick_code)) {
+#endif
       if (kLogInvocationStartAndReturn) {
         LOG(INFO) << StringPrintf(
             "Invoking '%s' quick code=%p static=%d", PrettyMethod(this).c_str(),
@@ -279,17 +302,28 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
 
       // Ensure that we won't be accidentally calling quick compiled code when -Xint.
       if (kIsDebugBuild && runtime->GetInstrumentation()->IsForcedInterpretOnly()) {
+#ifndef MOE
         CHECK(!runtime->UseJitCompilation());
+#endif
         const void* oat_quick_code = runtime->GetClassLinker()->GetOatMethodQuickCodeFor(this);
         CHECK(oat_quick_code == nullptr || oat_quick_code != GetEntryPointFromQuickCompiledCode())
             << "Don't call compiled code when -Xint " << PrettyMethod(this);
       }
 
+#ifndef MOE
       if (!IsStatic()) {
         (*art_quick_invoke_stub)(this, args, args_size, self, result, shorty);
       } else {
         (*art_quick_invoke_static_stub)(this, args, args_size, self, result, shorty);
       }
+#else
+      result->SetJ(0);
+      ((void (*)(Thread*, ArtMethod*, uintptr_t*, JValue*))
+          GetEntryPointFromReflection())(self, this, args, result);
+      if (GetShorty()[0] == 'B') {
+        result->SetI(result->GetB());
+      }
+#endif
       if (UNLIKELY(self->GetException() == Thread::GetDeoptimizationException())) {
         // Unusual case where we were running generated code and an
         // exception was thrown to force the activations to be removed from the
@@ -325,7 +359,9 @@ void ArtMethod::RegisterNative(const void* native_method, bool is_fast) {
 void ArtMethod::UnregisterNative() {
   CHECK(IsNative() && !IsFastNative()) << PrettyMethod(this);
   // restore stub to lookup native pointer via dlsym
+#ifndef MOE
   RegisterNative(GetJniDlsymLookupStub(), false);
+#endif
 }
 
 bool ArtMethod::IsOverridableByDefaultMethod() {
@@ -358,6 +394,7 @@ bool ArtMethod::EqualParameters(Handle<mirror::ObjectArray<mirror::Class>> param
   return true;
 }
 
+#ifndef MOE
 const uint8_t* ArtMethod::GetQuickenedInfo() {
   bool found = false;
   OatFile::OatMethod oat_method =
@@ -462,13 +499,16 @@ const OatQuickMethodHeader* ArtMethod::GetOatQuickMethodHeader(uintptr_t pc) {
       << " " << (uintptr_t)(method_header->code_ + method_header->code_size_);
   return method_header;
 }
+#endif
 
 bool ArtMethod::HasAnyCompiledCode() {
+#ifndef MOE
   // Check whether the JIT has compiled it.
   jit::Jit* jit = Runtime::Current()->GetJit();
   if (jit != nullptr && jit->GetCodeCache()->ContainsMethod(this)) {
     return true;
   }
+#endif
 
   // Check whether we have AOT code.
   return Runtime::Current()->GetClassLinker()->GetOatMethodQuickCodeFor(this) != nullptr;
@@ -483,12 +523,14 @@ void ArtMethod::CopyFrom(ArtMethod* src, size_t image_pointer_size) {
   // put the entry point of the new method to interpreter. We could set the entry point
   // to the JIT code, but this would require taking the JIT code cache lock to notify
   // it, which we do not want at this level.
+#ifndef MOE
   Runtime* runtime = Runtime::Current();
   if (runtime->UseJitCompilation()) {
     if (runtime->GetJit()->GetCodeCache()->ContainsPc(GetEntryPointFromQuickCompiledCode())) {
       SetEntryPointFromQuickCompiledCodePtrSize(GetQuickToInterpreterBridge(), image_pointer_size);
     }
   }
+#endif
   // Clear the profiling info for the same reasons as the JIT code.
   if (!src->IsNative()) {
     SetProfilingInfoPtrSize(nullptr, image_pointer_size);

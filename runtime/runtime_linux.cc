@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,6 +63,7 @@ struct OsInfo {
 };
 
 static const char* GetSignalName(int signal_number) {
+#ifndef MOE_WINDOWS
   switch (signal_number) {
     case SIGABRT: return "SIGABRT";
     case SIGBUS: return "SIGBUS";
@@ -74,10 +76,12 @@ static const char* GetSignalName(int signal_number) {
 #endif
     case SIGTRAP: return "SIGTRAP";
   }
+#endif
   return "??";
 }
 
 static const char* GetSignalCodeName(int signal_number, int signal_code) {
+#ifndef MOE_WINDOWS
   // Try the signal-specific codes...
   switch (signal_number) {
     case SIGILL:
@@ -144,10 +148,12 @@ static const char* GetSignalCodeName(int signal_number, int signal_code) {
     case SI_TKILL:    return "SI_TKILL";
 #endif
   }
+#endif
   // Then give up...
   return "?";
 }
 
+#ifndef MOE_WINDOWS
 struct UContext {
   explicit UContext(void* raw_context) :
       context(reinterpret_cast<ucontext_t*>(raw_context)->uc_mcontext) {
@@ -241,6 +247,67 @@ struct UContext {
     DumpRegister32(os, "cs",  (context.gregs[REG_CSGSFS]) & 0x0FFFF);
     DumpRegister32(os, "gs",  (context.gregs[REG_CSGSFS] >> 16) & 0x0FFFF);
     DumpRegister32(os, "fs",  (context.gregs[REG_CSGSFS] >> 32) & 0x0FFFF);
+    os << '\n';
+#elif defined(MOE) && defined(__APPLE__) && defined(__x86_64__)
+    DumpRegister64(os, "rax", context->__ss.__rax);
+    DumpRegister64(os, "rbx", context->__ss.__rbx);
+    DumpRegister64(os, "rcx", context->__ss.__rcx);
+    DumpRegister64(os, "rdx", context->__ss.__rdx);
+    os << '\n';
+
+    DumpRegister64(os, "rdi", context->__ss.__rdi);
+    DumpRegister64(os, "rsi", context->__ss.__rsi);
+    DumpRegister64(os, "rbp", context->__ss.__rbp);
+    DumpRegister64(os, "rsp", context->__ss.__rsp);
+    os << '\n';
+
+    DumpRegister64(os, "r8 ", context->__ss.__r8);
+    DumpRegister64(os, "r9 ", context->__ss.__r9);
+    DumpRegister64(os, "r10", context->__ss.__r10);
+    DumpRegister64(os, "r11", context->__ss.__r11);
+    os << '\n';
+
+    DumpRegister64(os, "r12", context->__ss.__r12);
+    DumpRegister64(os, "r13", context->__ss.__r13);
+    DumpRegister64(os, "r14", context->__ss.__r14);
+    DumpRegister64(os, "r15", context->__ss.__r15);
+    os << '\n';
+
+    DumpRegister64(os, "rip", context->__ss.__rip);
+    os << "   ";
+    DumpRegister64(os, "eflags", context->__ss.__rflags);
+    os << '\n';
+
+    DumpRegister64(os, "cs",  (context->__ss.__cs) & 0x0FFFF);
+    DumpRegister64(os, "gs",  (context->__ss.__gs >> 16) & 0x0FFFF);
+    DumpRegister64(os, "fs",  (context->__ss.__fs >> 32) & 0x0FFFF);
+#elif defined(MOE) && defined(__APPLE__) && defined(__arm__)
+    for (uint8_t i = 0; i < 13; i++) {
+      std::stringstream name;
+      name << "r" << i;
+      DumpRegister32(os, name.str().c_str(), context->__ss.__r[i]);
+    }
+    os << '\n';
+
+    DumpRegister32(os, "lr", context->__ss.__lr);
+    DumpRegister32(os, "sp", context->__ss.__sp);
+    DumpRegister32(os, "pc", context->__ss.__pc);
+    DumpRegister32(os, "cpsr", context->__ss.__cpsr);
+    os << '\n';
+#elif defined(MOE) && defined(__APPLE__) && defined(__arm64__)
+    for (uint8_t i = 0; i < 29; i++) {
+      std::stringstream name;
+      name << "x" << i;
+      DumpRegister64(os, name.str().c_str(), context->__ss.__x[i]);
+    }
+    os << '\n';
+
+    DumpRegister64(os, "fp", context->__ss.__fp);
+    DumpRegister64(os, "lr", context->__ss.__lr);
+    DumpRegister64(os, "sp", context->__ss.__sp);
+    DumpRegister64(os, "pc", context->__ss.__pc);
+    DumpRegister32(os, "cpsr", context->__ss.__cpsr);
+    DumpRegister32(os, "pad", context->__ss.__pad);
     os << '\n';
 #else
     os << "Unknown architecture/word size/OS in ucontext dump";
@@ -387,8 +454,10 @@ void HandleUnexpectedSignal(int signal_number, siginfo_t* info, void* raw_contex
   exit(EXIT_FAILURE);
 #endif
 }
+#endif
 
 void Runtime::InitPlatformSignalHandlers() {
+#ifndef MOE
   // On the host, we don't have debuggerd to dump a stack for us when something unexpected happens.
   struct sigaction action;
   memset(&action, 0, sizeof(action));
@@ -415,6 +484,7 @@ void Runtime::InitPlatformSignalHandlers() {
     rc += sigaction(GetTimeoutSignal(), &action, nullptr);
   }
   CHECK_EQ(rc, 0);
+#endif
 }
 
 }  // namespace art

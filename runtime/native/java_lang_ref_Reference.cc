@@ -25,7 +25,7 @@
 
 namespace art {
 
-static jobject Reference_getReferent(JNIEnv* env, jobject javaThis) {
+static JNICALL jobject Reference_getReferent(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Reference* const ref = soa.Decode<mirror::Reference*>(javaThis);
   mirror::Object* const referent =

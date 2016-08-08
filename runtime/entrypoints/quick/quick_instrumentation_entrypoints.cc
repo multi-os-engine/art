@@ -35,12 +35,21 @@ extern "C" const void* artInstrumentationMethodEntryFromCode(ArtMethod* method,
   instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
   const void* result;
   if (instrumentation->IsDeoptimized(method)) {
+#ifndef MOE
     result = GetQuickToInterpreterBridge();
+#else
+    result = Runtime::Current()->GetClassLinker()->GetInterpreterBridgeFromMethod(self, method);
+#endif
   } else {
     result = instrumentation->GetQuickCodeFor(method, sizeof(void*));
     DCHECK(!Runtime::Current()->GetClassLinker()->IsQuickToInterpreterBridge(result));
   }
+#ifndef MOE
   bool interpreter_entry = (result == GetQuickToInterpreterBridge());
+#else
+  // MOE TODO: Check whether this is needed.
+  bool interpreter_entry = false;
+#endif
   instrumentation->PushInstrumentationStackFrame(self, method->IsStatic() ? nullptr : this_object,
                                                  method, lr, interpreter_entry);
   CHECK(result != nullptr) << PrettyMethod(method);

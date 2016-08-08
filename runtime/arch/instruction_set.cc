@@ -117,10 +117,17 @@ static constexpr size_t kDefaultStackOverflowReservedBytes = 16 * KB;
 static constexpr size_t kMipsStackOverflowReservedBytes = kDefaultStackOverflowReservedBytes;
 static constexpr size_t kMips64StackOverflowReservedBytes = kDefaultStackOverflowReservedBytes;
 
+#ifndef MOE
 static constexpr size_t kArmStackOverflowReservedBytes =    8 * KB;
 static constexpr size_t kArm64StackOverflowReservedBytes =  8 * KB;
 static constexpr size_t kX86StackOverflowReservedBytes =    8 * KB;
 static constexpr size_t kX86_64StackOverflowReservedBytes = 8 * KB;
+#else
+static constexpr size_t kArmStackOverflowReservedBytes =    4 * 8 * KB;
+static constexpr size_t kArm64StackOverflowReservedBytes =  4 * 8 * KB;
+static constexpr size_t kX86StackOverflowReservedBytes =    4 * 8 * KB;
+static constexpr size_t kX86_64StackOverflowReservedBytes = 4 * 8 * KB;
+#endif
 
 size_t GetStackOverflowReservedBytes(InstructionSet isa) {
   switch (isa) {

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1204,11 +1205,21 @@ void Monitor::VisitLocks(StackVisitor* stack_visitor, void (*callback)(mirror::O
       << reinterpret_cast<const void*>(monitor_enter_instruction);
 
     uint16_t monitor_register = monitor_enter_instruction->VRegA();
+#ifndef MOE
     uint32_t value;
+#else
+    uintptr_t value;
+#endif
     bool success = stack_visitor->GetVReg(m, monitor_register, kReferenceVReg, &value);
     CHECK(success) << "Failed to read v" << monitor_register << " of kind "
                    << kReferenceVReg << " in method " << PrettyMethod(m);
+#ifndef MOE
     mirror::Object* o = reinterpret_cast<mirror::Object*>(value);
+#else
+    mirror::ObjectReference<false, mirror::Object>* value_ref =
+        reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&value);
+    mirror::Object* o = value_ref->AsMirrorPtr();
+#endif
     callback(o, callback_context);
   }
 }

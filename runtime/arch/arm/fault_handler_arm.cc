@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,23 +54,41 @@ void FaultManager::HandleNestedSignal(int sig ATTRIBUTE_UNUSED, siginfo_t* info 
   // reason for this is that longjmp is (currently) in ARM mode and that would
   // require switching modes in the stub - incurring an unwanted relocation.
 
+#ifndef MOE
   struct ucontext *uc = reinterpret_cast<struct ucontext*>(context);
   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
+#else
+  __darwin_ucontext *uc = reinterpret_cast<__darwin_ucontext*>(context);
+  _STRUCT_MCONTEXT *sc = uc->uc_mcontext;
+#endif
   Thread* self = Thread::Current();
   CHECK(self != nullptr);  // This will cause a SIGABRT if self is null.
 
+#ifndef MOE
   sc->arm_r0 = reinterpret_cast<uintptr_t>(*self->GetNestedSignalState());
   sc->arm_r1 = 1;
   sc->arm_pc = reinterpret_cast<uintptr_t>(longjmp);
   VLOG(signals) << "longjmp address: " << reinterpret_cast<void*>(sc->arm_pc);
+#else
+  sc->__ss.__r[0] = reinterpret_cast<uintptr_t>(*self->GetNestedSignalState());
+  sc->__ss.__r[1] = 1;
+  sc->__ss.__pc = reinterpret_cast<uintptr_t>(longjmp);
+  VLOG(signals) << "longjmp address: " << reinterpret_cast<void*>(sc->__ss.__pc);
+#endif
 }
 
 void FaultManager::GetMethodAndReturnPcAndSp(siginfo_t* siginfo ATTRIBUTE_UNUSED, void* context,
                                              ArtMethod** out_method,
                                              uintptr_t* out_return_pc, uintptr_t* out_sp) {
+#ifndef MOE
   struct ucontext* uc = reinterpret_cast<struct ucontext*>(context);
   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
   *out_sp = static_cast<uintptr_t>(sc->arm_sp);
+#else
+  __darwin_ucontext *uc = reinterpret_cast<__darwin_ucontext*>(context);
+  _STRUCT_MCONTEXT *sc = uc->uc_mcontext;
+  *out_sp = static_cast<uintptr_t>(sc->__ss.__sp);
+#endif
   VLOG(signals) << "sp: " << std::hex << *out_sp;
   if (*out_sp == 0) {
     return;
@@ -77,11 +96,19 @@ void FaultManager::GetMethodAndReturnPcAndSp(siginfo_t* siginfo ATTRIBUTE_UNUSED
 
   // In the case of a stack overflow, the stack is not valid and we can't
   // get the method from the top of the stack.  However it's in r0.
+#ifndef MOE
   uintptr_t* fault_addr = reinterpret_cast<uintptr_t*>(sc->fault_address);
+#else
+  uintptr_t* fault_addr = reinterpret_cast<uintptr_t*>(sc->__es.__far);
+#endif
   uintptr_t* overflow_addr = reinterpret_cast<uintptr_t*>(
       reinterpret_cast<uint8_t*>(*out_sp) - GetStackOverflowReservedBytes(kArm));
   if (overflow_addr == fault_addr) {
-    *out_method = reinterpret_cast<ArtMethod*>(sc->arm_r0);
+#ifndef MOE
+    *out_method = reinterpret_cast<ArtMethod*>(sc->arm_r0)
+#else
+    *out_method = reinterpret_cast<ArtMethod*>(sc->__ss.__r[0]);
+#endif
   } else {
     // The method is at the top of the stack.
     *out_method = reinterpret_cast<ArtMethod*>(reinterpret_cast<uintptr_t*>(*out_sp)[0]);
@@ -93,7 +120,11 @@ void FaultManager::GetMethodAndReturnPcAndSp(siginfo_t* siginfo ATTRIBUTE_UNUSED
   // has the bottom bit of the PC set so we also need to set that.
 
   // Need to work out the size of the instruction that caused the exception.
+#ifndef MOE
   uint8_t* ptr = reinterpret_cast<uint8_t*>(sc->arm_pc);
+#else
+  uint8_t* ptr = reinterpret_cast<uint8_t*>(sc->__ss.__pc);
+#endif
   VLOG(signals) << "pc: " << std::hex << static_cast<void*>(ptr);
 
   if (ptr == nullptr) {
@@ -104,7 +135,11 @@ void FaultManager::GetMethodAndReturnPcAndSp(siginfo_t* siginfo ATTRIBUTE_UNUSED
 
   uint32_t instr_size = GetInstructionSize(ptr);
 
+#ifndef MOE
   *out_return_pc = (sc->arm_pc + instr_size) | 1;
+#else
+  *out_return_pc = (sc->__ss.__pc + instr_size) | 1;
+#endif
 }
 
 bool NullPointerHandler::Action(int sig ATTRIBUTE_UNUSED, siginfo_t* info ATTRIBUTE_UNUSED,
@@ -116,13 +151,25 @@ bool NullPointerHandler::Action(int sig ATTRIBUTE_UNUSED, siginfo_t* info ATTRIB
   // register in order to find the mapping.
 
   // Need to work out the size of the instruction that caused the exception.
+#ifndef MOE
   struct ucontext *uc = reinterpret_cast<struct ucontext*>(context);
   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
   uint8_t* ptr = reinterpret_cast<uint8_t*>(sc->arm_pc);
+#else
+  __darwin_ucontext *uc = reinterpret_cast<__darwin_ucontext*>(context);
+  _STRUCT_MCONTEXT *sc = uc->uc_mcontext;
+  uint8_t* ptr = reinterpret_cast<uint8_t*>(sc->__ss.__pc);
+#endif
 
   uint32_t instr_size = GetInstructionSize(ptr);
+#ifndef MOE
   sc->arm_lr = (sc->arm_pc + instr_size) | 1;      // LR needs to point to gc map location
   sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_throw_null_pointer_exception);
+#else
+  sc->__ss.__lr = (sc->__ss.__pc + instr_size) | 1;      // LR needs to point to gc map location
+  // MOE TODO: we have to find a solution that works with LLVM.
+  sc->__ss.__pc = reinterpret_cast<uintptr_t>(nullptr);
+#endif
   VLOG(signals) << "Generating null pointer exception";
   return true;
 }
@@ -142,9 +189,15 @@ bool SuspensionHandler::Action(int sig ATTRIBUTE_UNUSED, siginfo_t* info ATTRIBU
   uint32_t checkinst1 = 0xf8d90000 + Thread::ThreadSuspendTriggerOffset<4>().Int32Value();
   uint16_t checkinst2 = 0x6800;
 
+#ifndef MOE
   struct ucontext* uc = reinterpret_cast<struct ucontext*>(context);
   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
   uint8_t* ptr2 = reinterpret_cast<uint8_t*>(sc->arm_pc);
+#else
+  __darwin_ucontext *uc = reinterpret_cast<__darwin_ucontext*>(context);
+  _STRUCT_MCONTEXT *sc = uc->uc_mcontext;
+  uint8_t* ptr2 = reinterpret_cast<uint8_t*>(sc->__ss.__pc);
+#endif
   uint8_t* ptr1 = ptr2 - 4;
   VLOG(signals) << "checking suspend";
 
@@ -177,10 +230,18 @@ bool SuspensionHandler::Action(int sig ATTRIBUTE_UNUSED, siginfo_t* info ATTRIBU
 
     // NB: remember that we need to set the bottom bit of the LR register
     // to switch to thumb mode.
+#ifndef MOE
     VLOG(signals) << "arm lr: " << std::hex << sc->arm_lr;
     VLOG(signals) << "arm pc: " << std::hex << sc->arm_pc;
     sc->arm_lr = sc->arm_pc + 3;      // +2 + 1 (for thumb)
     sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_implicit_suspend);
+#else
+    VLOG(signals) << "arm lr: " << std::hex << sc->__ss.__lr;
+    VLOG(signals) << "arm pc: " << std::hex << sc->__ss.__pc;
+    sc->__ss.__lr = sc->__ss.__pc + 3;      // +2 + 1 (for thumb)
+    // MOE TODO: we have to find a solution that works with LLVM.
+    sc->__ss.__pc = reinterpret_cast<uintptr_t>(nullptr);
+#endif
 
     // Now remove the suspend trigger that caused this fault.
     Thread::Current()->RemoveSuspendTrigger();
@@ -207,15 +268,28 @@ bool SuspensionHandler::Action(int sig ATTRIBUTE_UNUSED, siginfo_t* info ATTRIBU
 
 bool StackOverflowHandler::Action(int sig ATTRIBUTE_UNUSED, siginfo_t* info ATTRIBUTE_UNUSED,
                                   void* context) {
+#ifndef MOE
   struct ucontext* uc = reinterpret_cast<struct ucontext*>(context);
   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
+#else
+  __darwin_ucontext* uc = reinterpret_cast<__darwin_ucontext*>(context);
+  _STRUCT_MCONTEXT *sc = uc->uc_mcontext;
+#endif
   VLOG(signals) << "stack overflow handler with sp at " << std::hex << &uc;
   VLOG(signals) << "sigcontext: " << std::hex << sc;
 
+#ifndef MOE
   uintptr_t sp = sc->arm_sp;
+#else
+  uintptr_t sp = sc->__ss.__sp;
+#endif
   VLOG(signals) << "sp: " << std::hex << sp;
 
+#ifndef MOE
   uintptr_t fault_addr = sc->fault_address;
+#else
+  uintptr_t fault_addr = sc->__es.__far;
+#endif
   VLOG(signals) << "fault_addr: " << std::hex << fault_addr;
   VLOG(signals) << "checking for stack overflow, sp: " << std::hex << sp <<
     ", fault_addr: " << fault_addr;
@@ -234,7 +308,12 @@ bool StackOverflowHandler::Action(int sig ATTRIBUTE_UNUSED, siginfo_t* info ATTR
   // The value of LR must be the same as it was when we entered the code that
   // caused this fault.  This will be inserted into a callee save frame by
   // the function to which this handler returns (art_quick_throw_stack_overflow).
+#ifndef MOE
   sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_throw_stack_overflow);
+#else
+  // MOE TODO: we have to find a solution that works with LLVM.
+  sc->__ss.__pc = reinterpret_cast<uintptr_t>(nullptr);
+#endif
 
   // The kernel will now return to the address in sc->arm_pc.
   return true;

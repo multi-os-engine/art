@@ -16,7 +16,9 @@
 
 #include "zip_archive.h"
 
+#ifndef MOE_WINDOWS
 #include <fcntl.h>
+#endif
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -75,6 +77,7 @@ MemMap* ZipEntry::ExtractToMemMap(const char* zip_filename, const char* entry_fi
 }
 
 static void SetCloseOnExec(int fd) {
+#ifndef MOE_WINDOWS
   // This dance is more portable than Linux's O_CLOEXEC open(2) flag.
   int flags = fcntl(fd, F_GETFD);
   if (flags == -1) {
@@ -86,6 +89,9 @@ static void SetCloseOnExec(int fd) {
     PLOG(WARNING) << "fcntl(" << fd << ", F_SETFD, " << flags << ") failed";
     return;
   }
+#else
+  // MOE TODO: AFAIK, we don't need this, because we don't support child processes.
+#endif
 }
 
 ZipArchive* ZipArchive::Open(const char* filename, std::string* error_msg) {

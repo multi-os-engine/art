@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +19,9 @@
 
 #include <pthread.h>
 #include <signal.h>
+#ifndef MOE_WINDOWS
 #include <sys/resource.h>
+#endif
 #include <sys/time.h>
 
 #include <algorithm>
@@ -122,43 +125,109 @@ void Thread::InitTlsEntryPoints() {
   for (uintptr_t* it = begin; it != end; ++it) {
     *it = reinterpret_cast<uintptr_t>(UnimplementedEntryPoint);
   }
+#ifndef MOE
   InitEntryPoints(&tlsPtr_.jni_entrypoints, &tlsPtr_.quick_entrypoints);
+#endif
 }
 
 void Thread::InitStringEntryPoints() {
   ScopedObjectAccess soa(this);
   QuickEntryPoints* qpoints = &tlsPtr_.quick_entrypoints;
+#ifndef MOE
   qpoints->pNewEmptyString = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewEmptyString = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newEmptyString));
+#ifndef MOE
   qpoints->pNewStringFromBytes_B = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromBytes_B = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromBytes_B));
+#ifndef MOE
   qpoints->pNewStringFromBytes_BI = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromBytes_BI = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BI));
+#ifndef MOE
   qpoints->pNewStringFromBytes_BII = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromBytes_BII = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BII));
+#ifndef MOE
   qpoints->pNewStringFromBytes_BIII = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromBytes_BIII = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BIII));
+#ifndef MOE
   qpoints->pNewStringFromBytes_BIIString = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromBytes_BIIString = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BIIString));
+#ifndef MOE
   qpoints->pNewStringFromBytes_BString = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromBytes_BString = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BString));
+#ifndef MOE
   qpoints->pNewStringFromBytes_BIICharset = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromBytes_BIICharset = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BIICharset));
+#ifndef MOE
   qpoints->pNewStringFromBytes_BCharset = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromBytes_BCharset = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromBytes_BCharset));
+#ifndef MOE
   qpoints->pNewStringFromChars_C = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromChars_C = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromChars_C));
+#ifndef MOE
   qpoints->pNewStringFromChars_CII = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromChars_CII = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromChars_CII));
+#ifndef MOE
   qpoints->pNewStringFromChars_IIC = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromChars_IIC = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromChars_IIC));
+#ifndef MOE
   qpoints->pNewStringFromCodePoints = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromCodePoints = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromCodePoints));
+#ifndef MOE
   qpoints->pNewStringFromString = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromString = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromString));
+#ifndef MOE
   qpoints->pNewStringFromStringBuffer = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromStringBuffer = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromStringBuffer));
+#ifndef MOE
   qpoints->pNewStringFromStringBuilder = reinterpret_cast<void(*)()>(
+#else
+  qpoints->pNewStringFromStringBuilder = reinterpret_cast<void(*)(Thread*)>(
+#endif
       soa.DecodeMethod(WellKnownClasses::java_lang_StringFactory_newStringFromStringBuilder));
 }
 
@@ -414,6 +483,12 @@ void Thread::InitAfterFork() {
 }
 
 void* Thread::CreateCallback(void* arg) {
+#if defined(MOE) && defined(__arm__)
+    __asm__ volatile("vmrs r0, fpscr\n"
+                     "bic r0, $(1 << 24)\n"
+                     "vmsr fpscr, r0" : : : "r0");
+#endif
+
   Thread* self = reinterpret_cast<Thread*>(arg);
   Runtime* runtime = Runtime::Current();
   if (runtime == nullptr) {
@@ -589,6 +664,23 @@ void Thread::InstallImplicitProtection() {
   madvise(pregion, unwanted_size, MADV_DONTNEED);
 }
 
+// [XRT] Begin
+Thread* Thread::FindThread(pthread_t thread)
+{
+  std::list<Thread*> thread_list = Runtime::Current()->GetThreadList()->GetList();
+  
+  for (Thread* thrd : thread_list)
+  {
+    if(thrd->GetPthread() == thread)
+    {
+      return thrd;
+    }
+  }
+  
+  return NULL;
+}
+// [XRT] End
+  
 void Thread::CreateNativeThread(JNIEnv* env, jobject java_peer, size_t stack_size, bool is_daemon) {
   CHECK(java_peer != nullptr);
   Thread* self = static_cast<JNIEnvExt*>(env)->self;
@@ -704,6 +796,7 @@ bool Thread::Init(ThreadList* thread_list, JavaVMExt* java_vm, JNIEnvExt* jni_en
 
   SetUpAlternateSignalStack();
   if (!InitStackHwm()) {
+    TearDownAlternateSignalStack();
     return false;
   }
   InitCpu();
@@ -711,7 +804,9 @@ bool Thread::Init(ThreadList* thread_list, JavaVMExt* java_vm, JNIEnvExt* jni_en
   RemoveSuspendTrigger();
   InitCardTable();
   InitTid();
+#ifndef MOE
   interpreter::InitInterpreterTls(this);
+#endif
 
 #ifdef ART_TARGET_ANDROID
   __get_tls()[TLS_SLOT_ART_THREAD_SELF] = this;
@@ -1295,14 +1390,20 @@ void Thread::DumpState(std::ostream& os, const Thread* thread, pid_t tid) {
   }
 
   os << "  | sysTid=" << tid
+#ifndef MOE_WINDOWS
      << " nice=" << getpriority(PRIO_PROCESS, tid)
+#endif
      << " cgrp=" << scheduler_group_name;
   if (thread != nullptr) {
     int policy;
+#ifndef MOE_WINDOWS
     sched_param sp;
     CHECK_PTHREAD_CALL(pthread_getschedparam, (thread->tlsPtr_.pthread_self, &policy, &sp),
                        __FUNCTION__);
     os << " sched=" << policy << "/" << sp.sched_priority
+#else
+    os
+#endif
        << " handle=" << reinterpret_cast<void*>(thread->tlsPtr_.pthread_self);
   }
   os << "\n";
@@ -1545,6 +1646,16 @@ void Thread::DumpStack(std::ostream& os,
 }
 
 void Thread::ThreadExitCallback(void* arg) {
+#ifdef MOE_WINDOWS
+  if (!arg) {
+    // MOE TODO: This seems to be a winpthreads bug: by the pthread documentation a non-null
+    // destructor can only be invoked if the thread has an associatod value for the key.
+    // Winpthreads probably has another interpretation of this specification and it only considers
+    // whether a value (that also can be nullptr) has been associated. This is not really a TODO
+    // and is more like a notification for ourselves.
+    return;
+  }
+#endif
   Thread* self = reinterpret_cast<Thread*>(arg);
   if (self->tls32_.thread_exit_check_count == 0) {
     LOG(WARNING) << "Native thread exiting without having called DetachCurrentThread (maybe it's "
@@ -1802,7 +1913,9 @@ Thread::~Thread() {
 
   Runtime::Current()->GetHeap()->AssertThreadLocalBuffersAreRevoked(this);
 
-  TearDownAlternateSignalStack();
+  if (initialized) {
+    TearDownAlternateSignalStack();
+  }
 }
 
 void Thread::HandleUncaughtExceptions(ScopedObjectAccess& soa) {
@@ -2752,7 +2865,9 @@ class ReferenceMapVisitor : public StackVisitor {
           }
           if (failed) {
             GetThread()->Dump(LOG(INTERNAL_FATAL));
+#ifndef MOE
             space->AsImageSpace()->DumpSections(LOG(INTERNAL_FATAL));
+#endif
             LOG(INTERNAL_FATAL) << "Method@" << method->GetDexMethodIndex() << ":" << method
                                 << " klass@" << klass;
             // Pretty info last in case it crashes.

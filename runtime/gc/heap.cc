@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +19,9 @@
 
 #include <limits>
 #include <memory>
+#ifndef MOE
 #include <unwind.h>  // For GC verification.
+#endif
 #include <vector>
 
 #include "art_field-inl.h"
@@ -73,6 +76,10 @@
 #include "handle_scope-inl.h"
 #include "thread_list.h"
 #include "well_known_classes.h"
+
+#ifdef MOE
+#include "moe_entry.h"
+#endif
 
 namespace art {
 
@@ -276,6 +283,7 @@ Heap::Heap(size_t initial_size,
   }
 
   // Load image space(s).
+#ifndef MOE
   if (!image_file_name.empty()) {
     // For code reuse, handle this like a work queue.
     std::vector<std::string> image_file_names;
@@ -335,6 +343,8 @@ Heap::Heap(size_t initial_size,
       }
     }
   }
+#endif
+
   /*
   requested_alloc_space_begin ->     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
                                      +-  nonmoving space (non_moving_space_capacity)+-
@@ -397,7 +407,11 @@ Heap::Heap(size_t initial_size,
                              &error_str));
     CHECK(non_moving_space_mem_map != nullptr) << error_str;
     // Try to reserve virtual memory at a lower address if we have a separate non moving space.
+#ifndef MOE
     request_begin = reinterpret_cast<uint8_t*>(300 * MB);
+#else
+    request_begin = nullptr;
+#endif
   }
   // Attempt to create 2 mem maps at or after the requested begin.
   if (foreground_collector_type_ != kCollectorTypeCC) {
@@ -523,9 +537,14 @@ Heap::Heap(size_t initial_size,
   UNUSED(heap_capacity);
   // Start at 64 KB, we can be sure there are no spaces mapped this low since the address range is
   // reserved by the kernel.
+#ifndef MOE
   static constexpr size_t kMinHeapAddress = 4 * KB;
   card_table_.reset(accounting::CardTable::Create(reinterpret_cast<uint8_t*>(kMinHeapAddress),
                                                   4 * GB - kMinHeapAddress));
+#else
+  card_table_.reset(accounting::CardTable::Create(reinterpret_cast<uint8_t*>(MOE_MAP_BEGIN),
+                                                  MOE_MAP_END));
+#endif
   CHECK(card_table_.get() != nullptr) << "Failed to create card table";
   if (foreground_collector_type_ == kCollectorTypeCC && kUseTableLookupReadBarrier) {
     rb_table_.reset(new accounting::ReadBarrierTable());
@@ -637,6 +656,7 @@ MemMap* Heap::MapAnonymousPreferredAddress(const char* name,
                                            uint8_t* request_begin,
                                            size_t capacity,
                                            std::string* out_error_str) {
+#ifndef MOE
   while (true) {
     MemMap* map = MemMap::MapAnonymous(name, request_begin, capacity,
                                        PROT_READ | PROT_WRITE, true, false, out_error_str);
@@ -646,6 +666,10 @@ MemMap* Heap::MapAnonymousPreferredAddress(const char* name,
     // Retry a  second time with no specified request begin.
     request_begin = nullptr;
   }
+#else
+  return MemMap::MapAnonymous(name, request_begin, capacity,
+                              PROT_READ | PROT_WRITE, true, false, out_error_str, true);
+#endif
 }
 
 bool Heap::MayUseCollector(CollectorType type) const {
@@ -2709,9 +2733,11 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type,
   }
 
   // It's time to clear all inline caches, in case some classes can be unloaded.
+#ifndef MOE
   if ((gc_type == collector::kGcTypeFull) && (runtime->GetJit() != nullptr)) {
     runtime->GetJit()->GetCodeCache()->ClearGcRootsInInlineCaches(self);
   }
+#endif
 
   CHECK(collector != nullptr)
       << "Could not find garbage collector with collector_type="
@@ -4033,6 +4059,7 @@ void Heap::BroadcastForNewAllocationRecords() const {
   }
 }
 
+#ifndef MOE
 // Based on debug malloc logic from libc/bionic/debug_stacktrace.cpp.
 class StackCrawlState {
  public:
@@ -4100,6 +4127,9 @@ void Heap::CheckGcStressMode(Thread* self, mirror::Object** obj) {
     }
   }
 }
+#else
+void Heap::CheckGcStressMode(Thread* self, mirror::Object** obj) {}
+#endif
 
 void Heap::DisableGCForShutdown() {
   Thread* const self = Thread::Current();
@@ -4109,20 +4139,24 @@ void Heap::DisableGCForShutdown() {
 }
 
 bool Heap::ObjectIsInBootImageSpace(mirror::Object* obj) const {
+#ifndef MOE
   for (gc::space::ImageSpace* space : boot_image_spaces_) {
     if (space->HasAddress(obj)) {
       return true;
     }
   }
+#endif
   return false;
 }
 
 bool Heap::IsInBootImageOatFile(const void* p) const {
+#ifndef MOE
   for (gc::space::ImageSpace* space : boot_image_spaces_) {
     if (space->GetOatFile()->Contains(p)) {
       return true;
     }
   }
+#endif
   return false;
 }
 
@@ -4138,6 +4172,7 @@ void Heap::GetBootImagesSize(uint32_t* boot_image_begin,
   *boot_image_end = 0u;
   *boot_oat_begin = 0u;
   *boot_oat_end = 0u;
+#ifndef MOE
   for (gc::space::ImageSpace* space_ : GetBootImageSpaces()) {
     const uint32_t image_begin = PointerToLowMemUInt32(space_->Begin());
     const uint32_t image_size = space_->GetImageHeader().GetImageSize();
@@ -4153,6 +4188,7 @@ void Heap::GetBootImagesSize(uint32_t* boot_image_begin,
     }
     *boot_oat_end = std::max(*boot_oat_end, oat_begin + oat_size);
   }
+#endif
 }
 
 }  // namespace gc

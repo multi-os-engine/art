@@ -24,7 +24,11 @@
 
 namespace art {
 
+#ifndef MOE
 static constexpr size_t kObjectReferenceSize = 4;
+#else
+static constexpr size_t kObjectReferenceSize = sizeof(void*);
+#endif
 
 constexpr size_t ComponentSizeShiftWidth(size_t component_size) {
   return component_size == 1u ? 0u :

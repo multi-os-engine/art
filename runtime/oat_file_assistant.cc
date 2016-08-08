@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -648,6 +649,11 @@ OatFileAssistant::ResultOfAttemptToUpdate
 OatFileAssistant::RelocateOatFile(const std::string* input_file, std::string* error_msg) {
   CHECK(error_msg != nullptr);
 
+#ifdef MOE
+  *error_msg = "Patching of oat file is not allowed during runtime.";
+  return false;
+#endif
+
   if (input_file == nullptr) {
     *error_msg = "Patching of oat file for dex location " + dex_location_
       + " not attempted because the input file name could not be determined.";
@@ -699,6 +705,11 @@ OatFileAssistant::RelocateOatFile(const std::string* input_file, std::string* er
 OatFileAssistant::ResultOfAttemptToUpdate
 OatFileAssistant::GenerateOatFile(std::string* error_msg) {
   CHECK(error_msg != nullptr);
+
+#ifdef MOE
+  *error_msg = "Generation of oat file is not allowed during runtime.";
+  return false;
+#endif
 
   Runtime* runtime = Runtime::Current();
   if (!runtime->IsDex2OatEnabled()) {
@@ -763,6 +774,11 @@ OatFileAssistant::GenerateOatFile(std::string* error_msg) {
 
 bool OatFileAssistant::Dex2Oat(const std::vector<std::string>& args,
                                std::string* error_msg) {
+#ifdef MOE
+  *error_msg = "Running of dex2oat is not allowed during runtime.";
+  return false;
+#endif
+
   Runtime* runtime = Runtime::Current();
   std::string image_location = ImageLocation();
   if (image_location.empty()) {

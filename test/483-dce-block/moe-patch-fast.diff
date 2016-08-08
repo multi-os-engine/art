@@ -1,0 +1,7 @@
+diff --git a/test/483-dce-block/expected.txt b/test/483-dce-block/expected.txt
+index ef48625..3ab4d02 100644
+--- a/test/483-dce-block/expected.txt
++++ b/test/483-dce-block/expected.txt
+@@ -1 +1 @@
+-class Main
++class aosp_483_dce_block.Main

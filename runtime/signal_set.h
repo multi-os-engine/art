@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+
 #ifndef ART_RUNTIME_SIGNAL_SET_H_
 #define ART_RUNTIME_SIGNAL_SET_H_
 
@@ -60,3 +61,4 @@ class SignalSet {
 }  // namespace art
 
 #endif  // ART_RUNTIME_SIGNAL_SET_H_
+

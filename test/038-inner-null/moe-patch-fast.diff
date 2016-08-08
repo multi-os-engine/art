@@ -1,0 +1,12 @@
+diff --git a/test/038-inner-null/expected.txt b/test/038-inner-null/expected.txt
+index ba411f0..e6d6625 100644
+--- a/test/038-inner-null/expected.txt
++++ b/test/038-inner-null/expected.txt
+@@ -1,4 +1,4 @@
+ new Special()
+-Exception in thread "main" java.lang.NullPointerException: Attempt to invoke virtual method 'void Main$Blort.repaint()' on a null object reference
+-	at Main$Special.callInner(Main.java:31)
+-	at Main.main(Main.java:20)
++Exception in thread "main" java.lang.NullPointerException: Attempt to invoke virtual method 'void aosp_038_inner_null.Main$Blort.repaint()' on a null object reference
++	at aosp_038_inner_null.Main$Special.callInner(Main.java:31)
++	at aosp_038_inner_null.Main.main(Main.java:20)

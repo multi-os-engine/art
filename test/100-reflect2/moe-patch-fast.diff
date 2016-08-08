@@ -1,0 +1,22 @@
+diff --git a/test/100-reflect2/src/Main.java b/test/100-reflect2/src/Main.java
+index bf3a574..e9c226e 100644
+--- a/test/100-reflect2/src/Main.java
++++ b/test/100-reflect2/src/Main.java
+@@ -268,7 +268,7 @@ class Main {
+ 
+   private static void testPackagePrivateConstructor() {
+     try {
+-      Class<?> c = Class.forName("sub.PPClass");
++      Class<?> c = Class.forName("aosp_100_reflect2.sub.PPClass");
+       Constructor cons = c.getConstructor();
+       cons.newInstance();
+       throw new RuntimeException("Expected IllegalAccessException.");
+@@ -282,7 +282,7 @@ class Main {
+ 
+   private static void testPackagePrivateAccessibleConstructor() {
+     try {
+-      Class<?> c = Class.forName("sub.PPClass");
++      Class<?> c = Class.forName("aosp_100_reflect2.sub.PPClass");
+       Constructor cons = c.getConstructor();
+       cons.setAccessible(true);  // ensure we prevent IllegalAccessException
+       cons.newInstance();

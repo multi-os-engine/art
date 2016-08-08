@@ -33,7 +33,11 @@ namespace art {
 namespace interpreter {
 
 static void InterpreterJni(Thread* self, ArtMethod* method, const StringPiece& shorty,
+#ifndef MOE
                            Object* receiver, uint32_t* args, JValue* result)
+#else
+                           Object* receiver, uintptr_t* args, JValue* result)
+#endif
     SHARED_REQUIRES(Locks::mutator_lock_) {
   // TODO: The following enters JNI code using a typedef-ed function rather than the JNI compiler,
   //       it should be removed and JNI compiled stubs used instead.
@@ -240,9 +244,13 @@ static std::ostream& operator<<(std::ostream& os, const InterpreterImplKind& rhs
   return os;
 }
 
+#ifndef MOE
 static constexpr InterpreterImplKind kInterpreterImplKind = kMterpImplKind;
+#else
+static constexpr InterpreterImplKind kInterpreterImplKind = kComputedGotoImplKind;
+#endif
 
-#if defined(__clang__)
+#if defined(__clang__) && !defined(MOE)
 // Clang 3.4 fails to build the goto interpreter implementation.
 template<bool do_access_check, bool transaction_active>
 JValue ExecuteGotoImpl(Thread*, const DexFile::CodeItem*, ShadowFrame&, JValue) {
@@ -285,6 +293,7 @@ static inline JValue Execute(
     }
 
     if (!stay_in_interpreter) {
+#ifndef MOE
       jit::Jit* jit = Runtime::Current()->GetJit();
       if (jit != nullptr) {
         jit->MethodEntered(self, shadow_frame.GetMethod());
@@ -300,6 +309,7 @@ static inline JValue Execute(
           return result;
         }
       }
+#endif
     }
   }
 
@@ -389,7 +399,11 @@ static inline JValue Execute(
 }
 
 void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receiver,
+#ifndef MOE
                                 uint32_t* args, JValue* result,
+#else
+                                uintptr_t* args, JValue* result,
+#endif
                                 bool stay_in_interpreter) {
   DCHECK_EQ(self, Thread::Current());
   bool implicit_check = !Runtime::Current()->ExplicitStackOverflowChecks();
@@ -441,14 +455,35 @@ void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receive
         break;
       }
       case 'J': case 'D': {
+#ifndef MOE
         uint64_t wide_value = (static_cast<uint64_t>(args[arg_pos + 1]) << 32) | args[arg_pos];
+#else
+        uint64_t wide_value =
+            (static_cast<uint64_t>(static_cast<uint32_t>(args[arg_pos + 1])) << 32) |
+            static_cast<uint32_t>(args[arg_pos]);
+#endif
         shadow_frame->SetVRegLong(cur_reg, wide_value);
         cur_reg++;
         arg_pos++;
         break;
       }
+#ifdef MOE
+      case 'Z':
+      case 'B':
+        shadow_frame->SetVReg(cur_reg, static_cast<uint8_t>(args[arg_pos]));
+        break;
+
+      case 'C':
+      case 'S':
+        shadow_frame->SetVReg(cur_reg, static_cast<uint16_t>(args[arg_pos]));
+        break;
+#endif
       default:
+#ifndef MOE
         shadow_frame->SetVReg(cur_reg, args[arg_pos]);
+#else
+        shadow_frame->SetVReg(cur_reg, static_cast<uint32_t>(args[arg_pos]));
+#endif
         break;
     }
   }
@@ -609,10 +644,12 @@ JValue EnterInterpreterFromEntryPoint(Thread* self, const DexFile::CodeItem* cod
     return JValue();
   }
 
+#ifndef MOE
   jit::Jit* jit = Runtime::Current()->GetJit();
   if (jit != nullptr) {
     jit->NotifyCompiledCodeToInterpreterTransition(self, shadow_frame->GetMethod());
   }
+#endif
   return Execute(self, code_item, *shadow_frame, JValue());
 }
 
@@ -650,13 +687,18 @@ void ArtInterpreterToInterpreterBridge(Thread* self, const DexFile::CodeItem* co
     // generated stub) except during testing and image writing.
     CHECK(!Runtime::Current()->IsStarted());
     Object* receiver = is_static ? nullptr : shadow_frame->GetVRegReference(0);
+#ifndef MOE
     uint32_t* args = shadow_frame->GetVRegArgs(is_static ? 0 : 1);
+#else
+    uintptr_t* args = shadow_frame->GetVRegArgs(is_static ? 0 : 1);
+#endif
     UnstartedRuntime::Jni(self, shadow_frame->GetMethod(), receiver, args, result);
   }
 
   self->PopShadowFrame();
 }
 
+#ifndef MOE
 void CheckInterpreterAsmConstants() {
   CheckMterpAsmConstants();
 }
@@ -664,6 +706,7 @@ void CheckInterpreterAsmConstants() {
 void InitInterpreterTls(Thread* self) {
   InitMterpTls(self);
 }
+#endif
 
 }  // namespace interpreter
 }  // namespace art

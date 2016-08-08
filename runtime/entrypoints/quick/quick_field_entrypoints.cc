@@ -55,6 +55,9 @@ ALWAYS_INLINE static inline ArtField* FindInstanceField(uint32_t field_idx,
   return field;
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int8_t artGetByteStaticFromCode(uint32_t field_idx,
                                            ArtMethod* referrer,
                                            Thread* self)
@@ -71,6 +74,9 @@ extern "C" int8_t artGetByteStaticFromCode(uint32_t field_idx,
   return 0;  // Will throw exception by checking with Thread::Current.
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" uint8_t artGetBooleanStaticFromCode(uint32_t field_idx,
                                                ArtMethod* referrer,
                                                Thread* self)
@@ -87,6 +93,9 @@ extern "C" uint8_t artGetBooleanStaticFromCode(uint32_t field_idx,
   return 0;  // Will throw exception by checking with Thread::Current.
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int16_t artGetShortStaticFromCode(uint32_t field_idx,
                                              ArtMethod* referrer,
                                              Thread* self)
@@ -103,6 +112,9 @@ extern "C" int16_t artGetShortStaticFromCode(uint32_t field_idx,
   return 0;  // Will throw exception by checking with Thread::Current.
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" uint16_t artGetCharStaticFromCode(uint32_t field_idx,
                                              ArtMethod* referrer,
                                              Thread* self)
@@ -119,6 +131,9 @@ extern "C" uint16_t artGetCharStaticFromCode(uint32_t field_idx,
   return 0;  // Will throw exception by checking with Thread::Current.
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" uint32_t artGet32StaticFromCode(uint32_t field_idx,
                                            ArtMethod* referrer,
                                            Thread* self)
@@ -135,6 +150,9 @@ extern "C" uint32_t artGet32StaticFromCode(uint32_t field_idx,
   return 0;  // Will throw exception by checking with Thread::Current.
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" uint64_t artGet64StaticFromCode(uint32_t field_idx,
                                            ArtMethod* referrer,
                                            Thread* self)
@@ -151,6 +169,9 @@ extern "C" uint64_t artGet64StaticFromCode(uint32_t field_idx,
   return 0;  // Will throw exception by checking with Thread::Current.
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" mirror::Object* artGetObjStaticFromCode(uint32_t field_idx,
                                                    ArtMethod* referrer,
                                                    Thread* self)
@@ -173,6 +194,9 @@ extern "C" mirror::Object* artGetObjStaticFromCode(uint32_t field_idx,
   return nullptr;  // Will throw exception by checking with Thread::Current.
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int8_t artGetByteInstanceFromCode(uint32_t field_idx,
                                              mirror::Object* obj,
                                              ArtMethod* referrer,
@@ -194,6 +218,9 @@ extern "C" int8_t artGetByteInstanceFromCode(uint32_t field_idx,
   return 0;  // Will throw exception by checking with Thread::Current.
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" uint8_t artGetBooleanInstanceFromCode(uint32_t field_idx,
                                                  mirror::Object* obj,
                                                  ArtMethod* referrer,
@@ -214,6 +241,10 @@ extern "C" uint8_t artGetBooleanInstanceFromCode(uint32_t field_idx,
   }
   return 0;  // Will throw exception by checking with Thread::Current.
 }
+
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int16_t artGetShortInstanceFromCode(uint32_t field_idx,
                                                mirror::Object* obj,
                                                ArtMethod* referrer,
@@ -235,6 +266,9 @@ extern "C" int16_t artGetShortInstanceFromCode(uint32_t field_idx,
   return 0;  // Will throw exception by checking with Thread::Current.
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" uint16_t artGetCharInstanceFromCode(uint32_t field_idx,
                                                mirror::Object* obj,
                                                ArtMethod* referrer,
@@ -256,6 +290,9 @@ extern "C" uint16_t artGetCharInstanceFromCode(uint32_t field_idx,
   return 0;  // Will throw exception by checking with Thread::Current.
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" uint32_t artGet32InstanceFromCode(uint32_t field_idx,
                                              mirror::Object* obj,
                                              ArtMethod* referrer,
@@ -277,6 +314,9 @@ extern "C" uint32_t artGet32InstanceFromCode(uint32_t field_idx,
   return 0;  // Will throw exception by checking with Thread::Current.
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" uint64_t artGet64InstanceFromCode(uint32_t field_idx,
                                              mirror::Object* obj,
                                              ArtMethod* referrer,
@@ -298,6 +338,9 @@ extern "C" uint64_t artGet64InstanceFromCode(uint32_t field_idx,
   return 0;  // Will throw exception by checking with Thread::Current.
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" mirror::Object* artGetObjInstanceFromCode(uint32_t field_idx,
                                                      mirror::Object* obj,
                                                      ArtMethod* referrer,
@@ -322,8 +365,15 @@ extern "C" mirror::Object* artGetObjInstanceFromCode(uint32_t field_idx,
   return nullptr;  // Will throw exception by checking with Thread::Current.
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int artSet8StaticFromCode(uint32_t field_idx,
+#ifndef MOE
                                      uint32_t new_value,
+#else
+                                     uint8_t new_value,
+#endif
                                      ArtMethod* referrer,
                                      Thread* self)
     SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -355,6 +405,9 @@ extern "C" int artSet8StaticFromCode(uint32_t field_idx,
   return -1;  // failure
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int artSet16StaticFromCode(uint32_t field_idx,
                                       uint16_t new_value,
                                       ArtMethod* referrer,
@@ -388,6 +441,9 @@ extern "C" int artSet16StaticFromCode(uint32_t field_idx,
   return -1;  // failure
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int artSet32StaticFromCode(uint32_t field_idx,
                                       uint32_t new_value,
                                       ArtMethod* referrer,
@@ -409,6 +465,9 @@ extern "C" int artSet32StaticFromCode(uint32_t field_idx,
   return -1;  // failure
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int artSet64StaticFromCode(uint32_t field_idx,
                                       ArtMethod* referrer,
                                       uint64_t new_value,
@@ -430,6 +489,9 @@ extern "C" int artSet64StaticFromCode(uint32_t field_idx,
   return -1;  // failure
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int artSetObjStaticFromCode(uint32_t field_idx,
                                        mirror::Object* new_value,
                                        ArtMethod* referrer,
@@ -464,6 +526,9 @@ extern "C" int artSetObjStaticFromCode(uint32_t field_idx,
   return -1;  // failure
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int artSet8InstanceFromCode(uint32_t field_idx,
                                        mirror::Object* obj,
                                        uint8_t new_value,
@@ -501,6 +566,9 @@ extern "C" int artSet8InstanceFromCode(uint32_t field_idx,
   return -1;  // failure
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int artSet16InstanceFromCode(uint32_t field_idx,
                                         mirror::Object* obj,
                                         uint16_t new_value,
@@ -539,6 +607,9 @@ extern "C" int artSet16InstanceFromCode(uint32_t field_idx,
   return -1;  // failure
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int artSet32InstanceFromCode(uint32_t field_idx,
                                         mirror::Object* obj,
                                         uint32_t new_value,
@@ -565,6 +636,9 @@ extern "C" int artSet32InstanceFromCode(uint32_t field_idx,
   return -1;  // failure
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int artSet64InstanceFromCode(uint32_t field_idx,
                                         mirror::Object* obj,
                                         uint64_t new_value,
@@ -591,6 +665,9 @@ extern "C" int artSet64InstanceFromCode(uint32_t field_idx,
   return -1;  // failure
 }
 
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" int artSetObjInstanceFromCode(uint32_t field_idx,
                                          mirror::Object* obj,
                                          mirror::Object* new_value,

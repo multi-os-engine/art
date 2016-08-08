@@ -29,6 +29,9 @@ namespace mirror {
 class Class;
 
 // C++ mirror of java.lang.ClassLoader
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED ClassLoader : public Object {
  public:
   // Size of an instance of java.lang.ClassLoader.
@@ -71,12 +74,18 @@ class MANAGED ClassLoader : public Object {
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!Locks::classlinker_classes_lock_);
 
+#if defined(MOE) && defined(__LP64__)
+  uint32_t padding_ ATTRIBUTE_UNUSED;
+#endif
+
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
   HeapReference<Object> packages_;
   HeapReference<ClassLoader> parent_;
   HeapReference<Object> proxyCache_;
   // Native pointer to class table, need to zero this out when image writing.
+#if !defined(MOE) || !defined(__LP64__)
   uint32_t padding_ ATTRIBUTE_UNUSED;
+#endif
   uint64_t allocator_;
   uint64_t class_table_;
 
@@ -84,6 +93,9 @@ class MANAGED ClassLoader : public Object {
   friend class Object;  // For VisitReferences
   DISALLOW_IMPLICIT_CONSTRUCTORS(ClassLoader);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

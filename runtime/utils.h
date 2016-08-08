@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,11 +90,13 @@ static constexpr bool CanDivideByReciprocalMultiplyDouble(int64_t divisor) {
   return ((divisor & ((UINT64_C(1) << 52) - 1)) == 0);
 }
 
+#ifndef MOE
 static inline uint32_t PointerToLowMemUInt32(const void* p) {
   uintptr_t intp = reinterpret_cast<uintptr_t>(p);
   DCHECK_LE(intp, 0xFFFFFFFFU);
   return intp & 0xFFFFFFFFU;
 }
+#endif
 
 static inline bool NeedsEscaping(uint16_t ch) {
   return (ch < ' ' || ch > '~');
@@ -209,6 +212,11 @@ std::string JniShortName(ArtMethod* m)
 // Returns the JNI native function name for the overloaded method 'm'.
 std::string JniLongName(ArtMethod* m)
     SHARED_REQUIRES(Locks::mutator_lock_);
+    
+#ifdef MOE
+std::string JniShortNameWithPrefix(ArtMethod* m, const std::string& prefix);
+std::string JniLongNameWithPrefix(ArtMethod* m, const std::string& prefix);
+#endif
 
 bool ReadFileToString(const std::string& file_name, std::string* result);
 bool PrintFileToLog(const std::string& file_name, LogSeverity level);

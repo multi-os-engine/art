@@ -35,6 +35,9 @@ class Thread;
 // HandleScopes are scoped objects containing a number of Handles. They are used to allocate
 // handles, for these handles (and the objects contained within them) to be visible/roots for the
 // GC. It is most common to stack allocate HandleScopes using StackHandleScope.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class PACKED(4) HandleScope {
  public:
   ~HandleScope() {}
@@ -121,6 +124,9 @@ class PACKED(4) HandleScope {
  private:
   DISALLOW_COPY_AND_ASSIGN(HandleScope);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 // A wrapper which wraps around Object** and restores the pointer in the destructor.
 // TODO: Add more functionality.
@@ -142,6 +148,9 @@ class HandleWrapper : public MutableHandle<T> {
 };
 
 // Scoped handle storage of a fixed size that is usually stack allocated.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 template<size_t kNumReferences>
 class PACKED(4) StackHandleScope FINAL : public HandleScope {
  public:
@@ -181,6 +190,9 @@ class PACKED(4) StackHandleScope FINAL : public HandleScope {
 
   template<size_t kNumRefs> friend class StackHandleScope;
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 // Utility class to manage a collection (stack) of StackHandleScope. All the managed
 // scope handle have the same fixed sized.

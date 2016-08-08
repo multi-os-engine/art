@@ -24,6 +24,10 @@
 #include <malloc.h>  // For mallinfo
 #endif
 
+#ifdef MOE
+#include "llvm_compiler.hpp"
+#endif
+
 #include "art_field-inl.h"
 #include "art_method-inl.h"
 #include "base/stl_util.h"
@@ -338,6 +342,9 @@ CompilerDriver::CompilerDriver(
     VerificationResults* verification_results,
     DexFileToMethodInlinerMap* method_inliner_map,
     Compiler::Kind compiler_kind,
+#ifdef MOE
+    const std::string& platform_name,
+#endif
     InstructionSet instruction_set,
     const InstructionSetFeatures* instruction_set_features,
     bool boot_image,
@@ -350,11 +357,19 @@ CompilerDriver::CompilerDriver(
     bool dump_passes,
     CumulativeLogger* timer,
     int swap_fd,
+#ifdef MOE
+    const std::string& native_file)
+#else
     const ProfileCompilationInfo* profile_compilation_info)
+#endif
     : compiler_options_(compiler_options),
       verification_results_(verification_results),
       method_inliner_map_(method_inliner_map),
+#ifndef MOE
       compiler_(Compiler::Create(this, compiler_kind)),
+#else
+      compiler_(Compiler::Create(this, compiler_kind, platform_name, instruction_set, native_file)),
+#endif
       compiler_kind_(compiler_kind),
       instruction_set_(instruction_set),
       instruction_set_features_(instruction_set_features),
@@ -378,16 +393,20 @@ CompilerDriver::CompilerDriver(
       support_boot_image_fixup_(instruction_set != kMips && instruction_set != kMips64),
       dex_files_for_oat_file_(nullptr),
       compiled_method_storage_(swap_fd),
+#ifndef MOE
       profile_compilation_info_(profile_compilation_info),
+#endif
       max_arena_alloc_(0) {
   DCHECK(compiler_options_ != nullptr);
   DCHECK(method_inliner_map_ != nullptr);
 
   compiler_->Init();
 
+#ifndef MOE
   if (compiler_options->VerifyOnlyProfile()) {
     CHECK(profile_compilation_info_ != nullptr) << "Requires profile";
   }
+#endif
   if (boot_image_) {
     CHECK(image_classes_.get() != nullptr) << "Expected image classes for boot image";
   }
@@ -409,6 +428,7 @@ CompilerDriver::~CompilerDriver() {
 }
 
 
+#ifndef MOE
 #define CREATE_TRAMPOLINE(type, abi, offset) \
     if (Is64BitInstructionSet(instruction_set_)) { \
       return CreateTrampoline64(instruction_set_, abi, \
@@ -442,6 +462,7 @@ std::unique_ptr<const std::vector<uint8_t>> CompilerDriver::CreateQuickToInterpr
   CREATE_TRAMPOLINE(QUICK, kQuickAbi, pQuickToInterpreterBridge)
 }
 #undef CREATE_TRAMPOLINE
+#endif
 
 void CompilerDriver::CompileAll(jobject class_loader,
                                 const std::vector<const DexFile*>& dex_files,
@@ -475,6 +496,7 @@ static optimizer::DexToDexCompilationLevel GetDexToDexCompilationLevel(
     const DexFile& dex_file, const DexFile::ClassDef& class_def)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   auto* const runtime = Runtime::Current();
+#ifndef MOE
   if (runtime->UseJitCompilation() || driver.GetCompilerOptions().VerifyAtRuntime()) {
     // Verify at runtime shouldn't dex to dex since we didn't resolve of verify.
     return optimizer::DexToDexCompilationLevel::kDontDexToDexCompile;
@@ -504,6 +526,10 @@ static optimizer::DexToDexCompilationLevel GetDexToDexCompilationLevel(
     // Class verification has failed: do not run DEX-to-DEX compilation.
     return optimizer::DexToDexCompilationLevel::kDontDexToDexCompile;
   }
+#else
+  // MOE TODO: Re-enable dex-compilation in the future.
+  return optimizer::DexToDexCompilationLevel::kDontDexToDexCompile;
+#endif
 }
 
 static optimizer::DexToDexCompilationLevel GetDexToDexCompilationLevel(
@@ -559,7 +585,9 @@ static void CompileMethod(Thread* self,
       // Leaving this empty will trigger the generic JNI version
     } else {
       compiled_method = driver->GetCompiler()->JniCompile(access_flags, method_idx, dex_file);
+#ifndef MOE
       CHECK(compiled_method != nullptr);
+#endif
     }
   } else if ((access_flags & kAccAbstract) != 0) {
     // Abstract methods don't have code.
@@ -577,8 +605,12 @@ static void CompileMethod(Thread* self,
         (verified_method->GetEncounteredVerificationFailures() &
             (verifier::VERIFY_ERROR_FORCE_INTERPRETER | verifier::VERIFY_ERROR_LOCKING)) == 0 &&
         // Is eligable for compilation by methods-to-compile filter.
+#ifndef MOE
         driver->IsMethodToCompile(method_ref) &&
         driver->ShouldCompileBasedOnProfile(method_ref);
+#else
+        driver->IsMethodToCompile(method_ref);
+#endif
 
     if (compile) {
       // NOTE: if compiler declines to compile this method, it will return null.
@@ -913,6 +945,7 @@ bool CompilerDriver::IsMethodToCompile(const MethodReference& method_ref) const 
   return methods_to_compile_->find(tmp.c_str()) != methods_to_compile_->end();
 }
 
+#ifndef MOE
 bool CompilerDriver::ShouldCompileBasedOnProfile(const MethodReference& method_ref) const {
   if (profile_compilation_info_ == nullptr) {
     // If we miss profile information it means that we don't do a profile guided compilation.
@@ -928,9 +961,11 @@ bool CompilerDriver::ShouldCompileBasedOnProfile(const MethodReference& method_r
   }
   return result;
 }
+#endif
 
 bool CompilerDriver::ShouldVerifyClassBasedOnProfile(const DexFile& dex_file,
                                                      uint16_t class_idx) const {
+#ifndef MOE
   if (!compiler_options_->VerifyOnlyProfile()) {
     // No profile, verify everything.
     return true;
@@ -943,6 +978,9 @@ bool CompilerDriver::ShouldVerifyClassBasedOnProfile(const DexFile& dex_file,
         << dex_file.GetClassDescriptor(dex_file.GetClassDef(class_idx));
   }
   return result;
+#else
+  return true;
+#endif
 }
 
 class ResolveCatchBlockExceptionsClassVisitor : public ClassVisitor {
@@ -1270,7 +1308,9 @@ void CompilerDriver::UpdateImageClasses(TimingLogger* timings) {
 bool CompilerDriver::CanAssumeClassIsLoaded(mirror::Class* klass) {
   Runtime* runtime = Runtime::Current();
   if (!runtime->IsAotCompiler()) {
+#ifndef MOE
     DCHECK(runtime->UseJitCompilation());
+#endif
     // Having the klass reference here implies that the klass is already loaded.
     return true;
   }
@@ -1288,6 +1328,7 @@ bool CompilerDriver::CanAssumeClassIsLoaded(mirror::Class* klass) {
 bool CompilerDriver::CanAssumeTypeIsPresentInDexCache(Handle<mirror::DexCache> dex_cache,
                                                       uint32_t type_idx) {
   bool result = false;
+#ifndef MOE
   if ((IsBootImage() &&
        IsImageClass(dex_cache->GetDexFile()->StringDataByIdx(
            dex_cache->GetDexFile()->GetTypeId(type_idx).descriptor_idx_))) ||
@@ -1295,6 +1336,7 @@ bool CompilerDriver::CanAssumeTypeIsPresentInDexCache(Handle<mirror::DexCache> d
     mirror::Class* resolved_class = dex_cache->GetResolvedType(type_idx);
     result = (resolved_class != nullptr);
   }
+#endif
 
   if (result) {
     stats_->TypeInDexCache();
@@ -1309,6 +1351,7 @@ bool CompilerDriver::CanAssumeStringIsPresentInDexCache(const DexFile& dex_file,
   // See also Compiler::ResolveDexFile
 
   bool result = false;
+#ifndef MOE
   if (IsBootImage() || Runtime::Current()->UseJitCompilation()) {
     ScopedObjectAccess soa(Thread::Current());
     StackHandleScope<1> hs(soa.Self());
@@ -1325,6 +1368,7 @@ bool CompilerDriver::CanAssumeStringIsPresentInDexCache(const DexFile& dex_file,
       result = (dex_cache->GetResolvedString(string_idx) != nullptr);
     }
   }
+#endif
   if (result) {
     stats_->StringInDexCache();
   } else {
@@ -1429,12 +1473,14 @@ bool CompilerDriver::CanEmbedTypeInCode(const DexFile& dex_file, uint32_t type_i
     } else {
       return false;
     }
+#ifndef MOE
   } else if (runtime->UseJitCompilation() && !heap->IsMovableObject(resolved_class)) {
     *is_type_initialized = resolved_class->IsInitialized();
     // If the class may move around, then don't embed it as a direct pointer.
     *use_direct_type_ptr = true;
     *direct_type_ptr = reinterpret_cast<uintptr_t>(resolved_class);
     return true;
+#endif
   } else {
     // True if the class is in the image at app compiling time.
     const bool class_in_image = heap->FindSpaceFromObject(resolved_class, false)->IsImageSpace();
@@ -1606,6 +1652,7 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
       }
     }
   }
+#ifndef MOE
   if (runtime->UseJitCompilation()) {
     // If we are the JIT, then don't allow a direct call to the interpreter bridge since this will
     // never be updated even after we compile the method.
@@ -1614,6 +1661,7 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
       use_dex_cache = true;
     }
   }
+#endif
   if (method_code_in_boot) {
     *stats_flags |= kFlagDirectCallToBoot | kFlagDirectMethodToBoot;
   }
@@ -1637,9 +1685,13 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
   // dex file or direct pointers.
   bool must_use_direct_pointers = false;
   mirror::DexCache* dex_cache = declaring_class->GetDexCache();
+#ifndef MOE
   if (target_method->dex_file == dex_cache->GetDexFile() &&
     !(runtime->UseJitCompilation() && dex_cache->GetResolvedMethod(
         method->GetDexMethodIndex(), pointer_size) == nullptr)) {
+#else
+  if (target_method->dex_file == dex_cache->GetDexFile()) {
+#endif
     target_method->dex_method_index = method->GetDexMethodIndex();
   } else {
     if (no_guarantee_of_dex_cache_entry) {
@@ -1667,6 +1719,7 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
     }
   } else {
     bool method_in_image = false;
+#ifndef MOE
     const std::vector<gc::space::ImageSpace*> image_spaces = heap->GetBootImageSpaces();
     for (gc::space::ImageSpace* image_space : image_spaces) {
       const auto& method_section = image_space->GetImageHeader().GetMethodsSection();
@@ -1675,7 +1728,12 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
         break;
       }
     }
+#endif
+#ifndef MOE
     if (method_in_image || compiling_boot || runtime->UseJitCompilation()) {
+#else
+    if (method_in_image || compiling_boot) {
+#endif
       // We know we must be able to get to the method in the image, so use that pointer.
       // In the case where we are the JIT, we can always use direct pointers since we know where
       // the method and its code are / will be. We don't sharpen to interpreter bridge since we
@@ -2490,13 +2548,18 @@ void CompilerDriver::InitializeClasses(jobject class_loader,
 void CompilerDriver::Compile(jobject class_loader,
                              const std::vector<const DexFile*>& dex_files,
                              TimingLogger* timings) {
+#ifndef MOE
   if (kDebugProfileGuidedCompilation) {
     LOG(INFO) << "[ProfileGuidedCompilation] " <<
         ((profile_compilation_info_ == nullptr)
             ? "null"
             : profile_compilation_info_->DumpInfo(&dex_files));
   }
+#endif
   for (size_t i = 0; i != dex_files.size(); ++i) {
+#ifdef MOE
+    dex_file_idx_ = i;
+#endif
     const DexFile* dex_file = dex_files[i];
     CHECK(dex_file != nullptr);
     CompileDexFile(class_loader,
@@ -2530,6 +2593,9 @@ class CompileClassVisitor : public CompilationVisitor {
     }
     // Use a scoped object access to perform to the quick SkipClass check.
     const char* descriptor = dex_file.GetClassDescriptor(class_def);
+#ifdef MOE
+    LLVMCompiler::ScopedClassNotifier scn(descriptor);
+#endif
     ScopedObjectAccess soa(Thread::Current());
     StackHandleScope<3> hs(soa.Self());
     Handle<mirror::ClassLoader> class_loader(

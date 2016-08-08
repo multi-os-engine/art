@@ -65,9 +65,16 @@ class Throwable;
 static constexpr bool kCheckFieldAssignments = false;
 
 // Size of Object.
+#if !defined(MOE) || !defined(__LP64__)
 static constexpr uint32_t kObjectHeaderSize = kUseBrooksReadBarrier ? 16 : 8;
+#else
+static constexpr uint32_t kObjectHeaderSize = kUseBrooksReadBarrier ? 20 : 12;
+#endif
 
 // C++ mirror of java.lang.Object
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED LOCKABLE Object {
  public:
   // The number of vtable entries in java.lang.Object.
@@ -603,6 +610,9 @@ class MANAGED LOCKABLE Object {
   DISALLOW_ALLOCATION();
   DISALLOW_IMPLICIT_CONSTRUCTORS(Object);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

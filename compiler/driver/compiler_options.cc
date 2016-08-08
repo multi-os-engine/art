@@ -38,7 +38,11 @@ CompilerOptions::CompilerOptions()
       implicit_null_checks_(true),
       implicit_so_checks_(true),
       implicit_suspend_checks_(false),
+#ifndef MOE
       compile_pic_(false),
+#else
+      compile_pic_(true),
+#endif
       verbose_methods_(nullptr),
       abort_on_hard_verifier_failure_(false),
       init_failure_output_(nullptr),

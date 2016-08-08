@@ -1,0 +1,15 @@
+diff --git a/test/439-npe/src/Main.java b/test/439-npe/src/Main.java
+index 40c2645..e71a638 100644
+--- a/test/439-npe/src/Main.java
++++ b/test/439-npe/src/Main.java
+@@ -214,8 +214,8 @@ public class Main {
+   static void check(NullPointerException npe, int mainLine, int medthodLine, String methodName) {
+     System.out.println(methodName);
+     StackTraceElement[] trace = npe.getStackTrace();
+-    checkElement(trace[0], "Main", methodName, "Main.java", medthodLine);
+-    checkElement(trace[1], "Main", "main", "Main.java", mainLine);
++    checkElement(trace[0], "aosp_439_npe.Main", methodName, "Main.java", medthodLine);
++    checkElement(trace[1], "aosp_439_npe.Main", "main", "Main.java", mainLine);
+   }
+ 
+   static void checkElement(StackTraceElement element,

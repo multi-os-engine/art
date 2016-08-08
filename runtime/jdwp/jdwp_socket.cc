@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,10 +144,24 @@ static JdwpSocketState* SocketStartup(JdwpState* state, uint16_t port, bool prob
   inet_aton("127.0.0.1", &addr.addrInet.sin_addr);
 
   if (bind(netState->listenSock, &addr.addrPlain, sizeof(addr)) != 0) {
+#ifndef MOE
     PLOG(probe ? ERROR : FATAL) << "Attempt to bind to port " << port << " failed";
+#else
+    LOG(INFO) << "Attempt to bind to port " << port << " failed";
+    LOG(INFO) << "Attempting to bind to port " << port << " on all interfaces";
+    inet_aton("0.0.0.0", &addr.addrInet.sin_addr);
+    if (bind(netState->listenSock, &addr.addrPlain, sizeof(addr)) != 0) {
+      PLOG(probe ? ERROR : FATAL) << "Attempt to bind to port " << port << " on all interfaces failed";
+    } else {
+      goto bind_success;
+    }
+#endif
     goto fail;
   }
 
+#ifdef MOE
+ bind_success:
+#endif
   netState->listenPort = port;
 
   if (listen(netState->listenSock, 5) != 0) {
@@ -306,7 +321,11 @@ bool JdwpSocketState::Establish(const JdwpOptions* options) {
     return false;
   }
 #else
+#ifdef MOE_WINDOWS
+  WSASetLastError(0);
+#else
   h_errno = 0;
+#endif
   pEntry = gethostbyname(options->host.c_str());
   if (pEntry == nullptr) {
     PLOG(WARNING) << "gethostbyname('" << options->host << "') failed";
@@ -435,6 +454,11 @@ bool JdwpSocketState::ProcessIncoming() {
         if (errno == EINTR) {
           continue;
         }
+#ifdef MOE
+        if (errno == EBADF) {
+          goto fail;
+        }
+#endif
         PLOG(ERROR) << "select failed";
         goto fail;
       }

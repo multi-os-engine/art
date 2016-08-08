@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +17,13 @@
 
 #include "large_object_space.h"
 
+#ifndef MOE
 #include <valgrind.h>
+#endif
 #include <memory>
+#ifndef MOE
 #include <memcheck/memcheck.h>
+#endif
 
 #include "gc/accounting/heap_bitmap-inl.h"
 #include "gc/accounting/space_bitmap-inl.h"
@@ -35,6 +40,7 @@ namespace art {
 namespace gc {
 namespace space {
 
+#ifndef MOE
 class MemoryToolLargeObjectMapSpace FINAL : public LargeObjectMapSpace {
  public:
   explicit MemoryToolLargeObjectMapSpace(const std::string& name) : LargeObjectMapSpace(name) {
@@ -99,6 +105,8 @@ class MemoryToolLargeObjectMapSpace FINAL : public LargeObjectMapSpace {
   static constexpr size_t kMemoryToolRedZoneBytes = kPageSize;
 };
 
+#endif
+
 void LargeObjectSpace::SwapBitmaps() {
   live_bitmap_.swap(mark_bitmap_);
   // Swap names to get more descriptive diagnostics.
@@ -123,9 +131,13 @@ LargeObjectMapSpace::LargeObjectMapSpace(const std::string& name)
       lock_("large object map space lock", kAllocSpaceLock) {}
 
 LargeObjectMapSpace* LargeObjectMapSpace::Create(const std::string& name) {
+#ifndef MOE
   if (Runtime::Current()->IsRunningOnMemoryTool()) {
     return new MemoryToolLargeObjectMapSpace(name);
   } else {
+#else
+  {
+#endif
     return new LargeObjectMapSpace(name);
   }
 }
@@ -457,7 +469,13 @@ size_t FreeListSpace::Free(Thread* self, mirror::Object* obj) {
   --num_objects_allocated_;
   DCHECK_LE(allocation_size, num_bytes_allocated_);
   num_bytes_allocated_ -= allocation_size;
+#ifdef MOE
+  if (!kMadviseZeroes) {
+    SafeZeroAndReleaseSpace(obj, allocation_size);
+  }
+#else
   madvise(obj, allocation_size, MADV_DONTNEED);
+#endif
   if (kIsDebugBuild) {
     // Can't disallow reads since we use them to find next chunks during coalescing.
     mprotect(obj, allocation_size, PROT_READ);

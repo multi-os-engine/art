@@ -29,6 +29,7 @@ int Thread::GetNativePriority() {
   return kNormThreadPriority;
 }
 
+#ifndef MOE
 static void SigAltStack(stack_t* new_stack, stack_t* old_stack) {
   if (sigaltstack(new_stack, old_stack) == -1) {
     PLOG(FATAL) << "sigaltstack failed";
@@ -41,9 +42,11 @@ static void SigAltStack(stack_t* new_stack, stack_t* old_stack) {
 // TODO: We shouldn't do logging (with locks) in signal handlers.
 static constexpr int kHostAltSigStackSize =
     32 * KB < MINSIGSTKSZ ? MINSIGSTKSZ : 32 * KB;
+#endif
 
 void Thread::SetUpAlternateSignalStack() {
   // Create and set an alternate signal stack.
+#ifndef MOE
 #ifdef ART_TARGET_ANDROID
   LOG(FATAL) << "Invalid use of alternate signal stack on Android";
 #endif
@@ -58,9 +61,13 @@ void Thread::SetUpAlternateSignalStack() {
   ss.ss_sp = nullptr;
   SigAltStack(nullptr, &ss);
   VLOG(threads) << "Alternate signal stack is " << PrettySize(ss.ss_size) << " at " << ss.ss_sp;
+#else
+  return;
+#endif
 }
 
 void Thread::TearDownAlternateSignalStack() {
+#ifndef MOE
   // Get the pointer so we can free the memory.
   stack_t ss;
   SigAltStack(nullptr, &ss);
@@ -74,6 +81,9 @@ void Thread::TearDownAlternateSignalStack() {
 
   // Free it.
   delete[] allocated_signal_stack;
+#else
+  return;
+#endif
 }
 
 }  // namespace art

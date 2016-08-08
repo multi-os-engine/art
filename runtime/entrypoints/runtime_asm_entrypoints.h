@@ -23,51 +23,75 @@ namespace art {
 #error "File and symbols only for use within libart."
 #endif
 
+#ifndef MOE
 extern "C" void* art_jni_dlsym_lookup_stub(JNIEnv*, jobject);
 static inline const void* GetJniDlsymLookupStub() {
   return reinterpret_cast<const void*>(art_jni_dlsym_lookup_stub);
 }
+#endif
 
 // Return the address of quick stub code for handling IMT conflicts.
 extern "C" void art_quick_imt_conflict_trampoline(ArtMethod*);
 static inline const void* GetQuickImtConflictStub() {
+#ifndef MOE
   return reinterpret_cast<const void*>(art_quick_imt_conflict_trampoline);
+#else
+  return nullptr;
+#endif
 }
 
 // Return the address of quick stub code for bridging from quick code to the interpreter.
+#ifndef MOE
 extern "C" void art_quick_to_interpreter_bridge(ArtMethod*);
 static inline const void* GetQuickToInterpreterBridge() {
   return reinterpret_cast<const void*>(art_quick_to_interpreter_bridge);
 }
+#endif
 
 // Return the address of quick stub code for handling JNI calls.
+#ifndef MOE
 extern "C" void art_quick_generic_jni_trampoline(ArtMethod*);
 static inline const void* GetQuickGenericJniStub() {
   return reinterpret_cast<const void*>(art_quick_generic_jni_trampoline);
 }
+#endif
 
 // Return the address of quick stub code for handling transitions into the proxy invoke handler.
 extern "C" void art_quick_proxy_invoke_handler();
 static inline const void* GetQuickProxyInvokeHandler() {
+#ifndef MOE
   return reinterpret_cast<const void*>(art_quick_proxy_invoke_handler);
+#else
+  return nullptr;
+#endif
 }
 
 // Return the address of quick stub code for resolving a method at first call.
 extern "C" void art_quick_resolution_trampoline(ArtMethod*);
+#ifndef MOE
 static inline const void* GetQuickResolutionStub() {
   return reinterpret_cast<const void*>(art_quick_resolution_trampoline);
 }
+#endif
 
 // Entry point for quick code that performs deoptimization.
 extern "C" void art_quick_deoptimize();
 static inline const void* GetQuickDeoptimizationEntryPoint() {
+#ifndef MOE
   return reinterpret_cast<const void*>(art_quick_deoptimize);
+#else
+  return nullptr;
+#endif
 }
 
 // Return address of instrumentation entry point used by non-interpreter based tracing.
 extern "C" void art_quick_instrumentation_entry(void*);
 static inline const void* GetQuickInstrumentationEntryPoint() {
+#ifndef MOE
   return reinterpret_cast<const void*>(art_quick_instrumentation_entry);
+#else
+  return nullptr;
+#endif
 }
 
 // Stub to deoptimize from compiled code.
@@ -76,7 +100,11 @@ extern "C" void art_quick_deoptimize_from_compiled_code();
 // The return_pc of instrumentation exit stub.
 extern "C" void art_quick_instrumentation_exit();
 static inline const void* GetQuickInstrumentationExitPc() {
+#ifndef MOE
   return reinterpret_cast<const void*>(art_quick_instrumentation_exit);
+#else
+  return nullptr;
+#endif
 }
 
 }  // namespace art

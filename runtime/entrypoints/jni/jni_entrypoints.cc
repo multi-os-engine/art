@@ -24,10 +24,13 @@
 namespace art {
 
 // Used by the JNI dlsym stub to find the native method to invoke if none is registered.
-#if defined(__arm__) || defined(__aarch64__)
+#if !defined(MOE) && !(defined(__arm__) || defined(__aarch64__))
 extern "C" void* artFindNativeMethod() {
   Thread* self = Thread::Current();
 #else
+#ifdef MOE_WINDOWS
+__declspec(dllexport)
+#endif
 extern "C" void* artFindNativeMethod(Thread* self) {
   DCHECK_EQ(self, Thread::Current());
 #endif

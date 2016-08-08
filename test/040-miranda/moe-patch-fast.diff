@@ -1,0 +1,13 @@
+diff --git a/test/040-miranda/src/Main.java b/test/040-miranda/src/Main.java
+index 65f4fb4..1682ec4 100644
+--- a/test/040-miranda/src/Main.java
++++ b/test/040-miranda/src/Main.java
+@@ -42,7 +42,7 @@ public class Main {
+ 
+         System.out.println("Test getting miranda method via reflection:");
+         try {
+-          Class<?> mirandaClass = Class.forName("MirandaAbstract");
++          Class<?> mirandaClass = Class.forName("aosp_040_miranda.MirandaAbstract");
+           Method mirandaMethod = mirandaClass.getDeclaredMethod("inInterface");
+           System.out.println("  did not expect to find miranda method");
+         } catch (NoSuchMethodException nsme) {

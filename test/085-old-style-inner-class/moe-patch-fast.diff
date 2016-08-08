@@ -1,0 +1,15 @@
+diff --git a/test/085-old-style-inner-class/expected.txt b/test/085-old-style-inner-class/expected.txt
+index 63a0076..3acbd1c 100644
+--- a/test/085-old-style-inner-class/expected.txt
++++ b/test/085-old-style-inner-class/expected.txt
+@@ -1,8 +1,8 @@
+-Class: Main$1
++Class: aosp_085_old_style_inner_class.Main$1
+   getDeclaringClass(): (null)
+   getEnclosingClass(): (null)
+   getEnclosingMethod(): (null)
+-Class: Main$2
++Class: aosp_085_old_style_inner_class.Main$2
+   getDeclaringClass(): (null)
+   getEnclosingClass(): (null)
+   getEnclosingMethod(): (null)

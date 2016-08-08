@@ -1,0 +1,20 @@
+diff --git a/test/099-vmdebug/src/Main.java b/test/099-vmdebug/src/Main.java
+index 1be5765..848ee15 100644
+--- a/test/099-vmdebug/src/Main.java
++++ b/test/099-vmdebug/src/Main.java
+@@ -41,13 +41,8 @@ public class Main {
+         try {
+             return  File.createTempFile(TEMP_FILE_NAME_PREFIX, TEMP_FILE_NAME_SUFFIX);
+         } catch (IOException e) {
+-            System.setProperty("java.io.tmpdir", "/data/local/tmp");
+-            try {
+-                return File.createTempFile(TEMP_FILE_NAME_PREFIX, TEMP_FILE_NAME_SUFFIX);
+-            } catch (IOException e2) {
+-                System.setProperty("java.io.tmpdir", "/sdcard");
+-                return File.createTempFile(TEMP_FILE_NAME_PREFIX, TEMP_FILE_NAME_SUFFIX);
+-            }
++            return File.createTempFile(TEMP_FILE_NAME_PREFIX, TEMP_FILE_NAME_SUFFIX,
++                                       new File(System.getenv("MOE_APP_DOCS_DIR")));
+         }
+     }
+ 

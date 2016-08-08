@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +27,7 @@
 
 namespace art {
 
-static jclass VMClassLoader_findLoadedClass(JNIEnv* env, jclass, jobject javaLoader,
+static JNICALL jclass VMClassLoader_findLoadedClass(JNIEnv* env, jclass, jobject javaLoader,
                                             jstring javaName) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::ClassLoader* loader = soa.Decode<mirror::ClassLoader*>(javaLoader);
@@ -58,7 +59,8 @@ static jclass VMClassLoader_findLoadedClass(JNIEnv* env, jclass, jobject javaLoa
 /*
  * Returns an array of entries from the boot classpath that could contain resources.
  */
-static jobjectArray VMClassLoader_getBootClassPathEntries(JNIEnv* env, jclass) {
+static JNICALL jobjectArray VMClassLoader_getBootClassPathEntries(JNIEnv* env, jclass) {
+#ifndef MOE
   const std::vector<const DexFile*>& path =
       Runtime::Current()->GetClassLinker()->GetBootClassPath();
   jclass stringClass = env->FindClass("java/lang/String");
@@ -72,6 +74,22 @@ static jobjectArray VMClassLoader_getBootClassPathEntries(JNIEnv* env, jclass) {
     jstring javaPath = env->NewStringUTF(location.c_str());
     env->SetObjectArrayElement(array, i, javaPath);
   }
+#else
+  std::vector<std::string> path;
+#ifndef MOE_WINDOWS
+  Split(Runtime::Current()->GetClassPathString(), ':', &path);
+#else
+  Split(Runtime::Current()->GetClassPathString(), ';', &path);
+#endif
+  jclass stringClass = env->FindClass("java/lang/String");
+  jobjectArray array = env->NewObjectArray(path.size(), stringClass, nullptr);
+  for (size_t i = 0; i < path.size(); ++i) {
+    const std::string& location(path[i]);
+
+    jstring javaPath = env->NewStringUTF(location.c_str());
+    env->SetObjectArrayElement(array, i, javaPath);
+  }
+#endif
   return array;
 }
 

@@ -1,0 +1,13 @@
+diff --git a/test/125-gc-and-classloading/src/Main.java b/test/125-gc-and-classloading/src/Main.java
+index 61e123d..41fb4ce 100644
+--- a/test/125-gc-and-classloading/src/Main.java
++++ b/test/125-gc-and-classloading/src/Main.java
+@@ -57,7 +57,7 @@ public class Main {
+         public void run() {
+             try {
+                 cdl.await();
+-                Class c0 = Class.forName("Main$BigClass");
++                Class c0 = Class.forName("aosp_125_gc_and_classloading.Main$BigClass");
+             } catch (Exception e) {
+                 throw new RuntimeException(e);
+             }

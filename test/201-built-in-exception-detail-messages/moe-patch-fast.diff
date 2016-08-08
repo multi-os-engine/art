@@ -1,0 +1,121 @@
+diff --git a/test/201-built-in-exception-detail-messages/src/Main.java b/test/201-built-in-exception-detail-messages/src/Main.java
+index 52d4259..eb7aaba 100644
+--- a/test/201-built-in-exception-detail-messages/src/Main.java
++++ b/test/201-built-in-exception-detail-messages/src/Main.java
+@@ -117,7 +117,7 @@ public class Main {
+       array[0] = o;
+       fail();
+     } catch (ArrayStoreException ex) {
+-      assertEquals("java.lang.Integer cannot be stored in an array of type Main$C[][]",
++      assertEquals("java.lang.Integer cannot be stored in an array of type aosp_201_built_in_exception_detail_messages.Main$C[][]",
+                    ex.getMessage());
+     }
+ 
+@@ -127,7 +127,7 @@ public class Main {
+       array[0] = o;
+       fail();
+     } catch (ArrayStoreException ex) {
+-      assertEquals("Main$C[] cannot be stored in an array of type java.lang.Float[][]",
++      assertEquals("aosp_201_built_in_exception_detail_messages.Main$C[] cannot be stored in an array of type java.lang.Float[][]",
+                    ex.getMessage());
+     }
+ 
+@@ -186,7 +186,7 @@ public class Main {
+     try {
+       System.arraycopy(new C(), 0, "hello", 0, 1);
+     } catch (ArrayStoreException ex) {
+-      assertEquals("source of type Main$C is not an array", ex.getMessage());
++      assertEquals("source of type aosp_201_built_in_exception_detail_messages.Main$C is not an array", ex.getMessage());
+     }
+   }
+ 
+@@ -205,7 +205,7 @@ public class Main {
+       Object o = (C) makeArray(String.class);
+       fail();
+     } catch (ClassCastException ex) {
+-      assertEquals("java.lang.String[] cannot be cast to Main$C", ex.getMessage());
++      assertEquals("java.lang.String[] cannot be cast to aosp_201_built_in_exception_detail_messages.Main$C", ex.getMessage());
+     }
+ 
+     // Arrays of primitives.
+@@ -213,7 +213,7 @@ public class Main {
+       Object o = (C) makeArray(float.class);
+       fail();
+     } catch (ClassCastException ex) {
+-      assertEquals("float[] cannot be cast to Main$C", ex.getMessage());
++      assertEquals("float[] cannot be cast to aosp_201_built_in_exception_detail_messages.Main$C", ex.getMessage());
+     }
+ 
+     // Multi-dimensional arrays of primitives.
+@@ -221,7 +221,7 @@ public class Main {
+       Object o = (C) makeArray(char[].class);
+       fail();
+     } catch (ClassCastException ex) {
+-      assertEquals("char[][] cannot be cast to Main$C", ex.getMessage());
++      assertEquals("char[][] cannot be cast to aosp_201_built_in_exception_detail_messages.Main$C", ex.getMessage());
+     }
+ 
+     // Multi-dimensional arrays of references.
+@@ -311,7 +311,7 @@ public class Main {
+       int i = a.i;
+       fail();
+     } catch (NullPointerException ex) {
+-      assertEquals("Attempt to read from field 'int A.i' on a null object reference", ex.getMessage());
++      assertEquals("Attempt to read from field 'int aosp_201_built_in_exception_detail_messages.A.i' on a null object reference", ex.getMessage());
+     }
+ 
+     // Write field.
+@@ -320,7 +320,7 @@ public class Main {
+       a.i = 1;
+       fail();
+     } catch (NullPointerException ex) {
+-      assertEquals("Attempt to write to field 'int A.i' on a null object reference", ex.getMessage());
++      assertEquals("Attempt to write to field 'int aosp_201_built_in_exception_detail_messages.A.i' on a null object reference", ex.getMessage());
+     }
+ 
+     // Read array.
+@@ -358,7 +358,7 @@ public class Main {
+       field.set(new A(), 5);
+       fail();
+     } catch (IllegalArgumentException expected) {
+-      assertEquals("field A.b has type java.lang.String, got java.lang.Integer",
++      assertEquals("field aosp_201_built_in_exception_detail_messages.A.b has type java.lang.String, got java.lang.Integer",
+           expected.getMessage());
+     }
+ 
+@@ -368,7 +368,7 @@ public class Main {
+       field.set(new A(), null);
+       fail();
+     } catch (IllegalArgumentException expected) {
+-      assertEquals("field A.i has type int, got null", expected.getMessage());
++      assertEquals("field aosp_201_built_in_exception_detail_messages.A.i has type int, got null", expected.getMessage());
+     }
+ 
+     // Can't unbox String to a primitive.
+@@ -377,7 +377,7 @@ public class Main {
+       field.set(new A(), "hello, world!");
+       fail();
+     } catch (IllegalArgumentException expected) {
+-      assertEquals("field A.i has type int, got java.lang.String", expected.getMessage());
++      assertEquals("field aosp_201_built_in_exception_detail_messages.A.i has type int, got java.lang.String", expected.getMessage());
+     }
+ 
+     // Can't pass an Integer as a String.
+@@ -386,7 +386,7 @@ public class Main {
+       m.invoke(new A(), 2, 2);
+       fail();
+     } catch (IllegalArgumentException expected) {
+-      assertEquals("method A.m argument 2 has type java.lang.String, got java.lang.Integer",
++      assertEquals("method aosp_201_built_in_exception_detail_messages.A.m argument 2 has type java.lang.String, got java.lang.Integer",
+           expected.getMessage());
+     }
+ 
+@@ -396,7 +396,7 @@ public class Main {
+       m.invoke(new A(), null, "");
+       fail();
+     } catch (IllegalArgumentException expected) {
+-      assertEquals("method A.m argument 1 has type int, got null", expected.getMessage());
++      assertEquals("method aosp_201_built_in_exception_detail_messages.A.m argument 1 has type int, got null", expected.getMessage());
+     }
+ 
+     try {

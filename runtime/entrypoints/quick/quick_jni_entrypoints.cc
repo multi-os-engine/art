@@ -20,7 +20,21 @@
 #include "thread-inl.h"
 #include "verify_object-inl.h"
 
+
 namespace art {
+
+#ifdef MOE
+extern void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, uintptr_t* args,
+                                       JValue* result) {
+  if (method->IsStatic()) {
+    interpreter::EnterInterpreterFromInvoke(self, method, nullptr, args, result);
+  } else {
+    mirror::Object* receiver =
+        reinterpret_cast<StackReference<mirror::Object>*>(&args[0])->AsMirrorPtr();
+    interpreter::EnterInterpreterFromInvoke(self, method, receiver, args + 1, result);
+  }
+}
+#endif
 
 extern void ReadBarrierJni(mirror::CompressedReference<mirror::Object>* handle_on_stack,
                            Thread* self ATTRIBUTE_UNUSED) {
@@ -35,7 +49,11 @@ extern uint32_t JniMethodStart(Thread* self) {
   DCHECK(env != nullptr);
   uint32_t saved_local_ref_cookie = env->local_ref_cookie;
   env->local_ref_cookie = env->locals.GetSegmentState();
+#ifndef MOE
   ArtMethod* native_method = *self->GetManagedStack()->GetTopQuickFrame();
+#else
+  ArtMethod* native_method = self->GetManagedStack()->GetTopShadowFrame()->GetMethod();
+#endif
   if (!native_method->IsFastNative()) {
     // When not fast JNI we transition out of runnable.
     self->TransitionFromRunnableToSuspended(kNative);
@@ -50,7 +68,11 @@ extern uint32_t JniMethodStartSynchronized(jobject to_lock, Thread* self) {
 
 // TODO: NO_THREAD_SAFETY_ANALYSIS due to different control paths depending on fast JNI.
 static void GoToRunnable(Thread* self) NO_THREAD_SAFETY_ANALYSIS {
+#ifndef MOE
   ArtMethod* native_method = *self->GetManagedStack()->GetTopQuickFrame();
+#else
+  ArtMethod* native_method = self->GetManagedStack()->GetTopShadowFrame()->GetMethod();
+#endif
   bool is_fast = native_method->IsFastNative();
   if (!is_fast) {
     self->TransitionFromSuspendedToRunnable();
@@ -70,7 +92,9 @@ static void PopLocalReferences(uint32_t saved_local_ref_cookie, Thread* self)
   }
   env->locals.SetSegmentState(env->local_ref_cookie);
   env->local_ref_cookie = saved_local_ref_cookie;
+#ifndef MOE
   self->PopHandleScope();
+#endif
 }
 
 extern void JniMethodEnd(uint32_t saved_local_ref_cookie, Thread* self) {

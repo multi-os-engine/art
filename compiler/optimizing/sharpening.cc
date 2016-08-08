@@ -31,6 +31,10 @@
 #include "runtime.h"
 #include "scoped_thread_state_change.h"
 
+#ifdef MOE
+#include "llvm_compiler.hpp"
+#endif
+
 namespace art {
 
 void HSharpening::Run() {
@@ -87,12 +91,17 @@ void HSharpening::ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
   uint64_t method_load_data = 0u;
   uint64_t direct_code_ptr = 0u;
 
+#ifndef MOE
   HGraph* outer_graph = codegen_->GetGraph();
+#else
+  HGraph* outer_graph = outer_graph_;
+#endif
   if (target_method.dex_file == &outer_graph->GetDexFile() &&
       target_method.dex_method_index == outer_graph->GetMethodIdx()) {
     method_load_kind = HInvokeStaticOrDirect::MethodLoadKind::kRecursive;
     code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kCallSelf;
   } else {
+#ifndef MOE
     bool use_pc_relative_instructions =
         ((direct_method == 0u || direct_code == static_cast<uintptr_t>(-1))) &&
         ContainsElement(compiler_driver_->GetDexFilesForOatFile(), target_method.dex_file);
@@ -136,6 +145,10 @@ void HSharpening::ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
     } else {  // We must use the code pointer from the ArtMethod.
       code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kCallArtMethod;
     }
+#else
+    method_load_kind = HInvokeStaticOrDirect::MethodLoadKind::kDexCacheViaMethod;
+    code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kCallArtMethod;
+#endif
   }
 
   if (graph_->IsDebuggable()) {
@@ -148,8 +161,13 @@ void HSharpening::ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
       method_load_kind, code_ptr_location, method_load_data, direct_code_ptr
   };
   HInvokeStaticOrDirect::DispatchInfo dispatch_info =
+#ifndef MOE
       codegen_->GetSupportedInvokeStaticOrDirectDispatch(desired_dispatch_info,
                                                          invoke->GetTargetMethod());
+#else
+      LLVMCompiler::GetSupportedInvokeStaticOrDirectDispatch(desired_dispatch_info,
+                                                            invoke->GetTargetMethod());
+#endif
   invoke->SetDispatchInfo(dispatch_info);
 }
 
@@ -162,6 +180,9 @@ void HSharpening::ProcessLoadString(HLoadString* load_string) {
 
   bool is_in_dex_cache = false;
   HLoadString::LoadKind desired_load_kind;
+#ifdef MOE
+  desired_load_kind = HLoadString::LoadKind::kDexCacheViaMethod;
+#endif
   uint64_t address = 0u;  // String or dex cache element address.
   {
     Runtime* runtime = Runtime::Current();
@@ -172,6 +193,7 @@ void HSharpening::ProcessLoadString(HLoadString* load_string) {
         ? compilation_unit_.GetDexCache()
         : hs.NewHandle(class_linker->FindDexCache(soa.Self(), dex_file));
 
+#ifndef MOE
     if (compiler_driver_->IsBootImage()) {
       // Compiling boot image. Resolve the string and allocate it if needed.
       DCHECK(!runtime->UseJitCompilation());
@@ -223,12 +245,17 @@ void HSharpening::ProcessLoadString(HLoadString* load_string) {
         desired_load_kind = HLoadString::LoadKind::kDexCachePcRelative;
       }
     }
+#endif
   }
   if (is_in_dex_cache) {
     load_string->MarkInDexCache();
   }
 
+#ifndef MOE
   HLoadString::LoadKind load_kind = codegen_->GetSupportedLoadStringKind(desired_load_kind);
+#else
+  HLoadString::LoadKind load_kind = LLVMCompiler::GetSupportedLoadStringKind(desired_load_kind);
+#endif
   switch (load_kind) {
     case HLoadString::LoadKind::kBootImageLinkTimeAddress:
     case HLoadString::LoadKind::kBootImageLinkTimePcRelative:
@@ -237,14 +264,24 @@ void HSharpening::ProcessLoadString(HLoadString* load_string) {
       break;
     case HLoadString::LoadKind::kBootImageAddress:
     case HLoadString::LoadKind::kDexCacheAddress:
+#ifndef MOE
       DCHECK_NE(address, 0u);
       load_string->SetLoadKindWithAddress(load_kind, address);
+#else
+      LOG(FATAL) << "Unsupported for LLVM!";
+      UNREACHABLE();
+#endif
       break;
     case HLoadString::LoadKind::kDexCachePcRelative: {
+#ifndef MOE
       size_t pointer_size = InstructionSetPointerSize(codegen_->GetInstructionSet());
       DexCacheArraysLayout layout(pointer_size, &dex_file);
       size_t element_index = layout.StringOffset(string_index);
       load_string->SetLoadKindWithDexCacheReference(load_kind, dex_file, element_index);
+#else
+      LOG(FATAL) << "Unsupported for LLVM!";
+      UNREACHABLE();
+#endif
       break;
     }
   }

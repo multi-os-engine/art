@@ -453,7 +453,11 @@ class ArtMethod FINAL {
                                             uint32_t name_and_signature_idx)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+#ifndef MOE
   void Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue* result, const char* shorty)
+#else
+  void Invoke(Thread* self, uintptr_t* args, uint32_t args_size, JValue* result, const char* shorty)
+#endif
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   const void* GetEntryPointFromQuickCompiledCode() {
@@ -473,6 +477,27 @@ class ArtMethod FINAL {
     SetNativePointer(EntryPointFromQuickCompiledCodeOffset(pointer_size),
                      entry_point_from_quick_compiled_code, pointer_size);
   }
+
+#ifdef MOE
+  ALWAYS_INLINE const void* GetEntryPointFromReflectionPtrSize(size_t pointer_size) {
+    return GetNativePointer<const void*>(
+        EntryPointFromReflectionOffset(pointer_size), pointer_size);
+  }
+
+  ALWAYS_INLINE void SetEntryPointFromReflectionPtrSize(
+      const void* entry_point_from_reflection, size_t pointer_size) {
+    SetNativePointer(EntryPointFromReflectionOffset(pointer_size),
+                     entry_point_from_reflection, pointer_size);
+  }
+
+  const void* GetEntryPointFromReflection() {
+    return GetEntryPointFromReflectionPtrSize(sizeof(void*));
+  }
+
+  void SetEntryPointFromReflection(const void* entry_point_from_reflection) {
+    SetEntryPointFromReflectionPtrSize(entry_point_from_reflection, sizeof(void*));
+  }
+#endif
 
   void RegisterNative(const void* native_method, bool is_fast)
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -498,6 +523,13 @@ class ArtMethod FINAL {
     return MemberOffset(PtrSizedFieldsOffset(pointer_size) + OFFSETOF_MEMBER(
         PtrSizedFields, entry_point_from_quick_compiled_code_) / sizeof(void*) * pointer_size);
   }
+
+#ifdef MOE
+  static MemberOffset EntryPointFromReflectionOffset(size_t pointer_size) {
+    return MemberOffset(PtrSizedFieldsOffset(pointer_size) + OFFSETOF_MEMBER(
+        PtrSizedFields, entry_point_from_reflection_) / sizeof(void*) * pointer_size);
+  }
+#endif
 
   ProfilingInfo* GetProfilingInfo(size_t pointer_size) {
     return reinterpret_cast<ProfilingInfo*>(GetEntryPointFromJniPtrSize(pointer_size));
@@ -659,12 +691,14 @@ class ArtMethod FINAL {
     return hotness_count_;
   }
 
+#ifndef MOE
   const uint8_t* GetQuickenedInfo() SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Returns the method header for the compiled code containing 'pc'. Note that runtime
   // methods will return null for this method, as they are not oat based.
   const OatQuickMethodHeader* GetOatQuickMethodHeader(uintptr_t pc)
       SHARED_REQUIRES(Locks::mutator_lock_);
+#endif
 
   // Returns whether the method has any compiled code, JIT or AOT.
   bool HasAnyCompiledCode() SHARED_REQUIRES(Locks::mutator_lock_);
@@ -712,6 +746,9 @@ class ArtMethod FINAL {
   // Must be the last fields in the method.
   // PACKED(4) is necessary for the correctness of
   // RoundUp(OFFSETOF_MEMBER(ArtMethod, ptr_sized_fields_), pointer_size).
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
   struct PACKED(4) PtrSizedFields {
     // Short cuts to declaring_class_->dex_cache_ member for fast compiled code access.
     ArtMethod** dex_cache_resolved_methods_;
@@ -726,12 +763,27 @@ class ArtMethod FINAL {
     // Method dispatch from quick compiled code invokes this pointer which may cause bridging into
     // the interpreter.
     void* entry_point_from_quick_compiled_code_;
+
+    #ifdef MOE
+    // Cached reflection bridge for the method.
+    void* entry_point_from_reflection_;
+    #endif
   } ptr_sized_fields_;
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
  private:
   static size_t PtrSizedFieldsOffset(size_t pointer_size) {
     // Round up to pointer size for padding field.
+#ifndef MOE
     return RoundUp(OFFSETOF_MEMBER(ArtMethod, ptr_sized_fields_), pointer_size);
+#else
+    // Because the declaring_class_ object reference field is pointer sized,
+    // we have to slide the resulting offset.
+	const size_t slide = sizeof(void*) - pointer_size;
+    return RoundUp(OFFSETOF_MEMBER(ArtMethod, ptr_sized_fields_) - slide, pointer_size);
+#endif
   }
 
   template<typename T>

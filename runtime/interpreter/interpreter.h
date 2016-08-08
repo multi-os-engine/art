@@ -36,7 +36,11 @@ namespace interpreter {
 // The optional stay_in_interpreter parameter (false by default) can be used by clients to
 // explicitly force interpretation in the remaining path that implements method invocation.
 extern void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method,
+#ifndef MOE
                                        mirror::Object* receiver, uint32_t* args, JValue* result,
+#else
+                                       mirror::Object* receiver, uintptr_t* args, JValue* result,
+#endif
                                        bool stay_in_interpreter = false)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -54,9 +58,11 @@ void ArtInterpreterToInterpreterBridge(Thread* self, const DexFile::CodeItem* co
     SHARED_REQUIRES(Locks::mutator_lock_);
 
 // One-time sanity check.
+#ifndef MOE
 void CheckInterpreterAsmConstants();
 
 void InitInterpreterTls(Thread* self);
+#endif
 
 }  // namespace interpreter
 

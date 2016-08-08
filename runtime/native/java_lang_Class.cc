@@ -54,7 +54,7 @@ ALWAYS_INLINE static inline mirror::Class* DecodeClass(
 }
 
 // "name" is in "binary name" format, e.g. "dalvik.system.Debug$1".
-static jclass Class_classForName(JNIEnv* env, jclass, jstring javaName, jboolean initialize,
+static JNICALL jclass Class_classForName(JNIEnv* env, jclass, jstring javaName, jboolean initialize,
                                  jobject javaLoader) {
   ScopedFastNativeObjectAccess soa(env);
   ScopedUtfChars name(env, javaName);
@@ -95,14 +95,14 @@ static jclass Class_classForName(JNIEnv* env, jclass, jstring javaName, jboolean
   return soa.AddLocalReference<jclass>(c.Get());
 }
 
-static jstring Class_getNameNative(JNIEnv* env, jobject javaThis) {
+static JNICALL jstring Class_getNameNative(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   mirror::Class* const c = DecodeClass(soa, javaThis);
   return soa.AddLocalReference<jstring>(mirror::Class::ComputeName(hs.NewHandle(c)));
 }
 
-static jobjectArray Class_getProxyInterfaces(JNIEnv* env, jobject javaThis) {
+static JNICALL jobjectArray Class_getProxyInterfaces(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Class* c = DecodeClass(soa, javaThis);
   return soa.AddLocalReference<jobjectArray>(c->GetInterfaces()->Clone(soa.Self()));
@@ -163,20 +163,20 @@ static mirror::ObjectArray<mirror::Field>* GetDeclaredFields(
   return object_array.Get();
 }
 
-static jobjectArray Class_getDeclaredFieldsUnchecked(JNIEnv* env, jobject javaThis,
+static JNICALL jobjectArray Class_getDeclaredFieldsUnchecked(JNIEnv* env, jobject javaThis,
                                                      jboolean publicOnly) {
   ScopedFastNativeObjectAccess soa(env);
   return soa.AddLocalReference<jobjectArray>(
       GetDeclaredFields(soa.Self(), DecodeClass(soa, javaThis), publicOnly != JNI_FALSE, false));
 }
 
-static jobjectArray Class_getDeclaredFields(JNIEnv* env, jobject javaThis) {
+static JNICALL jobjectArray Class_getDeclaredFields(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   return soa.AddLocalReference<jobjectArray>(
       GetDeclaredFields(soa.Self(), DecodeClass(soa, javaThis), false, true));
 }
 
-static jobjectArray Class_getPublicDeclaredFields(JNIEnv* env, jobject javaThis) {
+static JNICALL jobjectArray Class_getPublicDeclaredFields(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   return soa.AddLocalReference<jobjectArray>(
       GetDeclaredFields(soa.Self(), DecodeClass(soa, javaThis), true, true));
@@ -280,7 +280,7 @@ static mirror::Field* GetPublicFieldRecursive(
   return nullptr;
 }
 
-static jobject Class_getPublicFieldRecursive(JNIEnv* env, jobject javaThis, jstring name) {
+static JNICALL jobject Class_getPublicFieldRecursive(JNIEnv* env, jobject javaThis, jstring name) {
   ScopedFastNativeObjectAccess soa(env);
   auto* name_string = soa.Decode<mirror::String*>(name);
   if (UNLIKELY(name_string == nullptr)) {
@@ -291,7 +291,7 @@ static jobject Class_getPublicFieldRecursive(JNIEnv* env, jobject javaThis, jstr
       GetPublicFieldRecursive(soa.Self(), DecodeClass(soa, javaThis), name_string));
 }
 
-static jobject Class_getDeclaredField(JNIEnv* env, jobject javaThis, jstring name) {
+static JNICALL jobject Class_getDeclaredField(JNIEnv* env, jobject javaThis, jstring name) {
   ScopedFastNativeObjectAccess soa(env);
   auto* name_string = soa.Decode<mirror::String*>(name);
   if (name_string == nullptr) {
@@ -320,7 +320,7 @@ static jobject Class_getDeclaredField(JNIEnv* env, jobject javaThis, jstring nam
   return soa.AddLocalReference<jobject>(result);
 }
 
-static jobject Class_getDeclaredConstructorInternal(
+static JNICALL jobject Class_getDeclaredConstructorInternal(
     JNIEnv* env, jobject javaThis, jobjectArray args) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Constructor* result = mirror::Class::GetDeclaredConstructorInternal(
@@ -336,7 +336,7 @@ static ALWAYS_INLINE inline bool MethodMatchesConstructor(ArtMethod* m, bool pub
   return (!public_only || m->IsPublic()) && !m->IsStatic() && m->IsConstructor();
 }
 
-static jobjectArray Class_getDeclaredConstructorsInternal(
+static JNICALL jobjectArray Class_getDeclaredConstructorsInternal(
     JNIEnv* env, jobject javaThis, jboolean publicOnly) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<2> hs(soa.Self());
@@ -366,7 +366,7 @@ static jobjectArray Class_getDeclaredConstructorsInternal(
   return soa.AddLocalReference<jobjectArray>(h_constructors.Get());
 }
 
-static jobject Class_getDeclaredMethodInternal(JNIEnv* env, jobject javaThis,
+static JNICALL jobject Class_getDeclaredMethodInternal(JNIEnv* env, jobject javaThis,
                                                jobject name, jobjectArray args) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Method* result = mirror::Class::GetDeclaredMethodInternal(
@@ -377,7 +377,7 @@ static jobject Class_getDeclaredMethodInternal(JNIEnv* env, jobject javaThis,
   return soa.AddLocalReference<jobject>(result);
 }
 
-static jobjectArray Class_getDeclaredMethodsUnchecked(JNIEnv* env, jobject javaThis,
+static JNICALL jobjectArray Class_getDeclaredMethodsUnchecked(JNIEnv* env, jobject javaThis,
                                                       jboolean publicOnly) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<2> hs(soa.Self());
@@ -409,7 +409,7 @@ static jobjectArray Class_getDeclaredMethodsUnchecked(JNIEnv* env, jobject javaT
   return soa.AddLocalReference<jobjectArray>(ret.Get());
 }
 
-static jobject Class_getDeclaredAnnotation(JNIEnv* env, jobject javaThis, jclass annotationClass) {
+static JNICALL jobject Class_getDeclaredAnnotation(JNIEnv* env, jobject javaThis, jclass annotationClass) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<2> hs(soa.Self());
   Handle<mirror::Class> klass(hs.NewHandle(DecodeClass(soa, javaThis)));
@@ -428,7 +428,7 @@ static jobject Class_getDeclaredAnnotation(JNIEnv* env, jobject javaThis, jclass
       klass->GetDexFile().GetAnnotationForClass(klass, annotation_class));
 }
 
-static jobjectArray Class_getDeclaredAnnotations(JNIEnv* env, jobject javaThis) {
+static JNICALL jobjectArray Class_getDeclaredAnnotations(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::Class> klass(hs.NewHandle(DecodeClass(soa, javaThis)));
@@ -443,7 +443,7 @@ static jobjectArray Class_getDeclaredAnnotations(JNIEnv* env, jobject javaThis) 
   return soa.AddLocalReference<jobjectArray>(klass->GetDexFile().GetAnnotationsForClass(klass));
 }
 
-static jobjectArray Class_getDeclaredClasses(JNIEnv* env, jobject javaThis) {
+static JNICALL jobjectArray Class_getDeclaredClasses(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::Class> klass(hs.NewHandle(DecodeClass(soa, javaThis)));
@@ -470,7 +470,7 @@ static jobjectArray Class_getDeclaredClasses(JNIEnv* env, jobject javaThis) {
   return soa.AddLocalReference<jobjectArray>(classes);
 }
 
-static jclass Class_getEnclosingClass(JNIEnv* env, jobject javaThis) {
+static JNICALL jclass Class_getEnclosingClass(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::Class> klass(hs.NewHandle(DecodeClass(soa, javaThis)));
@@ -480,7 +480,7 @@ static jclass Class_getEnclosingClass(JNIEnv* env, jobject javaThis) {
   return soa.AddLocalReference<jclass>(klass->GetDexFile().GetEnclosingClass(klass));
 }
 
-static jobject Class_getEnclosingConstructorNative(JNIEnv* env, jobject javaThis) {
+static JNICALL jobject Class_getEnclosingConstructorNative(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::Class> klass(hs.NewHandle(DecodeClass(soa, javaThis)));
@@ -497,7 +497,7 @@ static jobject Class_getEnclosingConstructorNative(JNIEnv* env, jobject javaThis
   return nullptr;
 }
 
-static jobject Class_getEnclosingMethodNative(JNIEnv* env, jobject javaThis) {
+static JNICALL jobject Class_getEnclosingMethodNative(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::Class> klass(hs.NewHandle(DecodeClass(soa, javaThis)));
@@ -514,14 +514,14 @@ static jobject Class_getEnclosingMethodNative(JNIEnv* env, jobject javaThis) {
   return nullptr;
 }
 
-static jint Class_getInnerClassFlags(JNIEnv* env, jobject javaThis, jint defaultValue) {
+static JNICALL jint Class_getInnerClassFlags(JNIEnv* env, jobject javaThis, jint defaultValue) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::Class> klass(hs.NewHandle(DecodeClass(soa, javaThis)));
   return mirror::Class::GetInnerClassFlags(klass, defaultValue);
 }
 
-static jstring Class_getInnerClassName(JNIEnv* env, jobject javaThis) {
+static JNICALL jstring Class_getInnerClassName(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::Class> klass(hs.NewHandle(DecodeClass(soa, javaThis)));
@@ -535,7 +535,7 @@ static jstring Class_getInnerClassName(JNIEnv* env, jobject javaThis) {
   return soa.AddLocalReference<jstring>(class_name);
 }
 
-static jobjectArray Class_getSignatureAnnotation(JNIEnv* env, jobject javaThis) {
+static JNICALL jobjectArray Class_getSignatureAnnotation(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::Class> klass(hs.NewHandle(DecodeClass(soa, javaThis)));
@@ -546,7 +546,7 @@ static jobjectArray Class_getSignatureAnnotation(JNIEnv* env, jobject javaThis) 
       klass->GetDexFile().GetSignatureAnnotationForClass(klass));
 }
 
-static jboolean Class_isAnonymousClass(JNIEnv* env, jobject javaThis) {
+static JNICALL jboolean Class_isAnonymousClass(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::Class> klass(hs.NewHandle(DecodeClass(soa, javaThis)));
@@ -560,7 +560,7 @@ static jboolean Class_isAnonymousClass(JNIEnv* env, jobject javaThis) {
   return class_name == nullptr;
 }
 
-static jboolean Class_isDeclaredAnnotationPresent(JNIEnv* env, jobject javaThis,
+static JNICALL jboolean Class_isDeclaredAnnotationPresent(JNIEnv* env, jobject javaThis,
                                                   jclass annotationType) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<2> hs(soa.Self());
@@ -572,7 +572,7 @@ static jboolean Class_isDeclaredAnnotationPresent(JNIEnv* env, jobject javaThis,
   return klass->GetDexFile().IsClassAnnotationPresent(klass, annotation_class);
 }
 
-static jclass Class_getDeclaringClass(JNIEnv* env, jobject javaThis) {
+static JNICALL jclass Class_getDeclaringClass(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::Class> klass(hs.NewHandle(DecodeClass(soa, javaThis)));
@@ -586,7 +586,7 @@ static jclass Class_getDeclaringClass(JNIEnv* env, jobject javaThis) {
   return soa.AddLocalReference<jclass>(klass->GetDexFile().GetDeclaringClass(klass));
 }
 
-static jobject Class_newInstance(JNIEnv* env, jobject javaThis) {
+static JNICALL jobject Class_newInstance(JNIEnv* env, jobject javaThis) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<4> hs(soa.Self());
   Handle<mirror::Class> klass = hs.NewHandle(DecodeClass(soa, javaThis));
@@ -658,7 +658,11 @@ static jobject Class_newInstance(JNIEnv* env, jobject javaThis) {
   }
   // Invoke the constructor.
   JValue result;
+#ifndef MOE
   uint32_t args[1] = { static_cast<uint32_t>(reinterpret_cast<uintptr_t>(receiver.Get())) };
+#else
+  uintptr_t args[1] = { reinterpret_cast<uintptr_t>(receiver.Get()) };
+#endif
   constructor->Invoke(soa.Self(), args, sizeof(args), &result, "V");
   if (UNLIKELY(soa.Self()->IsExceptionPending())) {
     return nullptr;

@@ -41,6 +41,9 @@ class Instruction {
     kArrayDataSignature = 0x0300,
   };
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
   struct PACKED(4) PackedSwitchPayload {
     const uint16_t ident;
     const uint16_t case_count;
@@ -50,7 +53,13 @@ class Instruction {
    private:
     DISALLOW_COPY_AND_ASSIGN(PackedSwitchPayload);
   };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
   struct PACKED(4) SparseSwitchPayload {
     const uint16_t ident;
     const uint16_t case_count;
@@ -68,7 +77,13 @@ class Instruction {
    private:
     DISALLOW_COPY_AND_ASSIGN(SparseSwitchPayload);
   };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
   struct PACKED(4) ArrayDataPayload {
     const uint16_t ident;
     const uint16_t element_width;
@@ -78,6 +93,9 @@ class Instruction {
    private:
     DISALLOW_COPY_AND_ASSIGN(ArrayDataPayload);
   };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
   enum Code {  // private marker to avoid generate-operator-out.py from processing.
 #define INSTRUCTION_ENUM(opcode, cname, p, f, r, i, a, v) cname = (opcode),

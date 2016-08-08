@@ -1,0 +1,66 @@
+diff --git a/test/004-JniTest/jni_test.cc b/test/004-JniTest/jni_test.cc
+index 0b2ab12..849e1d7 100644
+--- a/test/004-JniTest/jni_test.cc
++++ b/test/004-JniTest/jni_test.cc
+@@ -71,7 +71,7 @@ static void PthreadHelper(void (*fn)(JNIEnv*)) {
+ }
+ 
+ static void testFindClassOnAttachedNativeThread(JNIEnv* env) {
+-  jclass clazz = env->FindClass("Main");
++  jclass clazz = env->FindClass("aosp_004_JniTest/Main");
+   assert(clazz != nullptr);
+   assert(!env->ExceptionCheck());
+ 
+@@ -86,7 +86,7 @@ extern "C" JNIEXPORT void JNICALL Java_Main_testFindClassOnAttachedNativeThread(
+ }
+ 
+ static void testFindFieldOnAttachedNativeThread(JNIEnv* env) {
+-  jclass clazz = env->FindClass("Main");
++  jclass clazz = env->FindClass("aosp_004_JniTest/Main");
+   assert(clazz != nullptr);
+   assert(!env->ExceptionCheck());
+ 
+@@ -103,7 +103,7 @@ extern "C" JNIEXPORT void JNICALL Java_Main_testFindFieldOnAttachedNativeThreadN
+ }
+ 
+ static void testReflectFieldGetFromAttachedNativeThread(JNIEnv* env) {
+-  jclass clazz = env->FindClass("Main");
++  jclass clazz = env->FindClass("aosp_004_JniTest/Main");
+   assert(clazz != nullptr);
+   assert(!env->ExceptionCheck());
+ 
+@@ -148,20 +148,20 @@ extern "C" JNIEXPORT void JNICALL Java_Main_testReflectFieldGetFromAttachedNativ
+ // http://b/11243757
+ extern "C" JNIEXPORT void JNICALL Java_Main_testCallStaticVoidMethodOnSubClassNative(JNIEnv* env,
+                                                                                      jclass) {
+-  jclass super_class = env->FindClass("Main$testCallStaticVoidMethodOnSubClass_SuperClass");
++  jclass super_class = env->FindClass("aosp_004_JniTest/Main$testCallStaticVoidMethodOnSubClass_SuperClass");
+   assert(super_class != nullptr);
+ 
+   jmethodID execute = env->GetStaticMethodID(super_class, "execute", "()V");
+   assert(execute != nullptr);
+ 
+-  jclass sub_class = env->FindClass("Main$testCallStaticVoidMethodOnSubClass_SubClass");
++  jclass sub_class = env->FindClass("aosp_004_JniTest/Main$testCallStaticVoidMethodOnSubClass_SubClass");
+   assert(sub_class != nullptr);
+ 
+   env->CallStaticVoidMethod(sub_class, execute);
+ }
+ 
+ extern "C" JNIEXPORT jobject JNICALL Java_Main_testGetMirandaMethodNative(JNIEnv* env, jclass) {
+-  jclass abstract_class = env->FindClass("Main$testGetMirandaMethod_MirandaAbstract");
++  jclass abstract_class = env->FindClass("aosp_004_JniTest/Main$testGetMirandaMethod_MirandaAbstract");
+   assert(abstract_class != nullptr);
+   jmethodID miranda_method = env->GetMethodID(abstract_class, "inInterface", "()Z");
+   assert(miranda_method != nullptr);
+@@ -375,8 +367,8 @@ class JniCallNonvirtualVoidMethodTest {
+       : env_(env),
+         check_jni_ri_(true),
+         check_jni_android_(true),
+-        super_(GetClass("JniCallNonvirtualTest")),
+-        sub_(GetClass("JniCallNonvirtualTestSubclass")),
++        super_(GetClass("aosp_004_JniTest/JniCallNonvirtualTest")),
++        sub_(GetClass("aosp_004_JniTest/JniCallNonvirtualTestSubclass")),
+         super_constructor_(GetMethodID(super_, true, "<init>")),
+         super_static_(GetMethodID(super_, false, "staticMethod")),
+         super_nonstatic_(GetMethodID(super_, true, "nonstaticMethod")),

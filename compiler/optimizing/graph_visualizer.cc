@@ -102,6 +102,7 @@ class HGraphVisualizerDisassembler {
                                const uint8_t* base_address,
                                const uint8_t* end_address)
       : instruction_set_(instruction_set), disassembler_(nullptr) {
+#ifndef MOE
     libart_disassembler_handle_ =
         dlopen(kIsDebugBuild ? "libartd-disassembler.so" : "libart-disassembler.so", RTLD_NOW);
     if (libart_disassembler_handle_ == nullptr) {
@@ -114,6 +115,7 @@ class HGraphVisualizerDisassembler {
       LOG(WARNING) << "Could not find create_disassembler entry: " << dlerror();
       return;
     }
+#endif
     // Reading the disassembly from 0x0 is easier, so we print relative
     // addresses. We will only disassemble the code once everything has
     // been generated, so we can read data in literal pools.
@@ -128,9 +130,11 @@ class HGraphVisualizerDisassembler {
   ~HGraphVisualizerDisassembler() {
     // We need to call ~Disassembler() before we close the library.
     disassembler_.reset();
+#ifndef MOE
     if (libart_disassembler_handle_ != nullptr) {
       dlclose(libart_disassembler_handle_);
     }
+#endif
   }
 
   void Disassemble(std::ostream& output, size_t start, size_t end) const {
@@ -151,7 +155,9 @@ class HGraphVisualizerDisassembler {
   InstructionSet instruction_set_;
   std::unique_ptr<Disassembler> disassembler_;
 
+#ifndef MOE
   void* libart_disassembler_handle_;
+#endif
 };
 
 

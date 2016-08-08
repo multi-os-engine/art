@@ -29,6 +29,9 @@ namespace art {
 namespace mirror {
 
 // C++ mirror of java.lang.reflect.AccessibleObject
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED AccessibleObject : public Object {
  public:
   static MemberOffset FlagOffset() {
@@ -53,6 +56,9 @@ class MANAGED AccessibleObject : public Object {
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(AccessibleObject);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

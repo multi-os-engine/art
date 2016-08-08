@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+
 #include "signal_catcher.h"
 
 #include <fcntl.h>
@@ -221,3 +222,4 @@ void* SignalCatcher::Run(void* arg) {
 }
 
 }  // namespace art
+

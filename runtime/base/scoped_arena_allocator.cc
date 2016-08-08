@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,6 +91,7 @@ void ArenaStack::UpdateBytesAllocated() {
   }
 }
 
+#ifndef MOE
 void* ArenaStack::AllocWithMemoryTool(size_t bytes, ArenaAllocKind kind) {
   // We mark all memory for a newly retrieved arena as inaccessible and then
   // mark only the actually allocated memory as defined. That leaves red zones
@@ -106,6 +108,7 @@ void* ArenaStack::AllocWithMemoryTool(size_t bytes, ArenaAllocKind kind) {
   MEMORY_TOOL_MAKE_UNDEFINED(ptr, bytes);
   return ptr;
 }
+#endif
 
 ScopedArenaAllocator::ScopedArenaAllocator(ArenaStack* arena_stack)
   : DebugStackReference(arena_stack),

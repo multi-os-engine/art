@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +24,7 @@
 
 namespace art {
 
+#if !defined(MOE) || defined(__LP64__)
 namespace mirror {
   class Object;
 }  // namespace mirror
@@ -153,5 +155,7 @@ void MonitorPool::ReleaseMonitorsToPool(Thread* self, MonitorList::Monitors* mon
     ReleaseMonitorToPool(self, mon);
   }
 }
+
+#endif
 
 }  // namespace art

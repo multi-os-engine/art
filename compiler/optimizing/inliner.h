@@ -34,7 +34,9 @@ class HInliner : public HOptimization {
  public:
   HInliner(HGraph* outer_graph,
            HGraph* outermost_graph,
+#ifndef MOE
            CodeGenerator* codegen,
+#endif
            const DexCompilationUnit& outer_compilation_unit,
            const DexCompilationUnit& caller_compilation_unit,
            CompilerDriver* compiler_driver,
@@ -46,7 +48,9 @@ class HInliner : public HOptimization {
         outermost_graph_(outermost_graph),
         outer_compilation_unit_(outer_compilation_unit),
         caller_compilation_unit_(caller_compilation_unit),
+#ifndef MOE
         codegen_(codegen),
+#endif
         compiler_driver_(compiler_driver),
         total_number_of_dex_registers_(total_number_of_dex_registers),
         depth_(depth),
@@ -184,7 +188,9 @@ class HInliner : public HOptimization {
   HGraph* const outermost_graph_;
   const DexCompilationUnit& outer_compilation_unit_;
   const DexCompilationUnit& caller_compilation_unit_;
+#ifndef MOE
   CodeGenerator* const codegen_;
+#endif
   CompilerDriver* const compiler_driver_;
   const size_t total_number_of_dex_registers_;
   const size_t depth_;

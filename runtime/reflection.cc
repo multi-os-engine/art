@@ -52,13 +52,21 @@ class ArgArray {
       if (num_slots <= kSmallArgArraySize) {
         arg_array_ = small_arg_array_;
       } else {
+#ifndef MOE
         large_arg_array_.reset(new uint32_t[num_slots]);
+#else
+        large_arg_array_.reset(new uintptr_t[num_slots]);
+#endif
         arg_array_ = large_arg_array_.get();
       }
     }
   }
 
+#ifndef MOE
   uint32_t* GetArray() {
+#else
+  uintptr_t* GetArray() {
+#endif
     return arg_array_;
   }
 
@@ -66,9 +74,15 @@ class ArgArray {
     return num_bytes_;
   }
 
+#ifndef MOE
   void Append(uint32_t value) {
     arg_array_[num_bytes_ / 4] = value;
     num_bytes_ += 4;
+#else
+  void Append(uintptr_t value) {
+    arg_array_[num_bytes_ / sizeof(uintptr_t)] = value;
+    num_bytes_ += sizeof(uintptr_t);
+#endif
   }
 
   void Append(mirror::Object* obj) SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -76,9 +90,15 @@ class ArgArray {
   }
 
   void AppendWide(uint64_t value) {
+#ifndef MOE
     arg_array_[num_bytes_ / 4] = value;
     arg_array_[(num_bytes_ / 4) + 1] = value >> 32;
     num_bytes_ += 8;
+#else
+    arg_array_[num_bytes_ / sizeof(uintptr_t)] = static_cast<uint32_t>(value);
+    arg_array_[(num_bytes_ / sizeof(uintptr_t)) + 1] = value >> 32;
+    num_bytes_ += sizeof(uintptr_t) * 2;
+#endif
   }
 
   void AppendFloat(float value) {
@@ -339,12 +359,22 @@ class ArgArray {
   const char* const shorty_;
   const uint32_t shorty_len_;
   uint32_t num_bytes_;
+#ifndef MOE
   uint32_t* arg_array_;
   uint32_t small_arg_array_[kSmallArgArraySize];
   std::unique_ptr<uint32_t[]> large_arg_array_;
+#else
+  uintptr_t* arg_array_;
+  uintptr_t small_arg_array_[kSmallArgArraySize];
+  std::unique_ptr<uintptr_t[]> large_arg_array_;
+#endif
 };
 
+#ifndef MOE
 static void CheckMethodArguments(JavaVMExt* vm, ArtMethod* m, uint32_t* args)
+#else
+static void CheckMethodArguments(JavaVMExt* vm, ArtMethod* m, uintptr_t* args)
+#endif
     SHARED_REQUIRES(Locks::mutator_lock_) {
   const DexFile::TypeList* params = m->GetParameterTypeList();
   if (params == nullptr) {
@@ -432,7 +462,11 @@ static void InvokeWithArgArray(const ScopedObjectAccessAlreadyRunnable& soa,
                                ArtMethod* method, ArgArray* arg_array, JValue* result,
                                const char* shorty)
     SHARED_REQUIRES(Locks::mutator_lock_) {
+#ifndef MOE
   uint32_t* args = arg_array->GetArray();
+#else
+  uintptr_t* args = arg_array->GetArray();
+#endif
   if (UNLIKELY(soa.Env()->check_jni)) {
     CheckMethodArguments(soa.Vm(), method->GetInterfaceMethodIfProxy(sizeof(void*)), args);
   }

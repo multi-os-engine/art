@@ -222,7 +222,11 @@ class IrtEntry {
   uint32_t serial_;
   GcRoot<mirror::Object> references_[kIRTPrevCount];
 };
+#ifndef MOE
 static_assert(sizeof(IrtEntry) == (1 + kIRTPrevCount) * sizeof(uint32_t),
+#else
+static_assert(sizeof(IrtEntry) == kIRTPrevCount * sizeof(void*) + sizeof(uint32_t),
+#endif
               "Unexpected sizeof(IrtEntry)");
 
 class IrtIterator {

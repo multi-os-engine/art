@@ -56,6 +56,7 @@ class QuasiAtomic {
   static void Shutdown();
 
   // Reads the 64-bit value at "addr" without tearing.
+#ifndef MOE
   static int64_t Read64(volatile const int64_t* addr) {
     if (!NeedSwapMutexes(kRuntimeISA)) {
       int64_t value;
@@ -130,6 +131,7 @@ class QuasiAtomic {
       SwapMutexWrite64(addr, value);
     }
   }
+#endif
 
   // Atomically compare the value at "addr" to "old_value", if equal replace it with "new_value"
   // and return true. Otherwise, don't swap, and return false.
@@ -140,7 +142,11 @@ class QuasiAtomic {
   // old_value.
   static bool Cas64(int64_t old_value, int64_t new_value, volatile int64_t* addr) {
     if (!NeedSwapMutexes(kRuntimeISA)) {
+#ifndef MOE_WINDOWS
       return __sync_bool_compare_and_swap(addr, old_value, new_value);
+#else
+      return InterlockedCompareExchange64(addr, new_value, old_value) == old_value;
+#endif
     } else {
       return SwapMutexCas64(old_value, new_value, addr);
     }
@@ -160,7 +166,8 @@ class QuasiAtomic {
   }
 
   static void ThreadFenceForConstructor() {
-    #if defined(__aarch64__)
+    #if defined(__aarch64__) && !defined(MOE_WINDOWS)
+      // MOE TODO: Determine why is this code branch required here for aarch64.
       __asm__ __volatile__("dmb ishst" : : : "memory");
     #else
       std::atomic_thread_fence(std::memory_order_release);
@@ -184,8 +191,14 @@ class QuasiAtomic {
   DISALLOW_COPY_AND_ASSIGN(QuasiAtomic);
 };
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+template<typename T>
+class __declspec(align(sizeof(T))) Atomic : public std::atomic<T> {
+#else
 template<typename T>
 class PACKED(sizeof(T)) Atomic : public std::atomic<T> {
+#endif 
  public:
   Atomic<T>() : std::atomic<T>(0) { }
 
@@ -299,6 +312,9 @@ class PACKED(sizeof(T)) Atomic : public std::atomic<T> {
     return std::numeric_limits<T>::max();
   }
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 typedef Atomic<int32_t> AtomicInteger;
 

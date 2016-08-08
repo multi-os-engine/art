@@ -29,7 +29,12 @@ namespace art {
 
 class InstructionSetFeatures;
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+class __declspec(align(4)) OatHeader {
+#else
 class PACKED(4) OatHeader {
+#endif 
  public:
   static constexpr uint8_t kOatMagic[] = { 'o', 'a', 't', '\n' };
   static constexpr uint8_t kOatVersion[] = { '0', '7', '9', '\0' };
@@ -155,6 +160,9 @@ class PACKED(4) OatHeader {
 
   DISALLOW_COPY_AND_ASSIGN(OatHeader);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 // OatMethodOffsets are currently 5x32-bits=160-bits long, so if we can
 // save even one OatMethodOffsets struct, the more complicated encoding
@@ -169,7 +177,12 @@ enum OatClassType {
 
 std::ostream& operator<<(std::ostream& os, const OatClassType& rhs);
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+class __declspec(align(4)) OatMethodOffsets {
+#else
 class PACKED(4) OatMethodOffsets {
+#endif 
  public:
   OatMethodOffsets(uint32_t code_offset = 0);
 
@@ -179,6 +192,9 @@ class PACKED(4) OatMethodOffsets {
 
   uint32_t code_offset_;
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace art
 

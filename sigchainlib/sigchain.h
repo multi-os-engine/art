@@ -30,7 +30,11 @@ extern "C" void UnclaimSignalChain(int signal);
 typedef bool (*SpecialSignalHandlerFn)(int, siginfo_t*, void*);
 extern "C" void SetSpecialSignalHandlerFn(int signal, SpecialSignalHandlerFn fn);
 
+#ifndef MOE
 extern "C" void InvokeUserSignalHandler(int sig, siginfo_t* info, void* context);
+#else
+extern "C" bool InvokeUserSignalHandler(int sig, siginfo_t* info, void* context);
+#endif
 
 extern "C" void EnsureFrontOfChain(int signal, struct sigaction* expected_action);
 

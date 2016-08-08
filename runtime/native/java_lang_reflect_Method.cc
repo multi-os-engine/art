@@ -29,7 +29,7 @@
 
 namespace art {
 
-static jobject Method_getAnnotationNative(JNIEnv* env, jobject javaMethod, jclass annotationType) {
+static JNICALL jobject Method_getAnnotationNative(JNIEnv* env, jobject javaMethod, jclass annotationType) {
   ScopedFastNativeObjectAccess soa(env);
   ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod);
   if (method->GetDeclaringClass()->IsProxyClass()) {
@@ -41,7 +41,7 @@ static jobject Method_getAnnotationNative(JNIEnv* env, jobject javaMethod, jclas
       method->GetDexFile()->GetAnnotationForMethod(method, klass));
 }
 
-static jobject Method_getDefaultValue(JNIEnv* env, jobject javaMethod) {
+static JNICALL jobject Method_getDefaultValue(JNIEnv* env, jobject javaMethod) {
   ScopedFastNativeObjectAccess soa(env);
   ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod);
   if (!method->GetDeclaringClass()->IsAnnotation()) {
@@ -50,7 +50,7 @@ static jobject Method_getDefaultValue(JNIEnv* env, jobject javaMethod) {
   return soa.AddLocalReference<jobject>(method->GetDexFile()->GetAnnotationDefaultValue(method));
 }
 
-static jobjectArray Method_getExceptionTypes(JNIEnv* env, jobject javaMethod) {
+static JNICALL jobjectArray Method_getExceptionTypes(JNIEnv* env, jobject javaMethod) {
   ScopedFastNativeObjectAccess soa(env);
   ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod);
   if (method->GetDeclaringClass()->IsProxyClass()) {
@@ -87,7 +87,7 @@ static jobjectArray Method_getExceptionTypes(JNIEnv* env, jobject javaMethod) {
   }
 }
 
-static jobjectArray Method_getParameterAnnotationsNative(JNIEnv* env, jobject javaMethod) {
+static JNICALL jobjectArray Method_getParameterAnnotationsNative(JNIEnv* env, jobject javaMethod) {
   ScopedFastNativeObjectAccess soa(env);
   ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod);
   if (method->GetDeclaringClass()->IsProxyClass()) {
@@ -96,7 +96,7 @@ static jobjectArray Method_getParameterAnnotationsNative(JNIEnv* env, jobject ja
   return soa.AddLocalReference<jobjectArray>(method->GetDexFile()->GetParameterAnnotations(method));
 }
 
-static jobject Method_invoke(JNIEnv* env, jobject javaMethod, jobject javaReceiver,
+static JNICALL jobject Method_invoke(JNIEnv* env, jobject javaMethod, jobject javaReceiver,
                              jobject javaArgs) {
   ScopedFastNativeObjectAccess soa(env);
   return InvokeMethod(soa, javaMethod, javaReceiver, javaArgs);

@@ -30,7 +30,7 @@
 
 namespace art {
 
-static jboolean Unsafe_compareAndSwapInt(JNIEnv* env, jobject, jobject javaObj, jlong offset,
+static JNICALL jboolean Unsafe_compareAndSwapInt(JNIEnv* env, jobject, jobject javaObj, jlong offset,
                                          jint expectedValue, jint newValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
@@ -40,7 +40,7 @@ static jboolean Unsafe_compareAndSwapInt(JNIEnv* env, jobject, jobject javaObj, 
   return success ? JNI_TRUE : JNI_FALSE;
 }
 
-static jboolean Unsafe_compareAndSwapLong(JNIEnv* env, jobject, jobject javaObj, jlong offset,
+static JNICALL jboolean Unsafe_compareAndSwapLong(JNIEnv* env, jobject, jobject javaObj, jlong offset,
                                           jlong expectedValue, jlong newValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
@@ -50,7 +50,7 @@ static jboolean Unsafe_compareAndSwapLong(JNIEnv* env, jobject, jobject javaObj,
   return success ? JNI_TRUE : JNI_FALSE;
 }
 
-static jboolean Unsafe_compareAndSwapObject(JNIEnv* env, jobject, jobject javaObj, jlong offset,
+static JNICALL jboolean Unsafe_compareAndSwapObject(JNIEnv* env, jobject, jobject javaObj, jlong offset,
                                             jobject javaExpectedValue, jobject javaNewValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
@@ -73,26 +73,26 @@ static jboolean Unsafe_compareAndSwapObject(JNIEnv* env, jobject, jobject javaOb
   return success ? JNI_TRUE : JNI_FALSE;
 }
 
-static jint Unsafe_getInt(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
+static JNICALL jint Unsafe_getInt(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
   return obj->GetField32(MemberOffset(offset));
 }
 
-static jint Unsafe_getIntVolatile(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
+static JNICALL jint Unsafe_getIntVolatile(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
   return obj->GetField32Volatile(MemberOffset(offset));
 }
 
-static void Unsafe_putInt(JNIEnv* env, jobject, jobject javaObj, jlong offset, jint newValue) {
+static JNICALL void Unsafe_putInt(JNIEnv* env, jobject, jobject javaObj, jlong offset, jint newValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
   // JNI must use non transactional mode.
   obj->SetField32<false>(MemberOffset(offset), newValue);
 }
 
-static void Unsafe_putIntVolatile(JNIEnv* env, jobject, jobject javaObj, jlong offset,
+static JNICALL void Unsafe_putIntVolatile(JNIEnv* env, jobject, jobject javaObj, jlong offset,
                                   jint newValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
@@ -100,7 +100,7 @@ static void Unsafe_putIntVolatile(JNIEnv* env, jobject, jobject javaObj, jlong o
   obj->SetField32Volatile<false>(MemberOffset(offset), newValue);
 }
 
-static void Unsafe_putOrderedInt(JNIEnv* env, jobject, jobject javaObj, jlong offset,
+static JNICALL void Unsafe_putOrderedInt(JNIEnv* env, jobject, jobject javaObj, jlong offset,
                                  jint newValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
@@ -109,26 +109,26 @@ static void Unsafe_putOrderedInt(JNIEnv* env, jobject, jobject javaObj, jlong of
   obj->SetField32<false>(MemberOffset(offset), newValue);
 }
 
-static jlong Unsafe_getLong(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
+static JNICALL jlong Unsafe_getLong(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
   return obj->GetField64(MemberOffset(offset));
 }
 
-static jlong Unsafe_getLongVolatile(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
+static JNICALL jlong Unsafe_getLongVolatile(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
   return obj->GetField64Volatile(MemberOffset(offset));
 }
 
-static void Unsafe_putLong(JNIEnv* env, jobject, jobject javaObj, jlong offset, jlong newValue) {
+static JNICALL void Unsafe_putLong(JNIEnv* env, jobject, jobject javaObj, jlong offset, jlong newValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
   // JNI must use non transactional mode.
   obj->SetField64<false>(MemberOffset(offset), newValue);
 }
 
-static void Unsafe_putLongVolatile(JNIEnv* env, jobject, jobject javaObj, jlong offset,
+static JNICALL void Unsafe_putLongVolatile(JNIEnv* env, jobject, jobject javaObj, jlong offset,
                                    jlong newValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
@@ -136,7 +136,7 @@ static void Unsafe_putLongVolatile(JNIEnv* env, jobject, jobject javaObj, jlong 
   obj->SetField64Volatile<false>(MemberOffset(offset), newValue);
 }
 
-static void Unsafe_putOrderedLong(JNIEnv* env, jobject, jobject javaObj, jlong offset,
+static JNICALL void Unsafe_putOrderedLong(JNIEnv* env, jobject, jobject javaObj, jlong offset,
                                   jlong newValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
@@ -145,21 +145,21 @@ static void Unsafe_putOrderedLong(JNIEnv* env, jobject, jobject javaObj, jlong o
   obj->SetField64<false>(MemberOffset(offset), newValue);
 }
 
-static jobject Unsafe_getObjectVolatile(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
+static JNICALL jobject Unsafe_getObjectVolatile(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
   mirror::Object* value = obj->GetFieldObjectVolatile<mirror::Object>(MemberOffset(offset));
   return soa.AddLocalReference<jobject>(value);
 }
 
-static jobject Unsafe_getObject(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
+static JNICALL jobject Unsafe_getObject(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
   mirror::Object* value = obj->GetFieldObject<mirror::Object>(MemberOffset(offset));
   return soa.AddLocalReference<jobject>(value);
 }
 
-static void Unsafe_putObject(JNIEnv* env, jobject, jobject javaObj, jlong offset,
+static JNICALL void Unsafe_putObject(JNIEnv* env, jobject, jobject javaObj, jlong offset,
                              jobject javaNewValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
@@ -168,7 +168,7 @@ static void Unsafe_putObject(JNIEnv* env, jobject, jobject javaObj, jlong offset
   obj->SetFieldObject<false>(MemberOffset(offset), newValue);
 }
 
-static void Unsafe_putObjectVolatile(JNIEnv* env, jobject, jobject javaObj, jlong offset,
+static JNICALL void Unsafe_putObjectVolatile(JNIEnv* env, jobject, jobject javaObj, jlong offset,
                                      jobject javaNewValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
@@ -177,7 +177,7 @@ static void Unsafe_putObjectVolatile(JNIEnv* env, jobject, jobject javaObj, jlon
   obj->SetFieldObjectVolatile<false>(MemberOffset(offset), newValue);
 }
 
-static void Unsafe_putOrderedObject(JNIEnv* env, jobject, jobject javaObj, jlong offset,
+static JNICALL void Unsafe_putOrderedObject(JNIEnv* env, jobject, jobject javaObj, jlong offset,
                                     jobject javaNewValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
@@ -187,29 +187,29 @@ static void Unsafe_putOrderedObject(JNIEnv* env, jobject, jobject javaObj, jlong
   obj->SetFieldObject<false>(MemberOffset(offset), newValue);
 }
 
-static jint Unsafe_getArrayBaseOffsetForComponentType(JNIEnv* env, jclass, jobject component_class) {
+static JNICALL jint Unsafe_getArrayBaseOffsetForComponentType(JNIEnv* env, jclass, jobject component_class) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Class* component = soa.Decode<mirror::Class*>(component_class);
   Primitive::Type primitive_type = component->GetPrimitiveType();
   return mirror::Array::DataOffset(Primitive::ComponentSize(primitive_type)).Int32Value();
 }
 
-static jint Unsafe_getArrayIndexScaleForComponentType(JNIEnv* env, jclass, jobject component_class) {
+static JNICALL jint Unsafe_getArrayIndexScaleForComponentType(JNIEnv* env, jclass, jobject component_class) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Class* component = soa.Decode<mirror::Class*>(component_class);
   Primitive::Type primitive_type = component->GetPrimitiveType();
   return Primitive::ComponentSize(primitive_type);
 }
 
-static jint Unsafe_addressSize(JNIEnv* env ATTRIBUTE_UNUSED, jobject ob ATTRIBUTE_UNUSED) {
+static JNICALL jint Unsafe_addressSize(JNIEnv* env ATTRIBUTE_UNUSED, jobject ob ATTRIBUTE_UNUSED) {
   return sizeof(void*);
 }
 
-static jint Unsafe_pageSize(JNIEnv* env ATTRIBUTE_UNUSED, jobject ob ATTRIBUTE_UNUSED) {
+static JNICALL jint Unsafe_pageSize(JNIEnv* env ATTRIBUTE_UNUSED, jobject ob ATTRIBUTE_UNUSED) {
   return sysconf(_SC_PAGESIZE);
 }
 
-static jlong Unsafe_allocateMemory(JNIEnv* env, jobject, jlong bytes) {
+static JNICALL jlong Unsafe_allocateMemory(JNIEnv* env, jobject, jlong bytes) {
   ScopedFastNativeObjectAccess soa(env);
   // bytes is nonnegative and fits into size_t
   if (bytes < 0 || bytes != (jlong)(size_t) bytes) {
@@ -224,70 +224,70 @@ static jlong Unsafe_allocateMemory(JNIEnv* env, jobject, jlong bytes) {
   return (uintptr_t) mem;
 }
 
-static void Unsafe_freeMemory(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
+static JNICALL void Unsafe_freeMemory(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
   free(reinterpret_cast<void*>(static_cast<uintptr_t>(address)));
 }
 
-static void Unsafe_setMemory(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jlong bytes, jbyte value) {
+static JNICALL void Unsafe_setMemory(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jlong bytes, jbyte value) {
   memset(reinterpret_cast<void*>(static_cast<uintptr_t>(address)), value, bytes);
 }
 
-static jbyte Unsafe_getByteJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
+static JNICALL jbyte Unsafe_getByteJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
   return *reinterpret_cast<jbyte*>(address);
 }
 
-static void Unsafe_putByteJB(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jbyte value) {
+static JNICALL void Unsafe_putByteJB(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jbyte value) {
   *reinterpret_cast<jbyte*>(address) = value;
 }
 
-static jshort Unsafe_getShortJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
+static JNICALL jshort Unsafe_getShortJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
   return *reinterpret_cast<jshort*>(address);
 }
 
-static void Unsafe_putShortJS(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jshort value) {
+static JNICALL void Unsafe_putShortJS(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jshort value) {
   *reinterpret_cast<jshort*>(address) = value;
 }
 
-static jchar Unsafe_getCharJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
+static JNICALL jchar Unsafe_getCharJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
   return *reinterpret_cast<jchar*>(address);
 }
 
-static void Unsafe_putCharJC(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jchar value) {
+static JNICALL void Unsafe_putCharJC(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jchar value) {
   *reinterpret_cast<jchar*>(address) = value;
 }
 
-static jint Unsafe_getIntJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
+static JNICALL jint Unsafe_getIntJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
   return *reinterpret_cast<jint*>(address);
 }
 
-static void Unsafe_putIntJI(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jint value) {
+static JNICALL void Unsafe_putIntJI(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jint value) {
   *reinterpret_cast<jint*>(address) = value;
 }
 
-static jlong Unsafe_getLongJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
+static JNICALL jlong Unsafe_getLongJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
   return *reinterpret_cast<jlong*>(address);
 }
 
-static void Unsafe_putLongJJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jlong value) {
+static JNICALL void Unsafe_putLongJJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jlong value) {
   *reinterpret_cast<jlong*>(address) = value;
 }
 
-static jfloat Unsafe_getFloatJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
+static JNICALL jfloat Unsafe_getFloatJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
   return *reinterpret_cast<jfloat*>(address);
 }
 
-static void Unsafe_putFloatJF(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jfloat value) {
+static JNICALL void Unsafe_putFloatJF(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jfloat value) {
   *reinterpret_cast<jfloat*>(address) = value;
 }
-static jdouble Unsafe_getDoubleJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
+static JNICALL jdouble Unsafe_getDoubleJ(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address) {
   return *reinterpret_cast<jdouble*>(address);
 }
 
-static void Unsafe_putDoubleJD(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jdouble value) {
+static JNICALL void Unsafe_putDoubleJD(JNIEnv* env ATTRIBUTE_UNUSED, jobject, jlong address, jdouble value) {
   *reinterpret_cast<jdouble*>(address) = value;
 }
 
-static void Unsafe_copyMemory(JNIEnv *env, jobject unsafe ATTRIBUTE_UNUSED, jlong src,
+static JNICALL void Unsafe_copyMemory(JNIEnv *env, jobject unsafe ATTRIBUTE_UNUSED, jlong src,
                               jlong dst, jlong size) {
     if (size == 0) {
         return;
@@ -327,7 +327,7 @@ static void copyFromArray(jlong dstAddr, mirror::PrimitiveArray<T>* array,
     }
 }
 
-static void Unsafe_copyMemoryToPrimitiveArray(JNIEnv *env,
+static JNICALL void Unsafe_copyMemoryToPrimitiveArray(JNIEnv *env,
                                               jobject unsafe ATTRIBUTE_UNUSED,
                                               jlong srcAddr,
                                               jobject dstObj,
@@ -358,7 +358,7 @@ static void Unsafe_copyMemoryToPrimitiveArray(JNIEnv *env,
     }
 }
 
-static void Unsafe_copyMemoryFromPrimitiveArray(JNIEnv *env,
+static JNICALL void Unsafe_copyMemoryFromPrimitiveArray(JNIEnv *env,
                                                 jobject unsafe ATTRIBUTE_UNUSED,
                                                 jobject srcObj,
                                                 jlong srcOffset,
@@ -388,59 +388,59 @@ static void Unsafe_copyMemoryFromPrimitiveArray(JNIEnv *env,
         ThrowIllegalAccessException("not a primitive array");
     }
 }
-static jboolean Unsafe_getBoolean(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
+static JNICALL jboolean Unsafe_getBoolean(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
     ScopedFastNativeObjectAccess soa(env);
     mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
     return obj->GetFieldBoolean(MemberOffset(offset));
 }
 
-static void Unsafe_putBoolean(JNIEnv* env, jobject, jobject javaObj, jlong offset, jboolean newValue) {
+static JNICALL void Unsafe_putBoolean(JNIEnv* env, jobject, jobject javaObj, jlong offset, jboolean newValue) {
     ScopedFastNativeObjectAccess soa(env);
     mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
     // JNI must use non transactional mode (SetField8 is non-transactional).
     obj->SetFieldBoolean<false>(MemberOffset(offset), newValue);
 }
 
-static jbyte Unsafe_getByte(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
+static JNICALL jbyte Unsafe_getByte(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
     ScopedFastNativeObjectAccess soa(env);
     mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
     return obj->GetFieldByte(MemberOffset(offset));
 }
 
-static void Unsafe_putByte(JNIEnv* env, jobject, jobject javaObj, jlong offset, jbyte newValue) {
+static JNICALL void Unsafe_putByte(JNIEnv* env, jobject, jobject javaObj, jlong offset, jbyte newValue) {
     ScopedFastNativeObjectAccess soa(env);
     mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
     // JNI must use non transactional mode.
     obj->SetFieldByte<false>(MemberOffset(offset), newValue);
 }
 
-static jchar Unsafe_getChar(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
+static JNICALL jchar Unsafe_getChar(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
     ScopedFastNativeObjectAccess soa(env);
     mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
     return obj->GetFieldChar(MemberOffset(offset));
 }
 
-static void Unsafe_putChar(JNIEnv* env, jobject, jobject javaObj, jlong offset, jchar newValue) {
+static JNICALL void Unsafe_putChar(JNIEnv* env, jobject, jobject javaObj, jlong offset, jchar newValue) {
     ScopedFastNativeObjectAccess soa(env);
     mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
     // JNI must use non transactional mode.
     obj->SetFieldChar<false>(MemberOffset(offset), newValue);
 }
 
-static jshort Unsafe_getShort(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
+static JNICALL jshort Unsafe_getShort(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
     ScopedFastNativeObjectAccess soa(env);
     mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
     return obj->GetFieldShort(MemberOffset(offset));
 }
 
-static void Unsafe_putShort(JNIEnv* env, jobject, jobject javaObj, jlong offset, jshort newValue) {
+static JNICALL void Unsafe_putShort(JNIEnv* env, jobject, jobject javaObj, jlong offset, jshort newValue) {
     ScopedFastNativeObjectAccess soa(env);
     mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
     // JNI must use non transactional mode.
     obj->SetFieldShort<false>(MemberOffset(offset), newValue);
 }
 
-static jfloat Unsafe_getFloat(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
+static JNICALL jfloat Unsafe_getFloat(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
   union {int32_t val; jfloat converted;} conv;
@@ -448,7 +448,7 @@ static jfloat Unsafe_getFloat(JNIEnv* env, jobject, jobject javaObj, jlong offse
   return conv.converted;
 }
 
-static void Unsafe_putFloat(JNIEnv* env, jobject, jobject javaObj, jlong offset, jfloat newValue) {
+static JNICALL void Unsafe_putFloat(JNIEnv* env, jobject, jobject javaObj, jlong offset, jfloat newValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
   union {int32_t converted; jfloat val;} conv;
@@ -457,7 +457,7 @@ static void Unsafe_putFloat(JNIEnv* env, jobject, jobject javaObj, jlong offset,
   obj->SetField32<false>(MemberOffset(offset), conv.converted);
 }
 
-static jdouble Unsafe_getDouble(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
+static JNICALL jdouble Unsafe_getDouble(JNIEnv* env, jobject, jobject javaObj, jlong offset) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
   union {int64_t val; jdouble converted;} conv;
@@ -465,7 +465,7 @@ static jdouble Unsafe_getDouble(JNIEnv* env, jobject, jobject javaObj, jlong off
   return conv.converted;
 }
 
-static void Unsafe_putDouble(JNIEnv* env, jobject, jobject javaObj, jlong offset, jdouble newValue) {
+static JNICALL void Unsafe_putDouble(JNIEnv* env, jobject, jobject javaObj, jlong offset, jdouble newValue) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Object* obj = soa.Decode<mirror::Object*>(javaObj);
   union {int64_t converted; jdouble val;} conv;
@@ -474,15 +474,15 @@ static void Unsafe_putDouble(JNIEnv* env, jobject, jobject javaObj, jlong offset
   obj->SetField64<false>(MemberOffset(offset), conv.converted);
 }
 
-static void Unsafe_loadFence(JNIEnv*, jobject) {
+static JNICALL void Unsafe_loadFence(JNIEnv*, jobject) {
   std::atomic_thread_fence(std::memory_order_acquire);
 }
 
-static void Unsafe_storeFence(JNIEnv*, jobject) {
+static JNICALL void Unsafe_storeFence(JNIEnv*, jobject) {
   std::atomic_thread_fence(std::memory_order_release);
 }
 
-static void Unsafe_fullFence(JNIEnv*, jobject) {
+static JNICALL void Unsafe_fullFence(JNIEnv*, jobject) {
   std::atomic_thread_fence(std::memory_order_seq_cst);
 }
 

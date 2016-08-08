@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+
 #include "fault_handler.h"
 
 #include <setjmp.h>
@@ -27,6 +28,15 @@
 #include "sigchain.h"
 #include "thread-inl.h"
 #include "verify_object-inl.h"
+
+// [XRT] Begin
+#if defined(MOE) && !defined(MOE_WINDOWS)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+#include "xrt/MachException.h"
+#endif
+#endif
+// [XRT] End
 
 // Note on nested signal support
 // -----------------------------
@@ -78,6 +88,15 @@ extern "C" __attribute__((visibility("default"))) void art_sigsegv_fault() {
   VLOG(signals)<< "Caught unknown SIGSEGV in ART fault handler - chaining to next handler.";
 }
 
+// [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+extern "C" __attribute__((visibility("default"))) void art_sigbus_fault() {
+  // Set a breakpoint here to be informed when a SIGBUS is unhandled by ART.
+    VLOG(signals)<< "Caught unknown SIGBUS in ART fault handler - chaining to next handler.";
+}
+#endif
+// [XRT] End
+
 // Signal handler called on SIGSEGV.
 static void art_fault_handler(int sig, siginfo_t* info, void* context) {
   fault_manager.HandleFault(sig, info, context);
@@ -90,6 +109,11 @@ static void art_nested_signal_handler(int sig, siginfo_t* info, void* context) {
 
 FaultManager::FaultManager() : initialized_(false) {
   sigaction(SIGSEGV, nullptr, &oldaction_);
+  // [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+  sigaction(SIGBUS, nullptr, &oldaction_bus_);
+#endif
+  // [XRT] End
 }
 
 FaultManager::~FaultManager() {
@@ -108,6 +132,11 @@ void FaultManager::EnsureArtActionInFrontOfSignalChain() {
   if (initialized_) {
     struct sigaction action;
     SetUpArtAction(&action);
+    // [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+    EnsureFrontOfChain(SIGBUS, &action);
+#endif
+    // [XRT] End
     EnsureFrontOfChain(SIGSEGV, &action);
   } else {
     LOG(WARNING) << "Can't call " << __FUNCTION__ << " due to unitialized fault manager";
@@ -119,18 +148,44 @@ void FaultManager::Init() {
   struct sigaction action;
   SetUpArtAction(&action);
 
+  // [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+  InstallMachExceptionHandler();
+#endif
+  // [XRT] End
+  
   // Set our signal handler now.
   int e = sigaction(SIGSEGV, &action, &oldaction_);
   if (e != 0) {
     VLOG(signals) << "Failed to claim SEGV: " << strerror(errno);
   }
+  
+  // [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+  e = sigaction(SIGBUS, &action, &oldaction_bus_);
+  if (e != 0) {
+    VLOG(signals) << "Failed to claim BUS: " << strerror(errno);
+  }
+#endif
+  // [XRT] End
+  
   // Make sure our signal handler is called before any user handlers.
+  // [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+  ClaimSignalChain(SIGBUS, &oldaction_bus_);
+#endif
+  // [XRT] End
   ClaimSignalChain(SIGSEGV, &oldaction_);
   initialized_ = true;
 }
 
 void FaultManager::Release() {
   if (initialized_) {
+    // [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+    UnclaimSignalChain(SIGBUS);
+#endif
+    // [XRT] End
     UnclaimSignalChain(SIGSEGV);
     initialized_ = false;
   }
@@ -243,12 +298,20 @@ bool FaultManager::HandleFaultByOtherHandlers(int sig, siginfo_t* info, void* co
   return false;
 }
 
+#ifndef MOE
 void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
+#else
+bool FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
+#endif
   // BE CAREFUL ALLOCATING HERE INCLUDING USING LOG(...)
   //
   // If malloc calls abort, it will be holding its lock.
   // If the handler tries to call malloc, it will deadlock.
   VLOG(signals) << "Handling fault";
+#ifdef MOE
+  // MOE TODO: add fault handler support for LLVM code!
+  return false;
+#endif
   if (IsInGeneratedCode(info, context, true)) {
     VLOG(signals) << "in generated code, looking for handler";
     for (const auto& handler : generated_code_handlers_) {
@@ -262,7 +325,11 @@ void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
 #else
         // We have handled a signal so it's time to return from the
         // signal handler to the appropriate place.
+#ifndef MOE
         return;
+#else
+        return true;
+#endif
 #endif
       }
     }
@@ -271,15 +338,23 @@ void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
     // we can give more information about so call all registered handlers to see
     // if it is.
     if (HandleFaultByOtherHandlers(sig, info, context)) {
+#ifndef MOE
         return;
+#else
+        return true;
+#endif
     }
   }
 
+#ifndef MOE
   // Set a breakpoint in this function to catch unhandled signals.
   art_sigsegv_fault();
 
   // Pass this on to the next handler in the chain, or the default if none.
   InvokeUserSignalHandler(sig, info, context);
+#else
+  return InvokeUserSignalHandler(sig, info, context);
+#endif
 }
 
 void FaultManager::AddHandler(FaultHandler* handler, bool generated_code) {
@@ -369,6 +444,7 @@ bool FaultManager::IsInGeneratedCode(siginfo_t* siginfo, void* context, bool che
     return false;
   }
 
+#ifndef MOE
   const OatQuickMethodHeader* method_header = method_obj->GetOatQuickMethodHeader(return_pc);
 
   // We can be certain that this is a method now.  Check if we have a GC map
@@ -379,9 +455,14 @@ bool FaultManager::IsInGeneratedCode(siginfo_t* siginfo, void* context, bool che
         reinterpret_cast<uintptr_t>(method_header->GetEntryPoint());
     VLOG(signals) << "pc offset: " << std::hex << sought_offset;
   }
+
   uint32_t dexpc = method_header->ToDexPc(method_obj, return_pc, false);
   VLOG(signals) << "dexpc: " << dexpc;
   return !check_dex_pc || dexpc != DexFile::kDexNoIndex;
+#else
+  // MOE TODO: implement this for LLVM!
+  return false;
+#endif
 }
 
 FaultHandler::FaultHandler(FaultManager* manager) : manager_(manager) {

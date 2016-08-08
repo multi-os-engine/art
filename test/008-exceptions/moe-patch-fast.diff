@@ -1,0 +1,33 @@
+diff --git a/test/008-exceptions/expected.txt b/test/008-exceptions/expected.txt
+index 083ecf7..d304d40 100644
+--- a/test/008-exceptions/expected.txt
++++ b/test/008-exceptions/expected.txt
+@@ -1,17 +1,17 @@
+ Got an NPE: second throw
+ java.lang.NullPointerException: second throw
+-	at Main.catchAndRethrow(Main.java:77)
+-	at Main.exceptions_007(Main.java:59)
+-	at Main.main(Main.java:67)
++	at aosp_008_exceptions.Main.catchAndRethrow(Main.java:77)
++	at aosp_008_exceptions.Main.exceptions_007(Main.java:59)
++	at aosp_008_exceptions.Main.main(Main.java:67)
+ Caused by: java.lang.NullPointerException: first throw
+-	at Main.throwNullPointerException(Main.java:84)
+-	at Main.catchAndRethrow(Main.java:74)
++	at aosp_008_exceptions.Main.throwNullPointerException(Main.java:84)
++	at aosp_008_exceptions.Main.catchAndRethrow(Main.java:74)
+ 	... 2 more
+ Static Init
+-BadError: This is bad by convention: BadInit
+-java.lang.NoClassDefFoundError: BadInit
+-BadError: This is bad by convention: BadInit
++aosp_008_exceptions.BadError: This is bad by convention: BadInit
++java.lang.NoClassDefFoundError: aosp_008_exceptions.BadInit
++aosp_008_exceptions.BadError: This is bad by convention: BadInit
+ Static BadInitNoStringInit
+-BadErrorNoStringInit: This is bad by convention
+-java.lang.NoClassDefFoundError: BadInitNoStringInit
+-BadErrorNoStringInit: This is bad by convention
++aosp_008_exceptions.BadErrorNoStringInit: This is bad by convention
++java.lang.NoClassDefFoundError: aosp_008_exceptions.BadInitNoStringInit
++aosp_008_exceptions.BadErrorNoStringInit: This is bad by convention

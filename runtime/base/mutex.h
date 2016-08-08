@@ -28,7 +28,7 @@
 #include "base/macros.h"
 #include "globals.h"
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(MOE_WINDOWS)
 #define ART_USE_FUTEXES 0
 #else
 #define ART_USE_FUTEXES 1
@@ -82,9 +82,11 @@ enum LockLevel {
   kDexFileMethodInlinerLock,
   kDexFileToMethodInlinerMapLock,
   kInternTableLock,
-  kOatFileSecondaryLookupLock,
-  kHostDlOpenHandlesLock,
-  kOatFileManagerLock,
+//#ifndef MOE // operator generator gets confused by this
+ // kOatFileSecondaryLookupLock,
+ // kHostDlOpenHandlesLock,
+ // kOatFileManagerLock,
+//#endif
   kTracingUniqueMethodsLock,
   kTracingStreamingLock,
   kDeoptimizedMethodsLock,
@@ -134,7 +136,12 @@ const bool kLogLockContentions = false;
 const bool kLogLockContentions = false;
 #endif
 const size_t kContentionLogSize = 4;
+#ifndef MOE_WINDOWS
 const size_t kContentionLogDataSize = kLogLockContentions ? 1 : 0;
+#else
+// MOE TODO: MSVC compiler can not handle super classes with zero-sized arrays.
+const size_t kContentionLogDataSize = 1;
+#endif
 const size_t kAllMutexDataSize = kLogLockContentions ? 1 : 0;
 
 // Base class for all Mutex implementations
@@ -352,7 +359,7 @@ class SHARED_LOCKABLE ReaderWriterMutex : public BaseMutex {
     }
   }
   void AssertNotWriterHeld(const Thread* self) ASSERT_CAPABILITY(!this) {
-    AssertNotExclusiveHeld(self);
+      AssertNotExclusiveHeld(self);
   }
 
   // Is the current thread a shared holder of the ReaderWriterMutex.
@@ -366,7 +373,7 @@ class SHARED_LOCKABLE ReaderWriterMutex : public BaseMutex {
     }
   }
   void AssertReaderHeld(const Thread* self) ASSERT_SHARED_CAPABILITY(this) {
-    AssertSharedHeld(self);
+      AssertSharedHeld(self);
   }
 
   // Assert the current thread doesn't hold this ReaderWriterMutex either in shared or exclusive
@@ -649,13 +656,19 @@ class Locks {
   static Mutex* modify_ldt_lock_ ACQUIRED_AFTER(allocated_thread_ids_lock_);
 
   // Guards opened oat files in OatFileManager.
+#ifndef MOE
   static ReaderWriterMutex* oat_file_manager_lock_ ACQUIRED_AFTER(modify_ldt_lock_);
 
   // Guards dlopen_handles_ in DlOpenOatFile.
   static Mutex* host_dlopen_handles_lock_ ACQUIRED_AFTER(oat_file_manager_lock_);
+#endif
 
   // Guards intern table.
+#ifndef MOE
   static Mutex* intern_table_lock_ ACQUIRED_AFTER(host_dlopen_handles_lock_);
+#else
+  static Mutex* intern_table_lock_ ACQUIRED_AFTER(modify_ldt_lock_);
+#endif
 
   // Guards reference processor.
   static Mutex* reference_processor_lock_ ACQUIRED_AFTER(intern_table_lock_);

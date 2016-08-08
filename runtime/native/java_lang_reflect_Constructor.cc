@@ -29,7 +29,7 @@
 
 namespace art {
 
-static jobject Constructor_getAnnotationNative(JNIEnv* env, jobject javaMethod,
+static JNICALL jobject Constructor_getAnnotationNative(JNIEnv* env, jobject javaMethod,
                                                jclass annotationType) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
@@ -43,7 +43,7 @@ static jobject Constructor_getAnnotationNative(JNIEnv* env, jobject javaMethod,
   }
 }
 
-static jobjectArray Constructor_getDeclaredAnnotations(JNIEnv* env, jobject javaMethod) {
+static JNICALL jobjectArray Constructor_getDeclaredAnnotations(JNIEnv* env, jobject javaMethod) {
   ScopedFastNativeObjectAccess soa(env);
   ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod);
   if (method->IsProxyMethod()) {
@@ -62,7 +62,7 @@ static jobjectArray Constructor_getDeclaredAnnotations(JNIEnv* env, jobject java
   }
 }
 
-static jobjectArray Constructor_getExceptionTypes(JNIEnv* env, jobject javaMethod) {
+static JNICALL jobjectArray Constructor_getExceptionTypes(JNIEnv* env, jobject javaMethod) {
   ScopedFastNativeObjectAccess soa(env);
   ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod)
       ->GetInterfaceMethodIfProxy(sizeof(void*));
@@ -84,7 +84,7 @@ static jobjectArray Constructor_getExceptionTypes(JNIEnv* env, jobject javaMetho
   }
 }
 
-static jobjectArray Constructor_getParameterAnnotationsNative(JNIEnv* env, jobject javaMethod) {
+static JNICALL jobjectArray Constructor_getParameterAnnotationsNative(JNIEnv* env, jobject javaMethod) {
   ScopedFastNativeObjectAccess soa(env);
   ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod);
   if (method->IsProxyMethod()) {
@@ -95,7 +95,7 @@ static jobjectArray Constructor_getParameterAnnotationsNative(JNIEnv* env, jobje
   }
 }
 
-static jboolean Constructor_isAnnotationPresentNative(JNIEnv* env, jobject javaMethod,
+static JNICALL jboolean Constructor_isAnnotationPresentNative(JNIEnv* env, jobject javaMethod,
                                                       jclass annotationType) {
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
@@ -113,7 +113,7 @@ static jboolean Constructor_isAnnotationPresentNative(JNIEnv* env, jobject javaM
  * with an interface, array, or primitive class. If this is coming from
  * native, it is OK to avoid access checks since JNI does not enforce them.
  */
-static jobject Constructor_newInstance0(JNIEnv* env, jobject javaMethod, jobjectArray javaArgs) {
+static JNICALL jobject Constructor_newInstance0(JNIEnv* env, jobject javaMethod, jobjectArray javaArgs) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Constructor* m = soa.Decode<mirror::Constructor*>(javaMethod);
   StackHandleScope<1> hs(soa.Self());
@@ -170,7 +170,7 @@ static jobject Constructor_newInstance0(JNIEnv* env, jobject javaMethod, jobject
   return javaReceiver;
 }
 
-static jobject Constructor_newInstanceFromSerialization(JNIEnv* env, jclass unused ATTRIBUTE_UNUSED,
+static JNICALL jobject Constructor_newInstanceFromSerialization(JNIEnv* env, jclass unused ATTRIBUTE_UNUSED,
                                                         jclass ctorClass, jclass allocClass) {
     jmethodID ctor = env->GetMethodID(ctorClass, "<init>", "()V");
     DCHECK(ctor != NULL);

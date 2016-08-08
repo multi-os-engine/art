@@ -1,0 +1,91 @@
+/************************/
+/** Build Script Setup **/
+/************************/
+
+buildscript {
+    // Add central and local Maven repos
+    repositories {
+        mavenCentral()
+        jcenter()
+
+        maven {
+            url uri(System.getenv("INTEL_MULTI_OS_ENGINE_HOME") + "/gradle")
+        }
+    }
+    dependencies {
+        // MOE plugin
+        classpath 'com.intel.gradle:moeGradlePlugin:1.1.+'
+    }
+}
+
+/*******************/
+/** Project Setup **/
+/*******************/
+
+buildDir = 'build-tvos'
+
+// Apply plugins
+apply plugin: 'eclipse'
+apply plugin: 'moe'
+apply plugin: 'idea'
+
+// Set source and target to Java 8
+sourceCompatibility = "1.8"
+targetCompatibility = "1.8"
+
+// Set maven repository
+repositories {
+    maven {
+        url uri(System.getenv("INTEL_MULTI_OS_ENGINE_HOME") + "/gradle")
+    }
+    mavenCentral()
+}
+
+// Exclude all files from Gradle's test runner
+test { exclude '**' }
+
+// Setup MOE
+moe {
+    xcode.mainTarget = 'MOEArtTest-tvOS'
+    xcode.testTarget = 'MOEArtTest-tvOS-Test'
+    xcode.mainProductName = 'MOEArtTest-tvOS'
+    xcode.testProductName = 'MOEArtTest-tvOS-Test'
+
+    xcode.generateProject false
+}
+
+// Set dependencies
+dependencies {
+    // Compile with 'jar' files in the project's 'lib' directory
+    compile fileTree(dir: 'lib', include: '*.jar')
+}
+
+// Set MOE SDK as boot classpath
+compileJava { options.bootClasspath = moe.sdk.coreJarPath }
+compileTestJava { options.bootClasspath = moe.sdk.coreJarPath }
+
+// Setup Eclipse
+//eclipse {
+//    classpath {
+//        // Remove the default JRE container, MOE SDK will take its place
+//        file.whenMerged { classpath ->
+//            project.moe.fixJavaDocAndSources(classpath)
+//            classpath.entries.removeAll { entry ->
+//                entry.kind == 'con' && entry.path.startsWith('org.eclipse.jdt.launching.JRE_CONTAINER')
+//            }
+//        }
+//    }
+//
+//    // Set MOE natures and build commands
+//    project {
+//        natures 'com.moe.mdt.appnature'
+//        buildCommand 'com.moe.mdt.generalbuilder'
+//    }
+//}
+//
+//// Setup Idea
+//idea {
+//    module {
+//        jdkName = 'Intel MOE SDK'
+//    }
+//}

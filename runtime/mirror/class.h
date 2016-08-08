@@ -47,7 +47,13 @@ template<typename T> class LengthPrefixedArray;
 template<typename T> class ArraySlice;
 class Signature;
 class StringPiece;
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 template<size_t kNumReferences> class PACKED(4) StackHandleScope;
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif 
 
 namespace mirror {
 
@@ -58,6 +64,9 @@ class IfTable;
 class Method;
 
 // C++ mirror of java.lang.Class
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED Class FINAL : public Object {
  public:
   // A magic value for reference_instance_offsets_. Ignore the bits and walk the super chain when
@@ -1333,6 +1342,10 @@ class MANAGED Class FINAL : public Object {
   void VisitReferences(mirror::Class* klass, const Visitor& visitor)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+#if defined(MOE) && defined(__LP64__)
+  uint32_t access_flags_;
+#endif
+
   // 'Class' Object Fields
   // Order governed by java field ordering. See art::ClassLinker::LinkFields.
 
@@ -1384,7 +1397,9 @@ class MANAGED Class FINAL : public Object {
   HeapReference<PointerArray> vtable_;
 
   // Access flags; low 16 bits are defined by VM spec.
+#if !defined(MOE) || !defined(__LP64__)
   uint32_t access_flags_;
+#endif
 
   // Short cuts to dex_cache_ member for fast compiled code access.
   uint64_t dex_cache_strings_;
@@ -1428,7 +1443,11 @@ class MANAGED Class FINAL : public Object {
   uint32_t class_size_;
 
   // Tid used to check for recursive <clinit> invocation.
+#ifndef MOE_WINDOWS
   pid_t clinit_thread_id_;
+#else
+  uint32_t clinit_thread_id_;
+#endif
 
   // ClassDef index in dex file, -1 if no class definition such as an array.
   // TODO: really 16bits
@@ -1488,6 +1507,9 @@ class MANAGED Class FINAL : public Object {
   friend class Object;  // For VisitReferences
   DISALLOW_IMPLICIT_CONSTRUCTORS(Class);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 std::ostream& operator<<(std::ostream& os, const Class::Status& rhs);
 

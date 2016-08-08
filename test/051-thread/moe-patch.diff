@@ -1,0 +1,27 @@
+diff --git a/test/051-thread/expected.txt b/test/051-thread/expected.txt
+index c6cd4f8..f933b9a 100644
+--- a/test/051-thread/expected.txt
++++ b/test/051-thread/expected.txt
+@@ -1,6 +1,5 @@
+-JNI_OnLoad called
+ thread test starting
+-testThreadCapacity thread count: 512
++testThreadCapacity thread count: 256
+ testThreadDaemons starting thread 'TestDaemonThread'
+ testThreadDaemons @ Thread running
+ testThreadDaemons @ Got expected setDaemon exception
+diff --git a/test/051-thread/src/Main.java b/test/051-thread/src/Main.java
+index 2e26b22..0671db3 100644
+--- a/test/051-thread/src/Main.java
++++ b/test/051-thread/src/Main.java
+@@ -35,8 +35,8 @@ public class Main {
+      * Simple thread capacity test.
+      */
+     private static void testThreadCapacity() throws Exception {
+-        TestCapacityThread[] threads = new TestCapacityThread[512];
+-        for (int i = 0; i < 512; i++) {
++        TestCapacityThread[] threads = new TestCapacityThread[256];
++        for (int i = 0; i < 256; i++) {
+             threads[i] = new TestCapacityThread();
+         }
+ 

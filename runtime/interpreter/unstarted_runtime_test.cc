@@ -58,6 +58,7 @@ class UnstartedRuntimeTest : public CommonRuntimeTest {
 #undef UNSTARTED_DIRECT
 
   // Methods that are native.
+#ifndef MOE
 #define UNSTARTED_JNI(Name, SigIgnored)                       \
   static void UnstartedJNI ## Name(Thread* self,              \
                                    ArtMethod* method,         \
@@ -67,6 +68,17 @@ class UnstartedRuntimeTest : public CommonRuntimeTest {
       SHARED_REQUIRES(Locks::mutator_lock_) {           \
     interpreter::UnstartedRuntime::UnstartedJNI ## Name(self, method, receiver, args, result); \
   }
+#else
+#define UNSTARTED_JNI(Name, SigIgnored)                       \
+  static void UnstartedJNI ## Name(Thread* self,              \
+                                   ArtMethod* method,         \
+                                   mirror::Object* receiver,  \
+                                   uintptr_t* args,           \
+                                   JValue* result)            \
+      SHARED_REQUIRES(Locks::mutator_lock_) {           \
+    interpreter::UnstartedRuntime::UnstartedJNI ## Name(self, method, receiver, args, result); \
+  }
+#endif
 #include "unstarted_runtime_list.h"
   UNSTARTED_RUNTIME_JNI_LIST(UNSTARTED_JNI)
 #undef UNSTARTED_RUNTIME_DIRECT_LIST

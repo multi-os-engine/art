@@ -1,0 +1,14 @@
+byteMethod OK
+shortMethod OK
+booleanMethod OK
+booleanMethod OK
+charMethod OK
+intMethod OK
+longMethod OK
+byteshortMethod OK
+byteintMethod OK
+bytelongMethod OK
+charintMethod OK
+charintMethod OK
+intlongMethod OK
+intlongMethod OK

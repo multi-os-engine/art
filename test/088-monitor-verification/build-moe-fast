@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Stop if something fails.
+set -e
+
+perl -i -pe 's/runTest\("OK",/runTest("aosp_088_monitor_verification.OK",/g' src/Main.java
+perl -i -pe 's/runTest\("TooDeep",/runTest("aosp_088_monitor_verification.TooDeep",/g' src/Main.java
+perl -i -pe 's/runTest\("NotStructuredOverUnlock",/runTest("aosp_088_monitor_verification.NotStructuredOverUnlock",/g' src/Main.java
+perl -i -pe 's/runTest\("NotStructuredUnderUnlock",/runTest("aosp_088_monitor_verification.NotStructuredUnderUnlock",/g' src/Main.java
+perl -i -pe 's/runTest\("UnbalancedJoin",/runTest("aosp_088_monitor_verification.UnbalancedJoin",/g' src/Main.java
+perl -i -pe 's/runTest\("UnbalancedStraight",/runTest("aosp_088_monitor_verification.UnbalancedStraight",/g' src/Main.java
+perl -i -pe 's/runTest\("NullLocks",/runTest("aosp_088_monitor_verification.NullLocks",/g' src/Main.java
+
+mkdir classes
+${JAVAC} -d classes `find src -name '*.java'`
+
+${SMALI} --output smali_classes.dex `find smali -name '*.smali'`
+
+rm -f *.cc
+
+cp ../common/* .
+
+perl -i -pe 's/(?<!JNICALL )Java_/Java_aosp_1088_1monitor_1verification_/g' *.cc
+perl -i -pe 's/asserts_enabled/asserts_enabled_aosp_088_monitor_verification/g' *.cc

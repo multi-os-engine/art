@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -746,11 +747,11 @@ void DlOpenOatFile::PreSetup(const std::string& elf_filename) {
   }
 #endif
 }
-
+  
 ////////////////////////////////////////////////
 // OatFile via our own ElfFile implementation //
 ////////////////////////////////////////////////
-
+  
 class ElfOatFile FINAL : public OatFileBase {
  public:
   ElfOatFile(const std::string& filename, bool executable) : OatFileBase(filename, executable) {}
@@ -902,6 +903,7 @@ bool ElfOatFile::ElfFileOpen(File* file,
   return loaded;
 }
 
+
 //////////////////////////
 // General OatFile code //
 //////////////////////////
@@ -939,7 +941,7 @@ OatFile* OatFile::OpenWithElfFile(ElfFile* elf_file,
       ? oat_file.release()
       : nullptr;
 }
-
+    
 OatFile* OatFile::Open(const std::string& filename,
                        const std::string& location,
                        uint8_t* requested_base,

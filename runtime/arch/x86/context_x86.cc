@@ -102,6 +102,7 @@ void X86Context::DoLongJump() {
   uintptr_t esp = gprs[kNumberOfCpuRegisters - ESP - 1] - sizeof(intptr_t);
   gprs[kNumberOfCpuRegisters] = esp;
   *(reinterpret_cast<uintptr_t*>(esp)) = eip_;
+#ifndef MOE_WINDOWS
   __asm__ __volatile__(
       "movl %1, %%ebx\n\t"          // Address base of FPRs.
       "movsd 0(%%ebx), %%xmm0\n\t"  // Load up XMM0-XMM7.
@@ -119,6 +120,10 @@ void X86Context::DoLongJump() {
       :  // output.
       : "g"(&gprs[0]), "g"(&fprs[0]) // input.
       :);  // clobber.
+#else
+  // MOE TODO: implement jump for this platform.
+  UNIMPLEMENTED(FATAL);
+#endif
 #else
   UNIMPLEMENTED(FATAL);
 #endif

@@ -109,8 +109,12 @@ bool FdFile::Open(const std::string& path, int flags, mode_t mode) {
     return false;
   }
   file_path_ = path;
+#ifndef MOE_WINDOWS
   static_assert(O_RDONLY == 0, "Readonly flag has unexpected value.");
   if (kCheckSafeUsage && (flags & (O_RDWR | O_CREAT | O_WRONLY)) != 0) {
+#else
+  if (kCheckSafeUsage && (flags & (O_RDWR | O_CREAT | O_WRONLY) & ~O_BINARY) != 0) {
+#endif
     // Start in the base state (not flushed, not closed).
     guard_state_ = GuardState::kBase;
   } else {

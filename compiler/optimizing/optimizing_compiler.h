@@ -17,12 +17,20 @@
 #ifndef ART_COMPILER_OPTIMIZING_OPTIMIZING_COMPILER_H_
 #define ART_COMPILER_OPTIMIZING_OPTIMIZING_COMPILER_H_
 
+#ifdef MOE
+#include "arch/instruction_set.h"
+#endif
+
 namespace art {
 
 class Compiler;
 class CompilerDriver;
 
+#ifndef MOE
 Compiler* CreateOptimizingCompiler(CompilerDriver* driver);
+#else
+Compiler* CreateOptimizingCompiler(CompilerDriver* driver, const std::string& platform_name, InstructionSet instruction_set, const std::string& target_dir);
+#endif
 
 // Returns whether we are compiling against a "core" image, which
 // is an indicative we are running tests. The compiler will use that

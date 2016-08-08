@@ -51,11 +51,11 @@ public class Main {
         private static class Inaccessible extends InaccessibleSuper {}
 
         private static final String SUPERCLASS_NAME =
-                "Main$BrokenDexLoader$InaccessibleSuper";
+                "087_gc_after_link.Main$BrokenDexLoader$InaccessibleSuper";
         private static final String CLASS_NAME =
-                "Main$BrokenDexLoader$Inaccessible";
+                "087_gc_after_link.Main$BrokenDexLoader$Inaccessible";
 
-        private static final String DEX_FILE = System.getenv("DEX_LOCATION") + "/087-gc-after-link.jar";
+        private static final String DEX_FILE = System.getenv("DEX_LOCATION");
 
         public BrokenDexLoader(ClassLoader parent) {
             super(parent);

@@ -34,6 +34,9 @@ class Class;
 class String;
 
 // C++ mirror of java.lang.reflect.Field.
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED Field : public AccessibleObject {
  public:
   static mirror::Class* StaticClass() SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -135,6 +138,9 @@ class MANAGED Field : public AccessibleObject {
   friend struct art::FieldOffsets;  // for verifying offset information
   DISALLOW_IMPLICIT_CONSTRUCTORS(Field);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

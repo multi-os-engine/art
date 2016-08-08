@@ -23,6 +23,9 @@
 
 namespace art {
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class PACKED(4) QuickMethodFrameInfo {
  public:
   constexpr QuickMethodFrameInfo()
@@ -59,6 +62,9 @@ class PACKED(4) QuickMethodFrameInfo {
   uint32_t core_spill_mask_;
   uint32_t fp_spill_mask_;
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace art
 

@@ -52,7 +52,11 @@ class CardTable {
   static constexpr uint8_t kCardClean = 0x0;
   static constexpr uint8_t kCardDirty = 0x70;
 
+#ifndef MOE
   static CardTable* Create(const uint8_t* heap_begin, size_t heap_capacity);
+#else
+  static CardTable* Create(const uint8_t* heap_begin, unsigned long long heap_capacity);
+#endif
   ~CardTable();
 
   // Set the card associated with the given address to GC_CARD_DIRTY.

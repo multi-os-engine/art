@@ -932,7 +932,11 @@ inline bool Object::CasFieldWeakSequentiallyConsistentObjectWithoutWriteBarrier(
   HeapReference<Object> old_ref(HeapReference<Object>::FromMirrorPtr(old_value));
   HeapReference<Object> new_ref(HeapReference<Object>::FromMirrorPtr(new_value));
   uint8_t* raw_addr = reinterpret_cast<uint8_t*>(this) + field_offset.Int32Value();
+#ifndef MOE
   Atomic<uint32_t>* atomic_addr = reinterpret_cast<Atomic<uint32_t>*>(raw_addr);
+#else
+  Atomic<void*>* atomic_addr = reinterpret_cast<Atomic<void*>*>(raw_addr);
+#endif
 
   bool success = atomic_addr->CompareExchangeWeakSequentiallyConsistent(old_ref.reference_,
                                                                         new_ref.reference_);
@@ -971,7 +975,11 @@ inline bool Object::CasFieldStrongSequentiallyConsistentObjectWithoutWriteBarrie
   HeapReference<Object> old_ref(HeapReference<Object>::FromMirrorPtr(old_value));
   HeapReference<Object> new_ref(HeapReference<Object>::FromMirrorPtr(new_value));
   uint8_t* raw_addr = reinterpret_cast<uint8_t*>(this) + field_offset.Int32Value();
+#ifndef MOE
   Atomic<uint32_t>* atomic_addr = reinterpret_cast<Atomic<uint32_t>*>(raw_addr);
+#else
+  Atomic<void*>* atomic_addr = reinterpret_cast<Atomic<void*>*>(raw_addr);
+#endif
 
   bool success = atomic_addr->CompareExchangeStrongSequentiallyConsistent(old_ref.reference_,
                                                                           new_ref.reference_);
@@ -999,7 +1007,11 @@ inline bool Object::CasFieldWeakRelaxedObjectWithoutWriteBarrier(
   HeapReference<Object> old_ref(HeapReference<Object>::FromMirrorPtr(old_value));
   HeapReference<Object> new_ref(HeapReference<Object>::FromMirrorPtr(new_value));
   uint8_t* raw_addr = reinterpret_cast<uint8_t*>(this) + field_offset.Int32Value();
+#ifndef MOE
   Atomic<uint32_t>* atomic_addr = reinterpret_cast<Atomic<uint32_t>*>(raw_addr);
+#else
+  Atomic<void*>* atomic_addr = reinterpret_cast<Atomic<void*>*>(raw_addr);
+#endif
 
   bool success = atomic_addr->CompareExchangeWeakRelaxed(old_ref.reference_,
                                                          new_ref.reference_);
@@ -1027,7 +1039,11 @@ inline bool Object::CasFieldStrongRelaxedObjectWithoutWriteBarrier(
   HeapReference<Object> old_ref(HeapReference<Object>::FromMirrorPtr(old_value));
   HeapReference<Object> new_ref(HeapReference<Object>::FromMirrorPtr(new_value));
   uint8_t* raw_addr = reinterpret_cast<uint8_t*>(this) + field_offset.Int32Value();
+#ifndef MOE
   Atomic<uint32_t>* atomic_addr = reinterpret_cast<Atomic<uint32_t>*>(raw_addr);
+#else
+  Atomic<void*>* atomic_addr = reinterpret_cast<Atomic<void*>*>(raw_addr);
+#endif
 
   bool success = atomic_addr->CompareExchangeStrongRelaxed(old_ref.reference_,
                                                            new_ref.reference_);
@@ -1042,6 +1058,9 @@ inline void Object::VisitFieldsReferences(uint32_t ref_offsets, const Visitor& v
   if (!kIsStatic && (ref_offsets != mirror::Class::kClassWalkSuper)) {
     // Instance fields and not the slow-path.
     uint32_t field_offset = mirror::kObjectHeaderSize;
+#ifdef MOE
+    field_offset = RoundUp(field_offset, sizeof(mirror::HeapReference<mirror::Object>));
+#endif
     while (ref_offsets != 0) {
       if ((ref_offsets & 1) != 0) {
         visitor(this, MemberOffset(field_offset), kIsStatic);

@@ -1,0 +1,93 @@
+/************************/
+/** Build Script Setup **/
+/************************/
+
+buildscript {
+    // Add central and local Maven repos
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
+    dependencies {
+        // MOE plugin
+        classpath 'com.moe:moe.build.gradle:1.1.+'
+    }
+}
+
+/*******************/
+/** Project Setup **/
+/*******************/
+
+// Apply plugins
+apply plugin: 'eclipse'
+apply plugin: 'moe'
+apply plugin: 'idea'
+
+// Set source and target to Java 8
+sourceCompatibility = "1.8"
+targetCompatibility = "1.8"
+
+// Set maven repository
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+// Exclude all files from Gradle's test runner
+test { exclude '**' }
+
+// Setup MOE
+moe {
+    sdk.maven('ios', 'com.moe:moe-ios:1.0.+')
+    xcode.mainTarget = 'MOEArtTest'
+    xcode.testTarget = 'MOEArtTest-Test'
+    xcode.mainProductName = 'MOEArtTest'
+    xcode.testProductName = 'MOEArtTest-Test'
+}
+
+// Set dependencies
+dependencies {
+    // Compile with 'jar' files in the project's 'lib' directory
+    compile fileTree(dir: 'lib', include: '*.jar')
+
+    // Add MOE dependencies
+    compile moe.sdk.mainJars
+    testCompile moe.sdk.testJars
+}
+
+// Add external dex files
+gradle.taskGraph.beforeTask { Task task ->
+    if (task instanceof com.intel.inde.moe.gradle.task.Dex2Oat) {
+        task.inputFiles += fileTree("target/dexes").filter { it.isFile() && it.name.endsWith(".dex") }.files
+    }
+}
+
+// Set MOE SDK as boot classpath
+compileJava { options.bootClasspath = moe.sdk.coreJarPath }
+compileTestJava { options.bootClasspath = moe.sdk.coreJarPath }
+
+// Setup Eclipse
+eclipse {
+    classpath {
+        // Remove the default JRE container, MOE SDK will take its place
+        file.whenMerged { classpath ->
+            project.moe.fixJavaDocAndSources(classpath)
+            classpath.entries.removeAll { entry ->
+                entry.kind == 'con' && entry.path.startsWith('org.eclipse.jdt.launching.JRE_CONTAINER')
+            }
+        }
+    }
+
+    // Set MOE natures and build commands
+    project {
+        natures 'com.moe.mdt.appnature'
+        buildCommand 'com.moe.mdt.generalbuilder'
+    }
+}
+
+// Setup Idea
+idea {
+    module {
+        jdkName = 'Intel MOE SDK'
+    }
+}

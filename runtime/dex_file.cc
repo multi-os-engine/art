@@ -442,6 +442,7 @@ DexFile::DexFile(const uint8_t* base, size_t size,
       oat_dex_file_(oat_dex_file) {
   CHECK(begin_ != nullptr) << GetLocation();
   CHECK_GT(size_, 0U) << GetLocation();
+#ifndef MOE
   const uint8_t* lookup_data = (oat_dex_file != nullptr)
       ? oat_dex_file->GetLookupTableData()
       : nullptr;
@@ -452,6 +453,7 @@ DexFile::DexFile(const uint8_t* base, size_t size,
       lookup_table_.reset(TypeLookupTable::Open(lookup_data, *this));
     }
   }
+#endif
 }
 
 DexFile::~DexFile() {
@@ -1620,12 +1622,21 @@ mirror::Object* DexFile::CreateAnnotationMember(Handle<mirror::Class> klass,
   JValue result;
   ArtMethod* annotation_member_init =
       soa.DecodeMethod(WellKnownClasses::libcore_reflect_AnnotationMember_init);
+#ifndef MOE
   uint32_t args[5] = { static_cast<uint32_t>(reinterpret_cast<uintptr_t>(new_member.Get())),
                        static_cast<uint32_t>(reinterpret_cast<uintptr_t>(string_name.Get())),
                        static_cast<uint32_t>(reinterpret_cast<uintptr_t>(value_object.Get())),
                        static_cast<uint32_t>(reinterpret_cast<uintptr_t>(method_return.Get())),
                        static_cast<uint32_t>(reinterpret_cast<uintptr_t>(method_object.Get()))
   };
+#else
+  uintptr_t args[5] = { reinterpret_cast<uintptr_t>(new_member.Get()),
+                        reinterpret_cast<uintptr_t>(string_name.Get()),
+                        reinterpret_cast<uintptr_t>(value_object.Get()),
+                        reinterpret_cast<uintptr_t>(method_return.Get()),
+                        reinterpret_cast<uintptr_t>(method_object.Get())
+  };
+#endif
   annotation_member_init->Invoke(self, args, sizeof(args), &result, "VLLLL");
   if (self->IsExceptionPending()) {
     LOG(INFO) << "Exception in AnnotationMember.<init>";
@@ -2130,8 +2141,13 @@ mirror::Object* DexFile::ProcessEncodedAnnotation(Handle<mirror::Class> klass,
   JValue result;
   ArtMethod* create_annotation_method =
       soa.DecodeMethod(WellKnownClasses::libcore_reflect_AnnotationFactory_createAnnotation);
+#ifndef MOE
   uint32_t args[2] = { static_cast<uint32_t>(reinterpret_cast<uintptr_t>(annotation_class.Get())),
                        static_cast<uint32_t>(reinterpret_cast<uintptr_t>(h_element_array.Get())) };
+#else
+  uintptr_t args[2] = { reinterpret_cast<uintptr_t>(annotation_class.Get()),
+                        reinterpret_cast<uintptr_t>(h_element_array.Get()) };
+#endif
   create_annotation_method->Invoke(self, args, sizeof(args), &result, "LLL");
   if (self->IsExceptionPending()) {
     LOG(INFO) << "Exception in AnnotationFactory.createAnnotation";

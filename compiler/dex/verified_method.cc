@@ -54,10 +54,12 @@ const VerifiedMethod* VerifiedMethod::Create(verifier::MethodVerifier* method_ve
     }
 
     // Only need dequicken info for JIT so far.
+#ifndef MOE
     if (Runtime::Current()->UseJitCompilation() &&
         !verified_method->GenerateDequickenMap(method_verifier)) {
       return nullptr;
     }
+#endif
   }
 
   if (method_verifier->HasCheckCasts()) {
@@ -72,16 +74,19 @@ const MethodReference* VerifiedMethod::GetDevirtTarget(uint32_t dex_pc) const {
   return (it != devirt_map_.end()) ? &it->second : nullptr;
 }
 
+#ifndef MOE
 const DexFileReference* VerifiedMethod::GetDequickenIndex(uint32_t dex_pc) const {
   DCHECK(Runtime::Current()->UseJitCompilation());
   auto it = dequicken_map_.find(dex_pc);
   return (it != dequicken_map_.end()) ? &it->second : nullptr;
 }
+#endif
 
 bool VerifiedMethod::IsSafeCast(uint32_t pc) const {
   return std::binary_search(safe_cast_set_.begin(), safe_cast_set_.end(), pc);
 }
 
+#ifndef MOE
 bool VerifiedMethod::GenerateDequickenMap(verifier::MethodVerifier* method_verifier) {
   if (method_verifier->HasFailures()) {
     return false;
@@ -124,6 +129,7 @@ bool VerifiedMethod::GenerateDequickenMap(verifier::MethodVerifier* method_verif
   }
   return true;
 }
+#endif
 
 void VerifiedMethod::GenerateDevirtMap(verifier::MethodVerifier* method_verifier) {
   // It is risky to rely on reg_types for sharpening in cases of soft

@@ -273,9 +273,15 @@ class RegionSpace FINAL : public ContinuousMemMapAllocSpace {
       alloc_time_ = 0;
       live_bytes_ = static_cast<size_t>(-1);
       if (!kMadviseZeroes) {
+#ifndef MOE
         memset(begin_, 0, end_ - begin_);
+#else
+        SafeZeroAndReleaseSpace(begin_, end_ - begin_);
+#endif
       }
+#ifndef MOE
       madvise(begin_, end_ - begin_, MADV_DONTNEED);
+#endif
       is_newly_allocated_ = false;
       is_a_tlab_ = false;
       thread_ = nullptr;

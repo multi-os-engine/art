@@ -1,0 +1,13 @@
+diff --git a/test/493-checker-inline-invoke-interface/expected.txt b/test/493-checker-inline-invoke-interface/expected.txt
+index 93620a6..d4144a2 100644
+--- a/test/493-checker-inline-invoke-interface/expected.txt
++++ b/test/493-checker-inline-invoke-interface/expected.txt
+@@ -1,5 +1,5 @@
+ Hello from clinit
+ java.lang.Exception
+-	at ForceStatic.<clinit>(Main.java:24)
+-	at Main.foo(Main.java:31)
+-	at Main.main(Main.java:42)
++	at aosp_493_checker_inline_invoke_interface.ForceStatic.<clinit>(Main.java:24)
++	at aosp_493_checker_inline_invoke_interface.Main.foo(Main.java:31)
++	at aosp_493_checker_inline_invoke_interface.Main.main(Main.java:42)

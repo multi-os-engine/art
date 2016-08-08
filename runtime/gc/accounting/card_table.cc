@@ -57,7 +57,11 @@ constexpr uint8_t CardTable::kCardDirty;
  * byte is equal to GC_DIRTY_CARD. See CardTable::Create for details.
  */
 
+#ifndef MOE
 CardTable* CardTable::Create(const uint8_t* heap_begin, size_t heap_capacity) {
+#else
+CardTable* CardTable::Create(const uint8_t* heap_begin, unsigned long long heap_capacity) {
+#endif
   ScopedTrace trace(__PRETTY_FUNCTION__);
   /* Set up the card table */
   size_t capacity = heap_capacity / kCardSize;
@@ -111,7 +115,13 @@ void CardTable::ClearCardTable() {
 
 void CardTable::ClearCardRange(uint8_t* start, uint8_t* end) {
   if (!kMadviseZeroes) {
-    memset(start, 0, end - start);
+    uint8_t* start_card = CardFromAddr(start);
+    uint8_t* end_card = CardFromAddr(end);
+#ifndef MOE
+    memset(start_card, 0, end_card - start_card);
+#else
+    SafeZeroAndReleaseSpace(start_card, end_card -  start_card);
+#endif
     return;
   }
   CHECK_ALIGNED(reinterpret_cast<uintptr_t>(start), kCardSize);

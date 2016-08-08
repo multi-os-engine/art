@@ -23,6 +23,9 @@
 namespace art {
 namespace mirror {
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED IfTable FINAL : public ObjectArray<Object> {
  public:
   ALWAYS_INLINE Class* GetInterface(int32_t i) SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -74,6 +77,9 @@ class MANAGED IfTable FINAL : public ObjectArray<Object> {
  private:
   DISALLOW_IMPLICIT_CONSTRUCTORS(IfTable);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace mirror
 }  // namespace art

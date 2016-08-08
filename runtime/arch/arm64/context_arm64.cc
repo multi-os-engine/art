@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +26,11 @@
 namespace art {
 namespace arm64 {
 
+#ifndef MOE
 static constexpr uint64_t gZero = 0;
+#else
+static constexpr uintptr_t gZero = 0;
+#endif
 
 void Arm64Context::Reset() {
   std::fill_n(gprs_, arraysize(gprs_), nullptr);
@@ -74,7 +79,11 @@ void Arm64Context::SetFPR(uint32_t reg, uintptr_t value) {
 
 void Arm64Context::SmashCallerSaves() {
   // This needs to be 0 because we want a null/zero return value.
+#ifndef MOE
   gprs_[X0] = const_cast<uint64_t*>(&gZero);
+#else
+  gprs_[X0] = const_cast<uintptr_t*>(&gZero);
+#endif
   gprs_[X1] = nullptr;
   gprs_[X2] = nullptr;
   gprs_[X3] = nullptr;
@@ -137,7 +146,11 @@ void Arm64Context::DoLongJump() {
     fprs[i] = fprs_[i] != nullptr ? *fprs_[i] : Arm64Context::kBadFprBase + i;
   }
   DCHECK_EQ(reinterpret_cast<uintptr_t>(Thread::Current()), gprs[TR]);
+#ifndef MOE
   art_quick_do_long_jump(gprs, fprs);
+#else
+  // MOE TODO: implement jump for this platform.
+#endif
 }
 
 }  // namespace arm64

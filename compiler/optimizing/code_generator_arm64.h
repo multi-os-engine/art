@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +50,11 @@ static constexpr size_t kParameterFPRegistersLength = arraysize(kParameterFPRegi
 const vixl::Register tr = vixl::x19;                        // Thread Register
 static const vixl::Register kArtMethodRegister = vixl::x0;  // Method register on invoke.
 
+#ifndef MOE
 const vixl::CPURegList vixl_reserved_core_registers(vixl::ip0, vixl::ip1);
+#else
+const vixl::CPURegList vixl_reserved_core_registers(vixl::x18, vixl::ip0, vixl::ip1);
+#endif
 const vixl::CPURegList vixl_reserved_fp_registers(vixl::d31);
 
 const vixl::CPURegList runtime_reserved_core_registers(tr, vixl::lr);

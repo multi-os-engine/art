@@ -1,0 +1,18 @@
+diff --git a/test/488-checker-inline-recursive-calls/expected.txt b/test/488-checker-inline-recursive-calls/expected.txt
+index f615d3a..c5dafed 100644
+--- a/test/488-checker-inline-recursive-calls/expected.txt
++++ b/test/488-checker-inline-recursive-calls/expected.txt
+@@ -1,7 +1,7 @@
+ java.lang.Error
+-	at Main.inline3(Main.java:51)
+-	at Main.doTopCall(Main.java:37)
+-	at Main.inline2(Main.java:47)
+-	at Main.inline1(Main.java:43)
+-	at Main.doTopCall(Main.java:34)
+-	at Main.main(Main.java:21)
++	at aosp_488_checker_inline_recursive_calls.Main.inline3(Main.java:51)
++	at aosp_488_checker_inline_recursive_calls.Main.doTopCall(Main.java:37)
++	at aosp_488_checker_inline_recursive_calls.Main.inline2(Main.java:47)
++	at aosp_488_checker_inline_recursive_calls.Main.inline1(Main.java:43)
++	at aosp_488_checker_inline_recursive_calls.Main.doTopCall(Main.java:34)
++	at aosp_488_checker_inline_recursive_calls.Main.main(Main.java:21)

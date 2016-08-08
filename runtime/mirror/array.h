@@ -28,6 +28,9 @@ template<class T> class Handle;
 
 namespace mirror {
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 class MANAGED Array : public Object {
  public:
   // The size of a java.lang.Class representing an array.
@@ -102,7 +105,13 @@ class MANAGED Array : public Object {
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(Array);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 template<typename T>
 class MANAGED PrimitiveArray : public Array {
  public:
@@ -179,6 +188,9 @@ class MANAGED PrimitiveArray : public Array {
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(PrimitiveArray);
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 // Either an IntArray or a LongArray.
 class PointerArray : public Array {

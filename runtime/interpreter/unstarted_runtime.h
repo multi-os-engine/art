@@ -57,7 +57,11 @@ class UnstartedRuntime {
   static void Jni(Thread* self,
                   ArtMethod* method,
                   mirror::Object* receiver,
+#ifndef MOE
                   uint32_t* args,
+#else
+                  uintptr_t* args,
+#endif
                   JValue* result)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -76,6 +80,7 @@ class UnstartedRuntime {
 #undef UNSTARTED_DIRECT
 
   // Methods that are native.
+#ifndef MOE
 #define UNSTARTED_JNI(ShortName, SigIgnored)                       \
   static void UnstartedJNI ## ShortName(Thread* self,              \
                                         ArtMethod* method, \
@@ -83,6 +88,15 @@ class UnstartedRuntime {
                                         uint32_t* args,            \
                                         JValue* result)            \
       SHARED_REQUIRES(Locks::mutator_lock_);
+#else
+#define UNSTARTED_JNI(ShortName, SigIgnored)                       \
+  static void UnstartedJNI ## ShortName(Thread* self,              \
+                                        ArtMethod* method, \
+                                        mirror::Object* receiver,  \
+                                        uintptr_t* args,           \
+                                        JValue* result)            \
+      SHARED_REQUIRES(Locks::mutator_lock_);
+#endif
 #include "unstarted_runtime_list.h"
   UNSTARTED_RUNTIME_JNI_LIST(UNSTARTED_JNI)
 #undef UNSTARTED_RUNTIME_DIRECT_LIST

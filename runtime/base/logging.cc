@@ -87,7 +87,11 @@ void InitLogging(char* argv[]) {
       gCmdLine->append(argv[i]);
     }
     gProgramInvocationName.reset(new std::string(argv[0]));
+#ifndef MOE_WINDOWS
     const char* last_slash = strrchr(argv[0], '/');
+#else
+    const char* last_slash = strrchr(argv[0], '\\');
+#endif
     gProgramInvocationShortName.reset(new std::string((last_slash != nullptr) ? last_slash + 1
                                                                            : argv[0]));
   } else {
@@ -143,7 +147,11 @@ class LogMessageData {
         line_number_(line),
         severity_(severity),
         error_(error) {
+#ifndef MOE_WINDOWS
     const char* last_slash = strrchr(file, '/');
+#else
+    const char* last_slash = strrchr(file, '\\');
+#endif
     file = (last_slash == nullptr) ? file : last_slash + 1;
   }
 

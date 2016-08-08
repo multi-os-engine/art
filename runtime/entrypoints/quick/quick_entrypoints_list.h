@@ -20,18 +20,18 @@
 // All quick entrypoints. Format is name, return type, argument types.
 
 #define QUICK_ENTRYPOINT_LIST(V) \
-  V(AllocArray, void*, uint32_t, int32_t, ArtMethod*) \
-  V(AllocArrayResolved, void*, mirror::Class*, int32_t, ArtMethod*) \
-  V(AllocArrayWithAccessCheck, void*, uint32_t, int32_t, ArtMethod*) \
-  V(AllocObject, void*, uint32_t, ArtMethod*) \
-  V(AllocObjectResolved, void*, mirror::Class*, ArtMethod*) \
-  V(AllocObjectInitialized, void*, mirror::Class*, ArtMethod*) \
-  V(AllocObjectWithAccessCheck, void*, uint32_t, ArtMethod*) \
-  V(CheckAndAllocArray, void*, uint32_t, int32_t, ArtMethod*) \
-  V(CheckAndAllocArrayWithAccessCheck, void*, uint32_t, int32_t, ArtMethod*) \
-  V(AllocStringFromBytes, void*, void*, int32_t, int32_t, int32_t) \
-  V(AllocStringFromChars, void*, int32_t, int32_t, void*) \
-  V(AllocStringFromString, void*, void*) \
+  V(AllocArray, mirror::Array*, uint32_t, int32_t, ArtMethod*) \
+  V(AllocArrayResolved, mirror::Array*, mirror::Class*, int32_t, ArtMethod*) \
+  V(AllocArrayWithAccessCheck, mirror::Array*, uint32_t, int32_t, ArtMethod*) \
+  V(AllocObject, mirror::Object*, uint32_t, ArtMethod*) \
+  V(AllocObjectResolved, mirror::Object*, mirror::Class*, ArtMethod*) \
+  V(AllocObjectInitialized, mirror::Object*, mirror::Class*, ArtMethod*) \
+  V(AllocObjectWithAccessCheck, mirror::Object*, uint32_t, ArtMethod*) \
+  V(CheckAndAllocArray, mirror::Array*, uint32_t, int32_t, ArtMethod*) \
+  V(CheckAndAllocArrayWithAccessCheck, mirror::Array*, uint32_t, int32_t, ArtMethod*) \
+  V(AllocStringFromBytes, mirror::String*, mirror::ByteArray*, int32_t, int32_t, int32_t) \
+  V(AllocStringFromChars, mirror::String*, int32_t, int32_t, mirror::CharArray*) \
+  V(AllocStringFromString, mirror::String*, mirror::String*) \
 \
   V(InstanceofNonTrivial, uint32_t, const mirror::Class*, const mirror::Class*) \
   V(CheckCast, void, const mirror::Class*, const mirror::Class*) \
@@ -132,15 +132,15 @@
   V(InvokeSuperTrampolineWithAccessCheck, void, uint32_t, void*) \
   V(InvokeVirtualTrampolineWithAccessCheck, void, uint32_t, void*) \
 \
-  V(TestSuspend, void, void) \
+  V(TestSuspend, void) \
 \
   V(DeliverException, void, mirror::Object*) \
   V(ThrowArrayBounds, void, int32_t, int32_t) \
-  V(ThrowDivZero, void, void) \
+  V(ThrowDivZero, void) \
   V(ThrowNoSuchMethod, void, int32_t) \
-  V(ThrowNullPointer, void, void) \
+  V(ThrowNullPointer, void) \
   V(ThrowStackOverflow, void, void*) \
-  V(Deoptimize, void, void) \
+  V(Deoptimize, void) \
 \
   V(A64Load, int64_t, volatile const int64_t *) \
   V(A64Store, void, volatile int64_t *, int64_t) \

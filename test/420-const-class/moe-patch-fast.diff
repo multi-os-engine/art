@@ -1,0 +1,29 @@
+diff --git a/test/420-const-class/expected.txt b/test/420-const-class/expected.txt
+index 3213026..f69dd7f 100644
+--- a/test/420-const-class/expected.txt
++++ b/test/420-const-class/expected.txt
+@@ -1,16 +1,16 @@
+-class Main
+-class Main
+-class Main$Other
+-class Main$Other
++class aosp_420_const_class.Main
++class aosp_420_const_class.Main
++class aosp_420_const_class.Main$Other
++class aosp_420_const_class.Main$Other
+ class java.lang.System
+ class java.lang.System
+ Hello from OtherWithClinit
+ 42
+-class Main$OtherWithClinit
++class aosp_420_const_class.Main$OtherWithClinit
+ 42
+-class Main$OtherWithClinit
+-class Main$OtherWithClinit2
++class aosp_420_const_class.Main$OtherWithClinit
++class aosp_420_const_class.Main$OtherWithClinit2
+ Hello from OtherWithClinit2
+ 43
+-class Main$OtherWithClinit2
++class aosp_420_const_class.Main$OtherWithClinit2
+ 43

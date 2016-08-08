@@ -149,7 +149,11 @@ class Monitor {
   }
 
   void operator delete(void* ptr) {
+#ifndef MOE_WINDOWS
     free(ptr);
+#else
+    _aligned_free(ptr);
+#endif
   }
 #endif
 

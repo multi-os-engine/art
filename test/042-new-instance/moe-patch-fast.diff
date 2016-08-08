@@ -1,0 +1,85 @@
+diff --git a/test/042-new-instance/src/Main.java b/test/042-new-instance/src/Main.java
+index b0a5fd4..1b440d8 100644
+--- a/test/042-new-instance/src/Main.java
++++ b/test/042-new-instance/src/Main.java
+@@ -33,7 +33,7 @@ public class Main {
+     static void testClassNewInstance() {
+         // should succeed
+         try {
+-            Class c = Class.forName("LocalClass");
++            Class c = Class.forName("aosp_042_new_instance.LocalClass");
+             Object obj = c.newInstance();
+             System.out.println("LocalClass succeeded");
+         } catch (Exception ex) {
+@@ -43,7 +43,7 @@ public class Main {
+ 
+         // should fail
+         try {
+-            Class c = Class.forName("otherpackage.PackageAccess");
++            Class c = Class.forName("aosp_042_new_instance.otherpackage.PackageAccess");
+             Object obj = c.newInstance();
+             System.err.println("ERROR: PackageAccess succeeded unexpectedly");
+         } catch (IllegalAccessException iae) {
+@@ -71,7 +71,7 @@ public class Main {
+     static void testConstructorNewInstance() {
+         // should fail -- getConstructor only returns public constructors
+         try {
+-            Class c = Class.forName("LocalClass");
++            Class c = Class.forName("aosp_042_new_instance.LocalClass");
+             Constructor cons = c.getConstructor(new Class[0] /*(Class[])null*/);
+             System.err.println("Cons LocalClass succeeded unexpectedly");
+         } catch (NoSuchMethodException nsme) {
+@@ -83,7 +83,7 @@ public class Main {
+ 
+         // should succeed
+         try {
+-            Class c = Class.forName("LocalClass2");
++            Class c = Class.forName("aosp_042_new_instance.LocalClass2");
+             Constructor cons = c.getConstructor((Class[]) null);
+             Object obj = cons.newInstance();
+             System.out.println("Cons LocalClass2 succeeded");
+@@ -94,7 +94,7 @@ public class Main {
+ 
+         // should succeed
+         try {
+-            Class c = Class.forName("Main$InnerClass");
++            Class c = Class.forName("aosp_042_new_instance.Main$InnerClass");
+             Constructor cons = c.getDeclaredConstructor(new Class<?>[]{Main.class});
+             Object obj = cons.newInstance(new Main());
+             System.out.println("Cons InnerClass succeeded");
+@@ -105,7 +105,7 @@ public class Main {
+ 
+         // should succeed
+         try {
+-            Class c = Class.forName("Main$StaticInnerClass");
++            Class c = Class.forName("aosp_042_new_instance.Main$StaticInnerClass");
+             Constructor cons = c.getDeclaredConstructor((Class[]) null);
+             Object obj = cons.newInstance();
+             System.out.println("Cons StaticInnerClass succeeded");
+@@ -116,7 +116,7 @@ public class Main {
+ 
+         // should fail
+         try {
+-            Class c = Class.forName("otherpackage.PackageAccess");
++            Class c = Class.forName("aosp_042_new_instance.otherpackage.PackageAccess");
+             Constructor cons = c.getConstructor(new Class[0] /*(Class[])null*/);
+             System.err.println("ERROR: Cons PackageAccess succeeded unexpectedly");
+         } catch (NoSuchMethodException nsme) {
+@@ -129,7 +129,7 @@ public class Main {
+ 
+         // should fail
+         try {
+-            Class c = Class.forName("MaybeAbstract");
++            Class c = Class.forName("aosp_042_new_instance.MaybeAbstract");
+             Constructor cons = c.getConstructor(new Class[0] /*(Class[])null*/);
+             Object obj = cons.newInstance();
+             System.err.println("ERROR: Cons MaybeAbstract succeeded unexpectedly");
+@@ -143,7 +143,7 @@ public class Main {
+ 
+         // should fail
+         try {
+-            Class c = Class.forName("otherpackage.PackageAccess2");
++            Class c = Class.forName("aosp_042_new_instance.otherpackage.PackageAccess2");
+             Constructor cons = c.getConstructor((Class[]) null);
+             if (!FULL_ACCESS_CHECKS) { throw new IllegalAccessException(); }
+             Object obj = cons.newInstance();

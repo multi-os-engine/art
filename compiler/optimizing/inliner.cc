@@ -226,6 +226,7 @@ static uint32_t FindClassIndexIn(mirror::Class* cls,
   return index;
 }
 
+#ifndef MOE
 class ScopedProfilingInfoInlineUse {
  public:
   explicit ScopedProfilingInfoInlineUse(ArtMethod* method, Thread* self)
@@ -252,6 +253,7 @@ class ScopedProfilingInfoInlineUse {
   Thread* const self_;
   ProfilingInfo* const profiling_info_;
 };
+#endif
 
 bool HInliner::TryInline(HInvoke* invoke_instruction) {
   if (invoke_instruction->IsInvokeUnresolved()) {
@@ -307,6 +309,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
   DCHECK(!invoke_instruction->IsInvokeStaticOrDirect());
 
   // Check if we can use an inline cache.
+#ifndef MOE
   ArtMethod* caller = graph_->GetArtMethod();
   if (Runtime::Current()->UseJitCompilation()) {
     // Under JIT, we should always know the caller.
@@ -342,6 +345,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
       }
     }
   }
+#endif
 
   VLOG(compiler) << "Interface or virtual call to "
                  << PrettyMethod(method_index, caller_dex_file)
@@ -633,6 +637,7 @@ void HInliner::CreateDiamondPatternForPolymorphicInline(HInstruction* compare,
 bool HInliner::TryInlinePolymorphicCallToSameTarget(HInvoke* invoke_instruction,
                                                     ArtMethod* resolved_method,
                                                     const InlineCache& ic) {
+#ifndef MOE
   // This optimization only works under JIT for now.
   DCHECK(Runtime::Current()->UseJitCompilation());
   if (graph_->GetInstructionSet() == kMips64) {
@@ -745,6 +750,10 @@ bool HInliner::TryInlinePolymorphicCallToSameTarget(HInvoke* invoke_instruction,
   MaybeRecordStat(kInlinedPolymorphicCall);
 
   return true;
+#else
+  LOG(FATAL) << "TryInlinePolymorphicCallToSameTarget is not supported!";
+  UNREACHABLE();
+#endif
 }
 
 bool HInliner::TryInlineAndReplace(HInvoke* invoke_instruction, ArtMethod* method, bool do_rtp) {
@@ -829,7 +838,11 @@ bool HInliner::TryBuildAndInline(HInvoke* invoke_instruction,
 
   if (!method->GetDeclaringClass()->IsVerified()) {
     uint16_t class_def_idx = method->GetDeclaringClass()->GetDexClassDefIndex();
+#ifndef MOE
     if (Runtime::Current()->UseJitCompilation() ||
+#else
+    if (
+#endif
         !compiler_driver_->IsMethodVerifiedWithoutFailures(
             method->GetDexMethodIndex(), class_def_idx, *method->GetDexFile())) {
       VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
@@ -970,7 +983,11 @@ bool HInliner::TryPatternSubstitution(HInvoke* invoke_instruction,
           invoke_instruction->GetBlock()->InsertInstructionBefore(iput, invoke_instruction);
 
           // Check whether the field is final. If it is, we need to add a barrier.
+#ifndef MOE
           size_t pointer_size = InstructionSetPointerSize(codegen_->GetInstructionSet());
+#else
+          size_t pointer_size = InstructionSetPointerSize(compiler_driver_->GetInstructionSet());
+#endif
           ArtField* resolved_field = dex_cache->GetResolvedField(field_index, pointer_size);
           DCHECK(resolved_field != nullptr);
           if (resolved_field->IsFinal()) {
@@ -996,7 +1013,11 @@ HInstanceFieldGet* HInliner::CreateInstanceFieldGet(Handle<mirror::DexCache> dex
                                                     uint32_t field_index,
                                                     HInstruction* obj)
     SHARED_REQUIRES(Locks::mutator_lock_) {
+#ifndef MOE
   size_t pointer_size = InstructionSetPointerSize(codegen_->GetInstructionSet());
+#else
+  size_t pointer_size = InstructionSetPointerSize(compiler_driver_->GetInstructionSet());
+#endif
   ArtField* resolved_field = dex_cache->GetResolvedField(field_index, pointer_size);
   DCHECK(resolved_field != nullptr);
   HInstanceFieldGet* iget = new (graph_->GetArena()) HInstanceFieldGet(
@@ -1024,7 +1045,11 @@ HInstanceFieldSet* HInliner::CreateInstanceFieldSet(Handle<mirror::DexCache> dex
                                                     HInstruction* obj,
                                                     HInstruction* value)
     SHARED_REQUIRES(Locks::mutator_lock_) {
+#ifndef MOE
   size_t pointer_size = InstructionSetPointerSize(codegen_->GetInstructionSet());
+#else
+  size_t pointer_size = InstructionSetPointerSize(compiler_driver_->GetInstructionSet());
+#endif
   ArtField* resolved_field = dex_cache->GetResolvedField(field_index, pointer_size);
   DCHECK(resolved_field != nullptr);
   HInstanceFieldSet* iput = new (graph_->GetArena()) HInstanceFieldSet(
@@ -1116,7 +1141,11 @@ bool HInliner::TryBuildAndInlineHelper(HInvoke* invoke_instruction,
                         *code_item,
                         compiler_driver_,
                         inline_stats.get(),
+#ifndef MOE
                         resolved_method->GetQuickenedInfo(),
+#else
+                        nullptr, // MOE TODO: revisit this code for LLVM!
+#endif
                         dex_cache,
                         handles_);
 
@@ -1296,7 +1325,11 @@ size_t HInliner::RunOptimizations(HGraph* callee_graph,
   // optimization that could lead to a HDeoptimize. The following optimizations do not.
   HDeadCodeElimination dce(callee_graph, stats_);
   HConstantFolding fold(callee_graph);
+#ifndef MOE
   HSharpening sharpening(callee_graph, codegen_, dex_compilation_unit, compiler_driver_);
+#else
+  HSharpening sharpening(callee_graph, outermost_graph_, dex_compilation_unit, compiler_driver_);
+#endif
   InstructionSimplifier simplify(callee_graph, stats_);
   IntrinsicsRecognizer intrinsics(callee_graph, compiler_driver_, stats_);
 
@@ -1317,7 +1350,9 @@ size_t HInliner::RunOptimizations(HGraph* callee_graph,
   if (depth_ + 1 < compiler_driver_->GetCompilerOptions().GetInlineDepthLimit()) {
     HInliner inliner(callee_graph,
                      outermost_graph_,
+#ifndef MOE
                      codegen_,
+#endif
                      outer_compilation_unit_,
                      dex_compilation_unit,
                      compiler_driver_,

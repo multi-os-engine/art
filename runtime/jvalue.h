@@ -26,6 +26,9 @@ namespace mirror {
 class Object;
 }  // namespace mirror
 
+#ifdef MOE_WINDOWS
+#pragma pack(push, 1)
+#endif
 union PACKED(4) JValue {
   // We default initialize JValue instances to all-zeros.
   JValue() : j(0) {}
@@ -76,6 +79,9 @@ union PACKED(4) JValue {
   double d;
   mirror::Object* l;
 };
+#ifdef MOE_WINDOWS
+#pragma pack(pop)
+#endif
 
 }  // namespace art
 
