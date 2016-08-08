@@ -19,7 +19,9 @@
 #include "garbage_collector.h"
 
 #define ATRACE_TAG ATRACE_TAG_DALVIK
+#ifndef MOE
 #include "cutils/trace.h"
+#endif
 
 #include "base/dumpable.h"
 #include "base/histogram-inl.h"

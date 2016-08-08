@@ -23,7 +23,9 @@
 #include <vector>
 
 #define ATRACE_TAG ATRACE_TAG_DALVIK
+#ifndef MOE
 #include "cutils/trace.h"
+#endif
 
 #include "base/bounded_fifo.h"
 #include "base/logging.h"
@@ -697,7 +699,11 @@ class MarkStackTask : public Task {
     ALWAYS_INLINE void Mark(mirror::Object* ref) const SHARED_REQUIRES(Locks::mutator_lock_) {
       if (ref != nullptr && mark_sweep_->MarkObjectParallel(ref)) {
         if (kUseFinger) {
+#ifndef MOE
           std::atomic_thread_fence(std::memory_order_seq_cst);
+#else
+          atomic_thread_fence(std::memory_order_seq_cst);
+#endif
           if (reinterpret_cast<uintptr_t>(ref) >=
               static_cast<uintptr_t>(mark_sweep_->atomic_finger_.LoadRelaxed())) {
             return;

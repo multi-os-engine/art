@@ -1,0 +1,32 @@
+# Gradle work files
+.gradle
+
+# Build folders
+build
+build-tvos
+build-xcode
+target
+
+# Eclipse project files
+bin
+.settings
+.classpath
+.project
+
+# Idea / Android Studio files
+.idea
+*.iml
+*.ipr
+*.iws
+
+# Xcode user specific data
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Mac Finder
+# Other
+/target
+/results
+proguard.append.cfg
+native_cpp.cpp
+.DS_Store

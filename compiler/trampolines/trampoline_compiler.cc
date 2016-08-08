@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +43,12 @@
 #include "utils/x86_64/assembler_x86_64.h"
 #endif
 
+#ifdef MOE
+#include "asm_support.h"
+#endif
+
 #define __ assembler.
+
 
 namespace art {
 
@@ -184,8 +190,18 @@ namespace x86 {
 static const std::vector<uint8_t>* CreateTrampoline(ThreadOffset<4> offset) {
   X86Assembler assembler;
 
+#ifndef MOE
   // All x86 trampolines call via the Thread* held in fs.
   __ fs()->jmp(Address::Absolute(offset));
+#else
+  __ subl(ESP, Immediate(4));
+  __ pushl(EAX);
+  __ gs()->movl(EAX, Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  __ movl(EAX, Address(EAX, offset));
+  __ movl(Address(ESP, 4), EAX);
+  __ popl(EAX);
+  __ ret();
+#endif
   __ int3();
 
   __ FinalizeCode();
@@ -204,8 +220,18 @@ namespace x86_64 {
 static const std::vector<uint8_t>* CreateTrampoline(ThreadOffset<8> offset) {
   x86_64::X86_64Assembler assembler;
 
+#ifndef MOE
   // All x86 trampolines call via the Thread* held in gs.
   __ gs()->jmp(x86_64::Address::Absolute(offset, true));
+#else
+  __ subq(CpuRegister(RSP), Immediate(8));
+  __ pushq(CpuRegister(RAX));
+  __ gs()->movq(CpuRegister(RAX), Address::Absolute(MOE_TLS_THREAD_OFFSET_64, true));
+  __ movq(CpuRegister(RAX), Address(CpuRegister(RAX), offset));
+  __ movq(Address(CpuRegister(RSP), 8), CpuRegister(RAX));
+  __ popq(CpuRegister(RAX));
+  __ ret();
+#endif
   __ int3();
 
   __ FinalizeCode();

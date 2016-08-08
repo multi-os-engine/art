@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -301,6 +302,13 @@ ADD_TEST_EQ(ROSALLOC_SLOT_NEXT_OFFSET, MIRROR_OBJECT_CLASS_OFFSET)
 
 #if defined(__cplusplus)
 }  // End of CheckAsmSupportOffsets.
+#endif
+
+#ifdef MOE
+#define MOE_TLS_THREAD_OFFSET_32 1360  // MOE: Keep this update with MOE_TLS_THREAD_KEY * 4
+#define MOE_TLS_SCRATCH_OFFSET_32 1364  // MOE: Keep this update with MOE_TLS_SCRATCH_KEY * 4
+#define MOE_TLS_THREAD_OFFSET_64 2720  // MOE: Keep this update with MOE_TLS_THREAD_KEY * 8
+#define MOE_TLS_SCRATCH_OFFSET_64 2728  // MOE: Keep this update with MOE_TLS_SCRATCH_KEY * 8
 #endif
 
 #endif  // ART_RUNTIME_ASM_SUPPORT_H_

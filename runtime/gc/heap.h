@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,7 +131,11 @@ class Heap {
   // If true, measure the total allocation time.
   static constexpr size_t kDefaultStartingSize = kPageSize;
   static constexpr size_t kDefaultInitialSize = 2 * MB;
+#ifndef MOE
   static constexpr size_t kDefaultMaximumSize = 256 * MB;
+#else
+  static constexpr size_t kDefaultMaximumSize = 128 * MB;
+#endif
   static constexpr size_t kDefaultNonMovingSpaceCapacity = 64 * MB;
   static constexpr size_t kDefaultMaxFree = 2 * MB;
   static constexpr size_t kDefaultMinFree = kDefaultMaxFree / 4;

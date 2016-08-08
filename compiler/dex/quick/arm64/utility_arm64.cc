@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1107,6 +1108,17 @@ LIR* Arm64Mir2Lir::LoadBaseIndexed(RegStorage r_base, RegStorage r_index, RegSto
                    (scale != 0) ? 1 : 0);
   }
 
+#ifdef MOE
+  if (cu_->target64 && size == kReference && !r_dest.IsFloat()) {
+    RegStorage r_dest_wide = As64BitReg(r_dest);
+    int wide_dest = RegStorage::Solo64(r_dest.GetRegNum()).GetReg();
+    NewLIR3(kA64Cmp3RdT, r_dest.GetReg(), 0, ENCODE_NO_SHIFT);
+    NewLIR4(kA64Csinc4rrrc, r_dest.GetReg(), r_dest.GetReg(), r_dest.GetReg(), kArmCondEq);
+    NewLIR4(kA64Bfm4rrdd | WIDE(0), r_dest_wide.GetReg(), r_dest_wide.GetReg(), 32, 1);
+    NewLIR3(kA64And3Rrl | WIDE(0), r_dest_wide.GetReg(), r_dest_wide.GetReg(), -2);
+  }
+#endif
+
   return load;
 }
 
@@ -1246,12 +1258,21 @@ LIR* Arm64Mir2Lir::LoadBaseDispBody(RegStorage r_base, int displacement, RegStor
       LOG(FATAL) << "Bad size: " << size;
   }
 
+#ifdef MOE
+  bool may_need_uncompressing = false;
+#endif
   bool displacement_is_aligned = (displacement & ((1 << scale) - 1)) == 0;
   int scaled_disp = displacement >> scale;
   if (displacement_is_aligned && scaled_disp >= 0 && scaled_disp < 4096) {
+#ifdef MOE
+    may_need_uncompressing = true;
+#endif
     // Can use scaled load.
     load = NewLIR3(opcode, r_dest.GetReg(), r_base.GetReg(), scaled_disp);
   } else if (alt_opcode != kA64Brk1d && IS_SIGNED_IMM9(displacement)) {
+#ifdef MOE
+    may_need_uncompressing = true;
+#endif
     // Can use unscaled load.
     load = NewLIR3(alt_opcode, r_dest.GetReg(), r_base.GetReg(), displacement);
   } else {
@@ -1270,6 +1291,18 @@ LIR* Arm64Mir2Lir::LoadBaseDispBody(RegStorage r_base, int displacement, RegStor
     DCHECK_EQ(r_base, rs_sp);
     AnnotateDalvikRegAccess(load, displacement >> 2, true /* is_load */, r_dest.Is64Bit());
   }
+
+#ifdef MOE
+  if (may_need_uncompressing && cu_->target64 && size == kReference && !r_dest.IsFloat()) {
+    RegStorage r_dest_wide = As64BitReg(r_dest);
+    int wide_dest = RegStorage::Solo64(r_dest.GetRegNum()).GetReg();
+    NewLIR3(kA64Cmp3RdT, r_dest.GetReg(), 0, ENCODE_NO_SHIFT);
+    NewLIR4(kA64Csinc4rrrc, r_dest.GetReg(), r_dest.GetReg(), r_dest.GetReg(), kArmCondEq);
+    NewLIR4(kA64Bfm4rrdd | WIDE(0), r_dest_wide.GetReg(), r_dest_wide.GetReg(), 32, 1);
+    NewLIR3(kA64And3Rrl | WIDE(0), r_dest_wide.GetReg(), r_dest_wide.GetReg(), -2);
+  }
+#endif
+
   return load;
 }
 

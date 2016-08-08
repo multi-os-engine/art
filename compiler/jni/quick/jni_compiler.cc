@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +37,10 @@
 #include "utils/managed_register.h"
 #include "utils/arm/managed_register_arm.h"
 #include "utils/arm64/managed_register_arm64.h"
+#ifndef MOE
 #include "utils/mips/managed_register_mips.h"
 #include "utils/mips64/managed_register_mips64.h"
+#endif
 #include "utils/x86/managed_register_x86.h"
 #include "thread.h"
 
@@ -260,6 +263,11 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
     }
     main_jni_conv->Next();
   }
+#ifdef MOE
+  if (instruction_set == kThumb2) {
+    __ Move(arm::ArmManagedRegister::FromCoreRegister(arm::R10), arm::ArmManagedRegister::FromCoreRegister(arm::R9), GetInstructionSetPointerSize(instruction_set));
+  }
+#endif
   if (main_jni_conv->IsCurrentParamInRegister()) {
     __ GetCurrentThread(main_jni_conv->CurrentParamRegister());
     if (is_64_bit_target) {
@@ -278,6 +286,11 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
       __ CallFromThread32(jni_start32, main_jni_conv->InterproceduralScratchRegister());
     }
   }
+#ifdef MOE
+  if (instruction_set ==  kThumb2) {
+    __ Move(arm::ArmManagedRegister::FromCoreRegister(arm::R9), arm::ArmManagedRegister::FromCoreRegister(arm::R10), GetInstructionSetPointerSize(instruction_set));
+  }
+#endif
   if (is_synchronized) {  // Check for exceptions from monitor enter.
     __ ExceptionPoll(main_jni_conv->InterproceduralScratchRegister(), main_out_arg_size);
   }
@@ -359,7 +372,11 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
       InstructionSetPointerSize(instruction_set));
   __ Call(main_jni_conv->MethodStackOffset(), jni_entrypoint_offset,
           mr_conv->InterproceduralScratchRegister());
-
+#ifdef MOE
+  if (instruction_set == kThumb2) {
+    __ Move(arm::ArmManagedRegister::FromCoreRegister(arm::R9), arm::ArmManagedRegister::FromCoreRegister(arm::R10), GetInstructionSetPointerSize(instruction_set));
+  }
+#endif
   // 10. Fix differences in result widths.
   if (main_jni_conv->RequiresSmallResultTypeExtension()) {
     if (main_jni_conv->GetReturnType() == Primitive::kPrimByte ||
@@ -456,7 +473,11 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
       __ CallFromThread32(ThreadOffset<4>(jni_end32), end_jni_conv->InterproceduralScratchRegister());
     }
   }
-
+#ifdef MOE
+  if (instruction_set == kThumb2) {
+    __ Move(arm::ArmManagedRegister::FromCoreRegister(arm::R9), arm::ArmManagedRegister::FromCoreRegister(arm::R10), GetInstructionSetPointerSize(instruction_set));
+  }
+#endif
   // 13. Reload return value
   if (main_jni_conv->SizeOfReturnValue() != 0 && !reference_return) {
     __ Load(mr_conv->ReturnRegister(), return_save_location, mr_conv->SizeOfReturnValue());
@@ -509,7 +530,9 @@ static void CopyParameter(Assembler* jni_asm,
   // input may be in register, on stack or both - but not none!
   CHECK(input_in_reg || mr_conv->IsCurrentParamOnStack());
   if (output_in_reg) {  // output shouldn't straddle registers and stack
+#ifndef MOE
     CHECK(!jni_conv->IsCurrentParamOnStack());
+#endif
   } else {
     CHECK(jni_conv->IsCurrentParamOnStack());
   }
@@ -523,7 +546,30 @@ static void CopyParameter(Assembler* jni_asm,
     // Check handle scope offset is within frame.
     CHECK_LT(handle_scope_offset.Uint32Value(), (frame_size + out_arg_size));
   }
+#ifdef MOE
+  if (input_in_reg && output_in_reg && jni_conv->IsCurrentParamOnStack()) {
+    // MOE: In this case the argument is always a split double word value
+    ManagedRegister in_reg = mr_conv->CurrentParamRegister();
+    ManagedRegister out_reg = jni_conv->CurrentParamRegister();
+    FrameOffset out_off = jni_conv->CurrentParamStackOffset();
+    if (!mr_conv->IsCurrentParamOnStack()) {
+      __ Move(out_reg, arm::ArmManagedRegister::FromCoreRegister(in_reg.AsArm().AsRegisterPairLow()), mr_conv->CurrentParamSize());
+      __ Store(out_off, arm::ArmManagedRegister::FromCoreRegister(in_reg.AsArm().AsRegisterPairHigh()), 4);
+    } else {
+      UNIMPLEMENTED(FATAL);  // we currently don't expect to see this case
+    }
+  } else if (!input_in_reg && output_in_reg && jni_conv->IsCurrentParamOnStack()) {
+    // MOE: In this case the argument is always a split double word value
+    ManagedRegister out_reg = jni_conv->CurrentParamRegister();
+    FrameOffset in_off = mr_conv->CurrentParamStackOffset();
+    FrameOffset out_off = jni_conv->CurrentParamStackOffset();
+    __ Load(out_reg, FrameOffset(in_off.Int32Value() + 4), 4);
+    __ Store(out_off, out_reg, 4);
+    __ Load(out_reg, in_off, 4);
+  } else if (input_in_reg && output_in_reg) {
+#else
   if (input_in_reg && output_in_reg) {
+#endif
     ManagedRegister in_reg = mr_conv->CurrentParamRegister();
     ManagedRegister out_reg = jni_conv->CurrentParamRegister();
     if (ref_param) {
@@ -543,8 +589,12 @@ static void CopyParameter(Assembler* jni_asm,
                          null_allowed);
     } else {
       FrameOffset in_off = mr_conv->CurrentParamStackOffset();
+#ifndef MOE
       size_t param_size = mr_conv->CurrentParamSize();
       CHECK_EQ(param_size, jni_conv->CurrentParamSize());
+#else
+      size_t param_size = jni_conv->CurrentParamSize();
+#endif
       __ Copy(out_off, in_off, mr_conv->InterproceduralScratchRegister(), param_size);
     }
   } else if (!input_in_reg && output_in_reg) {
@@ -556,7 +606,9 @@ static void CopyParameter(Assembler* jni_asm,
       __ CreateHandleScopeEntry(out_reg, handle_scope_offset, ManagedRegister::NoRegister(), null_allowed);
     } else {
       size_t param_size = mr_conv->CurrentParamSize();
+#ifndef MOE
       CHECK_EQ(param_size, jni_conv->CurrentParamSize());
+#endif
       __ Load(out_reg, in_off, param_size);
     }
   } else {
@@ -570,8 +622,12 @@ static void CopyParameter(Assembler* jni_asm,
       __ CreateHandleScopeEntry(out_off, handle_scope_offset, mr_conv->InterproceduralScratchRegister(),
                          null_allowed);
     } else {
+#ifndef MOE
       size_t param_size = mr_conv->CurrentParamSize();
       CHECK_EQ(param_size, jni_conv->CurrentParamSize());
+#else
+      size_t param_size = jni_conv->CurrentParamSize();
+#endif
       if (!mr_conv->IsCurrentParamOnStack()) {
         // regular non-straddling store
         __ Store(out_off, in_reg, param_size);

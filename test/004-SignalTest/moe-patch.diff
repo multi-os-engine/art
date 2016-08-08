@@ -1,0 +1,83 @@
+diff --git a/test/004-SignalTest/expected.txt b/test/004-SignalTest/expected.txt
+index b3a0e1c..fd5ec00 100644
+--- a/test/004-SignalTest/expected.txt
++++ b/test/004-SignalTest/expected.txt
+@@ -1,4 +1,3 @@
+-JNI_OnLoad called
+ init signal test
+ Caught NullPointerException
+ Caught StackOverflowError
+diff --git a/test/004-SignalTest/signaltest.cc b/test/004-SignalTest/signaltest.cc
+index 6dd6355..a9c906e 100644
+--- a/test/004-SignalTest/signaltest.cc
++++ b/test/004-SignalTest/signaltest.cc
+@@ -14,13 +14,16 @@
+  * limitations under the License.
+  */
+ 
+-#include <jni.h>
++#include "jni.h"
+ #include <signal.h>
+ #include <stdio.h>
+ #include <stdlib.h>
++#if defined(__aarch64__)
++#include <sys/_types/_ucontext64.h>
++#else
+ #include <sys/ucontext.h>
++#endif
+ #include <unistd.h>
+-
+ #include "base/macros.h"
+ 
+ static int signal_count;
+@@ -54,6 +57,26 @@ static void signalhandler(int sig ATTRIBUTE_UNUSED, siginfo_t* info ATTRIBUTE_UN
+   if (signal_count > kMaxSignal) {
+      abort();
+   }
++#if defined(__APPLE__)
++
++#if defined(__arm__)
++  ucontext_t *uc = reinterpret_cast<ucontext_t*>(context);
++  _STRUCT_MCONTEXT *sc = uc->uc_mcontext;
++  sc->__ss.__pc += 2;     // Skip instruction causing segv.
++#elif defined(__aarch64__)
++  ucontext64_t *uc = reinterpret_cast<ucontext64_t*>(context);
++  _STRUCT_MCONTEXT64 *sc = uc->uc_mcontext64;
++  sc->__ss.__pc += 4;     // Skip instruction causing segv.
++#elif defined(__i386__)
++  struct ucontext *uc = reinterpret_cast<struct ucontext*>(context);
++  uc->CTX_EIP += 3;
++#elif defined(__x86_64__)
++  struct ucontext *uc = reinterpret_cast<struct ucontext*>(context);
++  uc->CTX_EIP += 2;
++#endif
++
++#else
++
+ #if defined(__arm__)
+   struct ucontext *uc = reinterpret_cast<struct ucontext*>(context);
+   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
+@@ -71,6 +94,7 @@ static void signalhandler(int sig ATTRIBUTE_UNUSED, siginfo_t* info ATTRIBUTE_UN
+ #else
+   UNUSED(context);
+ #endif
++#endif
+ }
+ 
+ static struct sigaction oldaction;
+@@ -88,6 +112,15 @@ extern "C" JNIEXPORT void JNICALL Java_Main_initSignalTest(JNIEnv*, jclass) {
+ }
+ 
+ extern "C" JNIEXPORT void JNICALL Java_Main_terminateSignalTest(JNIEnv*, jclass) {
++  struct sigaction action;
++  action.sa_sigaction = signalhandler;
++  sigemptyset(&action.sa_mask);
++  action.sa_flags = SA_SIGINFO | SA_ONSTACK;
++#if !defined(__APPLE__) && !defined(__mips__)
++  action.sa_restorer = nullptr;
++#endif
++
++  sigaction(SIGSEGV, &action, &oldaction);
+   sigaction(SIGSEGV, &oldaction, nullptr);
+ }
+ 

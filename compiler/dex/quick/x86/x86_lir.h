@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +20,10 @@
 
 #include "dex/reg_location.h"
 #include "dex/reg_storage.h"
+
+#ifdef MOE
+#include "asm_support.h"
+#endif
 
 namespace art {
 
@@ -708,7 +713,12 @@ struct X86EncodingMap {
 #define HIWORD_OFFSET 4
 
 // Segment override instruction prefix used for quick TLS access to Thread::Current().
+#ifndef MOE
 #define THREAD_PREFIX 0x64
+#else
+#define THREAD_PREFIX 0x65
+#endif
+
 #define THREAD_PREFIX_GS 0x65
 
 // 64 Bit Operand Size

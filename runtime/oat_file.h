@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +35,11 @@
 namespace art {
 
 class BitVector;
+#ifndef MOE
 class ElfFile;
+#else
+class MachOFile;
+#endif
 class MemMap;
 class OatMethodOffsets;
 class OatHeader;
@@ -46,9 +51,11 @@ class OatFile FINAL {
 
   // Opens an oat file contained within the given elf file. This is always opened as
   // non-executable at the moment.
+#ifndef MOE
   static OatFile* OpenWithElfFile(ElfFile* elf_file, const std::string& location,
                                   const char* abs_dex_location,
                                   std::string* error_msg);
+#endif
   // Open an oat file. Returns null on failure.  Requested base can
   // optionally be used to request where the file should be loaded.
   // See the ResolveRelativeEncodedDexLocation for a description of how the
@@ -85,11 +92,13 @@ class OatFile FINAL {
   // Indicates whether the oat file was compiled with full debugging capability.
   bool IsDebuggable() const;
 
+#ifndef MOE
   ElfFile* GetElfFile() const {
     CHECK_NE(reinterpret_cast<uintptr_t>(elf_file_.get()), reinterpret_cast<uintptr_t>(nullptr))
         << "Cannot get an elf file from " << GetLocation();
     return elf_file_.get();
   }
+#endif
 
   const std::string& GetLocation() const {
     return location_;
@@ -263,6 +272,9 @@ class OatFile FINAL {
  private:
   static void CheckLocation(const std::string& location);
 
+#ifdef MOE
+  static OatFile* OpenThisDlopen(uint8_t* requested_base, std::string* error_msg);
+#endif
   static OatFile* OpenDlopen(const std::string& elf_filename,
                              const std::string& location,
                              uint8_t* requested_base,
@@ -279,6 +291,9 @@ class OatFile FINAL {
                               std::string* error_msg);
 
   explicit OatFile(const std::string& filename, bool executable);
+#ifdef MOE
+  bool ThisDlopen(uint8_t* requested_base, std::string* error_msg);
+#endif
   bool Dlopen(const std::string& elf_filename, uint8_t* requested_base,
               const char* abs_dex_location, std::string* error_msg);
   bool ElfFileOpen(File* file, uint8_t* requested_base,
@@ -313,7 +328,11 @@ class OatFile FINAL {
   std::unique_ptr<MemMap> mem_map_;
 
   // Backing memory map for oat file during cross compilation.
+#ifndef MOE
   std::unique_ptr<ElfFile> elf_file_;
+#else
+  std::unique_ptr<MachOFile> macho_file_;
+#endif
 
   // dlopen handle during runtime.
   void* dlopen_handle_;

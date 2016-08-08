@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +23,10 @@
 
 #include "arm/instruction_set_features_arm.h"
 #include "arm64/instruction_set_features_arm64.h"
+#ifndef MOE
 #include "mips/instruction_set_features_mips.h"
 #include "mips64/instruction_set_features_mips64.h"
+#endif
 #include "x86/instruction_set_features_x86.h"
 #include "x86_64/instruction_set_features_x86_64.h"
 
@@ -41,12 +44,14 @@ const InstructionSetFeatures* InstructionSetFeatures::FromVariant(InstructionSet
     case kArm64:
       result = Arm64InstructionSetFeatures::FromVariant(variant, error_msg);
       break;
+#ifndef MOE
     case kMips:
       result = MipsInstructionSetFeatures::FromVariant(variant, error_msg);
       break;
     case kMips64:
       result = Mips64InstructionSetFeatures::FromVariant(variant, error_msg);
       break;
+#endif
     case kX86:
       result = X86InstructionSetFeatures::FromVariant(variant, error_msg);
       break;
@@ -72,12 +77,14 @@ const InstructionSetFeatures* InstructionSetFeatures::FromBitmap(InstructionSet 
     case kArm64:
       result = Arm64InstructionSetFeatures::FromBitmap(bitmap);
       break;
+#ifndef MOE
     case kMips:
       result = MipsInstructionSetFeatures::FromBitmap(bitmap);
       break;
     case kMips64:
       result = Mips64InstructionSetFeatures::FromBitmap(bitmap);
       break;
+#endif
     case kX86:
       result = X86InstructionSetFeatures::FromBitmap(bitmap);
       break;
@@ -102,12 +109,14 @@ const InstructionSetFeatures* InstructionSetFeatures::FromCppDefines() {
     case kArm64:
       result = Arm64InstructionSetFeatures::FromCppDefines();
       break;
+#ifndef MOE
     case kMips:
       result = MipsInstructionSetFeatures::FromCppDefines();
       break;
     case kMips64:
       result = Mips64InstructionSetFeatures::FromCppDefines();
       break;
+#endif
     case kX86:
       result = X86InstructionSetFeatures::FromCppDefines();
       break;
@@ -132,12 +141,14 @@ const InstructionSetFeatures* InstructionSetFeatures::FromCpuInfo() {
     case kArm64:
       result = Arm64InstructionSetFeatures::FromCpuInfo();
       break;
+#ifndef MOE
     case kMips:
       result = MipsInstructionSetFeatures::FromCpuInfo();
       break;
     case kMips64:
       result = Mips64InstructionSetFeatures::FromCpuInfo();
       break;
+#endif
     case kX86:
       result = X86InstructionSetFeatures::FromCpuInfo();
       break;
@@ -161,12 +172,14 @@ const InstructionSetFeatures* InstructionSetFeatures::FromHwcap() {
     case kArm64:
       result = Arm64InstructionSetFeatures::FromHwcap();
       break;
+#ifndef MOE
     case kMips:
       result = MipsInstructionSetFeatures::FromHwcap();
       break;
     case kMips64:
       result = Mips64InstructionSetFeatures::FromHwcap();
       break;
+#endif
     case kX86:
       result = X86InstructionSetFeatures::FromHwcap();
       break;
@@ -190,12 +203,14 @@ const InstructionSetFeatures* InstructionSetFeatures::FromAssembly() {
     case kArm64:
       result = Arm64InstructionSetFeatures::FromAssembly();
       break;
+#ifndef MOE
     case kMips:
       result = MipsInstructionSetFeatures::FromAssembly();
       break;
     case kMips64:
       result = Mips64InstructionSetFeatures::FromAssembly();
       break;
+#endif
     case kX86:
       result = X86InstructionSetFeatures::FromAssembly();
       break;
@@ -270,12 +285,20 @@ const Arm64InstructionSetFeatures* InstructionSetFeatures::AsArm64InstructionSet
 
 const MipsInstructionSetFeatures* InstructionSetFeatures::AsMipsInstructionSetFeatures() const {
   DCHECK_EQ(kMips, GetInstructionSet());
+#ifndef MOE
   return down_cast<const MipsInstructionSetFeatures*>(this);
+#else
+  return nullptr;
+#endif
 }
 
 const Mips64InstructionSetFeatures* InstructionSetFeatures::AsMips64InstructionSetFeatures() const {
   DCHECK_EQ(kMips64, GetInstructionSet());
+#ifndef MOE
   return down_cast<const Mips64InstructionSetFeatures*>(this);
+#else
+  return nullptr;
+#endif
 }
 
 const X86InstructionSetFeatures* InstructionSetFeatures::AsX86InstructionSetFeatures() const {

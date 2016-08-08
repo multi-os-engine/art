@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,10 @@
  */
 
 #include "asm_support_arm64.S"
+
+#ifdef MOE
+#define artFindNativeMethod _artFindNativeMethod
+#endif
 
     /*
      * Jni dlsym lookup stub.

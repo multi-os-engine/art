@@ -1,0 +1,1 @@
+Test to check that java logging is workable in our environment.

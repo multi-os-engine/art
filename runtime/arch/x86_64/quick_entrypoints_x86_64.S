@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +18,10 @@
 #include "asm_support_x86_64.S"
 
 #include "arch/quick_alloc_entrypoints.S"
+
+#ifdef MOE
+#define _ZN3art7Runtime9instance_E __ZN3art7Runtime9instance_E
+#endif
 
 MACRO0(SETUP_FP_CALLEE_SAVE_FRAME)
     // Create space for ART FP callee-saved registers
@@ -45,7 +50,7 @@ END_MACRO
      * Runtime::CreateCalleeSaveMethod(kSaveAll)
      */
 MACRO0(SETUP_SAVE_ALL_CALLEE_SAVE_FRAME)
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(MOE)
     int3
     int3
 #else
@@ -72,14 +77,23 @@ MACRO0(SETUP_SAVE_ALL_CALLEE_SAVE_FRAME)
     // Store ArtMethod* to bottom of stack.
     movq %r10, 0(%rsp)
     // Store rsp as the top quick frame.
+    #ifndef MOE
     movq %rsp, %gs:THREAD_TOP_QUICK_FRAME_OFFSET
+    #else
+    pushq %rax
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rax
+    addq MACRO_LITERAL(8), %rsp
+    movq %rsp, THREAD_TOP_QUICK_FRAME_OFFSET(%rax)
+    subq MACRO_LITERAL(8), %rsp
+    popq %rax
+    #endif
 
     // Ugly compile-time check, but we only have the preprocessor.
     // Last +8: implicit return address pushed on stack when caller made call.
 #if (FRAME_SIZE_SAVE_ALL_CALLEE_SAVE != 6 * 8 + 4 * 8 + 8 + 8)
 #error "SAVE_ALL_CALLEE_SAVE_FRAME(X86_64) size not as expected."
 #endif
-#endif  // __APPLE__
+#endif  // __APPLE__ && !MOE
 END_MACRO
 
     /*
@@ -87,7 +101,7 @@ END_MACRO
      * Runtime::CreateCalleeSaveMethod(kRefsOnly)
      */
 MACRO0(SETUP_REFS_ONLY_CALLEE_SAVE_FRAME)
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(MOE)
     int3
     int3
 #else
@@ -102,7 +116,11 @@ MACRO0(SETUP_REFS_ONLY_CALLEE_SAVE_FRAME)
     PUSH rbp  // Callee save.
     PUSH rbx  // Callee save.
     // Create space for FPR args, plus space for ArtMethod*.
+    #ifndef MOE
     subq LITERAL(8 + 4 * 8), %rsp
+    #else
+    subq MACRO_LITERAL(8 + 4 * 8), %rsp
+    #endif
     CFI_ADJUST_CFA_OFFSET(8 + 4 * 8)
     // Save FPRs.
     movq %xmm12, 8(%rsp)
@@ -114,14 +132,23 @@ MACRO0(SETUP_REFS_ONLY_CALLEE_SAVE_FRAME)
     // Store ArtMethod* to bottom of stack.
     movq %r10, 0(%rsp)
     // Store rsp as the stop quick frame.
+    #ifndef MOE
     movq %rsp, %gs:THREAD_TOP_QUICK_FRAME_OFFSET
+    #else
+    pushq %rax
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rax
+    addq MACRO_LITERAL(8), %rsp
+    movq %rsp, THREAD_TOP_QUICK_FRAME_OFFSET(%rax)
+    subq MACRO_LITERAL(8), %rsp
+    popq %rax
+    #endif
 
     // Ugly compile-time check, but we only have the preprocessor.
     // Last +8: implicit return address pushed on stack when caller made call.
 #if (FRAME_SIZE_REFS_ONLY_CALLEE_SAVE != 6 * 8 + 4 * 8 + 8 + 8)
 #error "REFS_ONLY_CALLEE_SAVE_FRAME(X86_64) size not as expected."
 #endif
-#endif  // __APPLE__
+#endif  // __APPLE__ && !MOE
 END_MACRO
 
 MACRO0(RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME)
@@ -129,7 +156,11 @@ MACRO0(RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME)
     movq 16(%rsp), %xmm13
     movq 24(%rsp), %xmm14
     movq 32(%rsp), %xmm15
+    #ifndef MOE
     addq LITERAL(8 + 4*8), %rsp
+    #else
+    addq MACRO_LITERAL(8 + 4*8), %rsp
+    #endif
     CFI_ADJUST_CFA_OFFSET(-8 - 4*8)
     // TODO: optimize by not restoring callee-saves restored by the ABI
     POP rbx
@@ -145,7 +176,7 @@ END_MACRO
      * Runtime::CreateCalleeSaveMethod(kRefsAndArgs)
      */
 MACRO0(SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME)
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(MOE)
     int3
     int3
 #else
@@ -185,14 +216,23 @@ MACRO0(SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME)
     // Store ArtMethod* to bottom of stack.
     movq %r10, 0(%rsp)
     // Store rsp as the top quick frame.
+    #ifndef MOE
     movq %rsp, %gs:THREAD_TOP_QUICK_FRAME_OFFSET
+    #else
+    pushq %rax
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rax
+    addq MACRO_LITERAL(8), %rsp
+    movq %rsp, THREAD_TOP_QUICK_FRAME_OFFSET(%rax)
+    subq MACRO_LITERAL(8), %rsp
+    popq %rax
+    #endif
 
     // Ugly compile-time check, but we only have the preprocessor.
     // Last +8: implicit return address pushed on stack when caller made call.
 #if (FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE != 11 * 8 + 4 * 8 + 80 + 8)
 #error "REFS_AND_ARGS_CALLEE_SAVE_FRAME(X86_64) size not as expected."
 #endif
-#endif  // __APPLE__
+#endif  // __APPLE__ && !MOE
 END_MACRO
 
 MACRO0(SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_RDI)
@@ -209,7 +249,11 @@ MACRO0(SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_RDI)
     PUSH rdx  // Quick arg 2.
     PUSH rcx  // Quick arg 3.
     // Create space for FPR args and create 2 slots for ArtMethod*.
+    #ifndef MOE
     subq LITERAL(80 + 4 * 8), %rsp
+    #else
+    subq MACRO_LITERAL(80 + 4 * 8), %rsp
+    #endif
     CFI_ADJUST_CFA_OFFSET(80 + 4 * 8)
     // Save FPRs.
     movq %xmm0, 16(%rsp)
@@ -227,7 +271,16 @@ MACRO0(SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_RDI)
     // Store ArtMethod to bottom of stack.
     movq %rdi, 0(%rsp)
     // Store rsp as the stop quick frame.
+    #ifndef MOE
     movq %rsp, %gs:THREAD_TOP_QUICK_FRAME_OFFSET
+    #else
+    pushq %rax
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rax
+    addq MACRO_LITERAL(8), %rsp
+    movq %rsp, THREAD_TOP_QUICK_FRAME_OFFSET(%rax)
+    subq MACRO_LITERAL(8), %rsp
+    popq %rax
+    #endif
 END_MACRO
 
 MACRO0(RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME)
@@ -268,36 +321,64 @@ END_MACRO
 MACRO0(DELIVER_PENDING_EXCEPTION)
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME         // save callee saves for throw
     // (Thread*) setup
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdi
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdi
+    #endif
     call SYMBOL(artDeliverPendingExceptionFromCode)  // artDeliverPendingExceptionFromCode(Thread*)
     UNREACHABLE
 END_MACRO
 
 MACRO2(NO_ARG_RUNTIME_EXCEPTION, c_name, cxx_name)
+    #ifndef MOE
     DEFINE_FUNCTION VAR(c_name)
+    #else
+    DEFINE_FUNCTION RAW_VAR(c_name)
+    #endif
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME   // save all registers as basis for long jump context
     // Outgoing argument set up
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdi  // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdi
+    #endif
     call VAR(cxx_name)                 // cxx_name(Thread*)
     UNREACHABLE
     END_FUNCTION VAR(c_name)
 END_MACRO
 
 MACRO2(ONE_ARG_RUNTIME_EXCEPTION, c_name, cxx_name)
+    #ifndef MOE
     DEFINE_FUNCTION VAR(c_name)
+    #else
+    DEFINE_FUNCTION RAW_VAR(c_name)
+    #endif
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME   // save all registers as basis for long jump context
     // Outgoing argument set up
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rsi  // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rsi  // pass Thread::Current()
+    #endif
     call VAR(cxx_name)                 // cxx_name(arg1, Thread*)
     UNREACHABLE
     END_FUNCTION VAR(c_name)
 END_MACRO
 
 MACRO2(TWO_ARG_RUNTIME_EXCEPTION, c_name, cxx_name)
+    #ifndef MOE
     DEFINE_FUNCTION VAR(c_name)
+    #else
+    DEFINE_FUNCTION RAW_VAR(c_name)
+    #endif
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME   // save all registers as basis for long jump context
     // Outgoing argument set up
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdx  // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx
+    #endif
     call VAR(cxx_name)                 // cxx_name(Thread*)
     UNREACHABLE
     END_FUNCTION VAR(c_name)
@@ -357,7 +438,11 @@ MACRO1(INVOKE_TRAMPOLINE_BODY, cxx_name)
     // Helper signature is always
     // (method_idx, *this_object, *caller_method, *self, sp)
 
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdx                      // pass Thread
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx
+    #endif
     movq %rsp, %rcx                                        // pass SP
 
     call VAR(cxx_name)                                     // cxx_name(arg1, arg2, Thread*, SP)
@@ -375,7 +460,11 @@ MACRO1(INVOKE_TRAMPOLINE_BODY, cxx_name)
     DELIVER_PENDING_EXCEPTION
 END_MACRO
 MACRO2(INVOKE_TRAMPOLINE, c_name, cxx_name)
+    #ifndef MOE
     DEFINE_FUNCTION VAR(c_name)
+    #else
+    DEFINE_FUNCTION RAW_VAR(c_name)
+    #endif
     INVOKE_TRAMPOLINE_BODY RAW_VAR(cxx_name)
     END_FUNCTION VAR(c_name)
 END_MACRO
@@ -398,7 +487,11 @@ MACRO2(LOOP_OVER_SHORTY_LOADING_XMMS, xmm_reg, finished)
     movb (%r10), %al              // al := *shorty
     addq MACRO_LITERAL(1), %r10   // shorty++
     cmpb MACRO_LITERAL(0), %al    // if (al == '\0') goto xmm_setup_finished
+    #ifndef MOE
     je VAR(finished)
+    #else
+    je RAW_VAR(finished)
+    #endif
     cmpb MACRO_LITERAL(68), %al   // if (al == 'D') goto FOUND_DOUBLE
     je 2f
     cmpb MACRO_LITERAL(70), %al   // if (al == 'F') goto FOUND_FLOAT
@@ -429,7 +522,11 @@ MACRO3(LOOP_OVER_SHORTY_LOADING_GPRS, gpr_reg64, gpr_reg32, finished)
     movb (%r10), %al              // al := *shorty
     addq MACRO_LITERAL(1), %r10   // shorty++
     cmpb MACRO_LITERAL(0), %al    // if (al == '\0') goto gpr_setup_finished
+    #ifndef MOE
     je  VAR(finished)
+    #else
+    je  RAW_VAR(finished)
+    #endif
     cmpb MACRO_LITERAL(74), %al   // if (al == 'J') goto FOUND_LONG
     je 2f
     cmpb MACRO_LITERAL(70), %al   // if (al == 'F') goto SKIP_FLOAT
@@ -464,7 +561,7 @@ END_MACRO
      *   r9 = char* shorty
      */
 DEFINE_FUNCTION art_quick_invoke_stub
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(MOE)
     int3
     int3
 #else
@@ -543,7 +640,7 @@ DEFINE_FUNCTION art_quick_invoke_stub
 .Lreturn_float_quick:
     movss %xmm0, (%r8)            // Store the floating point result.
     ret
-#endif  // __APPLE__
+#endif  // __APPLE__ && !MOE
 END_FUNCTION art_quick_invoke_stub
 
     /*
@@ -558,7 +655,7 @@ END_FUNCTION art_quick_invoke_stub
      *   r9 = char* shorty
      */
 DEFINE_FUNCTION art_quick_invoke_static_stub
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(MOE)
     int3
     int3
 #else
@@ -636,7 +733,7 @@ DEFINE_FUNCTION art_quick_invoke_static_stub
 .Lreturn_float_quick2:
     movss %xmm0, (%r8)             // Store the floating point result.
     ret
-#endif  // __APPLE__
+#endif  // __APPLE__ && !MOE
 END_FUNCTION art_quick_invoke_static_stub
 
     /*
@@ -646,7 +743,7 @@ END_FUNCTION art_quick_invoke_static_stub
      *   rsi = fprs
      */
 DEFINE_FUNCTION art_quick_do_long_jump
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(MOE)
     int3
     int3
 #else
@@ -688,14 +785,22 @@ DEFINE_FUNCTION art_quick_do_long_jump
     popq %rax
     popq %rsp      // Load stack pointer.
     ret            // From higher in the stack pop rip.
-#endif  // __APPLE__
+#endif  // __APPLE__ && !MOE
 END_FUNCTION art_quick_do_long_jump
 
 MACRO3(NO_ARG_DOWNCALL, c_name, cxx_name, return_macro)
+    #ifndef MOE
     DEFINE_FUNCTION VAR(c_name)
+    #else
+    DEFINE_FUNCTION RAW_VAR(c_name)
+    #endif
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    // save ref containing registers for GC
     // Outgoing argument set up
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdi    // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdi
+    #endif
     call VAR(cxx_name)                   // cxx_name(Thread*)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME  // restore frame up to return address
     CALL_MACRO(return_macro)             // return or deliver exception
@@ -703,10 +808,18 @@ MACRO3(NO_ARG_DOWNCALL, c_name, cxx_name, return_macro)
 END_MACRO
 
 MACRO3(ONE_ARG_DOWNCALL, c_name, cxx_name, return_macro)
+    #ifndef MOE
     DEFINE_FUNCTION VAR(c_name)
+    #else
+    DEFINE_FUNCTION RAW_VAR(c_name)
+    #endif
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    // save ref containing registers for GC
     // Outgoing argument set up
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rsi    // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rsi
+    #endif
     call VAR(cxx_name)                   // cxx_name(arg0, Thread*)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME  // restore frame up to return address
     CALL_MACRO(return_macro)             // return or deliver exception
@@ -714,10 +827,18 @@ MACRO3(ONE_ARG_DOWNCALL, c_name, cxx_name, return_macro)
 END_MACRO
 
 MACRO3(TWO_ARG_DOWNCALL, c_name, cxx_name, return_macro)
+    #ifndef MOE
     DEFINE_FUNCTION VAR(c_name)
+    #else
+    DEFINE_FUNCTION RAW_VAR(c_name)
+    #endif
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME    // save ref containing registers for GC
     // Outgoing argument set up
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdx    // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx
+    #endif
     call VAR(cxx_name)                   // cxx_name(arg0, arg1, Thread*)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME  // restore frame up to return address
     CALL_MACRO(return_macro)             // return or deliver exception
@@ -725,10 +846,18 @@ MACRO3(TWO_ARG_DOWNCALL, c_name, cxx_name, return_macro)
 END_MACRO
 
 MACRO3(THREE_ARG_DOWNCALL, c_name, cxx_name, return_macro)
+    #ifndef MOE
     DEFINE_FUNCTION VAR(c_name)
+    #else
+    DEFINE_FUNCTION RAW_VAR(c_name)
+    #endif
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME   // save ref containing registers for GC
     // Outgoing argument set up
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rcx   // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rcx
+    #endif
     call VAR(cxx_name)                  // cxx_name(arg0, arg1, arg2, Thread*)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME // restore frame up to return address
     CALL_MACRO(return_macro)            // return or deliver exception
@@ -736,10 +865,18 @@ MACRO3(THREE_ARG_DOWNCALL, c_name, cxx_name, return_macro)
 END_MACRO
 
 MACRO3(FOUR_ARG_DOWNCALL, c_name, cxx_name, return_macro)
+    #ifndef MOE
     DEFINE_FUNCTION VAR(c_name)
+    #else
+    DEFINE_FUNCTION RAW_VAR(c_name)
+    #endif
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME   // save ref containing registers for GC
     // Outgoing argument set up
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %r8    // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %r8    // pass Thread::Current()
+    #endif
     call VAR(cxx_name)                  // cxx_name(arg1, arg2, arg3, arg4, Thread*)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME // restore frame up to return address
     CALL_MACRO(return_macro)            // return or deliver exception
@@ -747,11 +884,19 @@ MACRO3(FOUR_ARG_DOWNCALL, c_name, cxx_name, return_macro)
 END_MACRO
 
 MACRO3(ONE_ARG_REF_DOWNCALL, c_name, cxx_name, return_macro)
+    #ifndef MOE
     DEFINE_FUNCTION VAR(c_name)
+    #else
+    DEFINE_FUNCTION RAW_VAR(c_name)
+    #endif
     movq 8(%rsp), %rsi                  // pass referrer
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME
                                         // arg0 is in rdi
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdx   // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx
+    #endif
     call VAR(cxx_name)                  // cxx_name(arg0, referrer, Thread*)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME // restore frame up to return address
     CALL_MACRO(return_macro)
@@ -759,11 +904,19 @@ MACRO3(ONE_ARG_REF_DOWNCALL, c_name, cxx_name, return_macro)
 END_MACRO
 
 MACRO3(TWO_ARG_REF_DOWNCALL, c_name, cxx_name, return_macro)
+    #ifndef MOE
     DEFINE_FUNCTION VAR(c_name)
+    #else
+    DEFINE_FUNCTION RAW_VAR(c_name)
+    #endif
     movq 8(%rsp), %rdx                  // pass referrer
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME
                                         // arg0 and arg1 are in rdi/rsi
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rcx   // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rcx
+    #endif
     call VAR(cxx_name)                  // (arg0, arg1, referrer, Thread*)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME // restore frame up to return address
     CALL_MACRO(return_macro)
@@ -771,11 +924,19 @@ MACRO3(TWO_ARG_REF_DOWNCALL, c_name, cxx_name, return_macro)
 END_MACRO
 
 MACRO3(THREE_ARG_REF_DOWNCALL, c_name, cxx_name, return_macro)
+    #ifndef MOE
     DEFINE_FUNCTION VAR(c_name)
+    #else
+    DEFINE_FUNCTION RAW_VAR(c_name)
+    #endif
     movq 8(%rsp), %rcx                  // pass referrer
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME
                                         // arg0, arg1, and arg2 are in rdi/rsi/rdx
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %r8    // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %r8
+    #endif
     call VAR(cxx_name)                  // cxx_name(arg0, arg1, arg2, referrer, Thread*)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME // restore frame up to return address
     CALL_MACRO(return_macro)            // return or deliver exception
@@ -799,7 +960,12 @@ MACRO0(RETURN_IF_EAX_ZERO)
 END_MACRO
 
 MACRO0(RETURN_OR_DELIVER_PENDING_EXCEPTION)
+    #ifndef MOE
     movq %gs:THREAD_EXCEPTION_OFFSET, %rcx // get exception field
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rcx
+    movq THREAD_EXCEPTION_OFFSET(%rcx), %rcx
+    #endif
     testq %rcx, %rcx               // rcx == 0 ?
     jnz 1f                         // if rcx != 0 goto 1
     ret                            // return
@@ -840,7 +1006,11 @@ DEFINE_FUNCTION art_quick_alloc_object_tlab
     movl MIRROR_CLASS_OBJECT_SIZE_OFFSET(%rdx), %ecx           // Load the object size.
     addl LITERAL(OBJECT_ALIGNMENT_MASK), %ecx                  // Align the size by 8. (addr + 7) & ~7.
     andl LITERAL(OBJECT_ALIGNMENT_MASK_TOGGLED), %ecx
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %r8                           // r8 = thread
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %r8                 // r8 = thread
+    #endif
     movq THREAD_LOCAL_POS_OFFSET(%r8), %rax                    // Load thread_local_pos.
     addq %rax, %rcx                                            // Add the object size.
     cmpq THREAD_LOCAL_END_OFFSET(%r8), %rcx                    // Check if it fits.
@@ -854,7 +1024,11 @@ DEFINE_FUNCTION art_quick_alloc_object_tlab
 .Lart_quick_alloc_object_tlab_slow_path:
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME                          // save ref containing registers for GC
     // Outgoing argument set up
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdx                          // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx                // pass Thread::Current()
+    #endif
     call SYMBOL(artAllocObjectFromCodeTLAB)                    // cxx_name(arg0, arg1, Thread*)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME                        // restore frame up to return address
     RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER                    // return or deliver exception
@@ -880,13 +1054,23 @@ DEFINE_FUNCTION art_quick_lock_object
     jnz  .Lalready_thin                   // Lock word contains a thin lock.
     // unlocked case - edx: original lock word, edi: obj.
     movl %edx, %eax                       // eax: lock word zero except for read barrier bits.
+    #ifndef MOE
     movl %gs:THREAD_ID_OFFSET, %edx       // edx := thread id
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx       // edx := thread id
+    movl THREAD_ID_OFFSET(%rdx), %edx
+    #endif
     or   %eax, %edx                       // edx: thread id with count of 0 + read barrier bits.
     lock cmpxchg  %edx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi)
     jnz  .Lretry_lock                     // cmpxchg failed retry
     ret
 .Lalready_thin:  // edx: lock word (with high 2 bits zero and original rb bits), edi: obj.
+    #ifndef MOE
     movl %gs:THREAD_ID_OFFSET, %ecx       // ecx := thread id
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rcx       // ecx := thread id
+    movl THREAD_ID_OFFSET(%rcx), %ecx
+    #endif
     cmpw %cx, %dx                         // do we hold the lock already?
     jne  .Lslow_lock
     movl %edx, %ecx                       // copy the lock word to check count overflow.
@@ -902,7 +1086,11 @@ DEFINE_FUNCTION art_quick_lock_object
     ret
 .Lslow_lock:
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rsi     // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rsi
+    #endif
     call SYMBOL(artLockObjectFromCode)    // artLockObjectFromCode(object, Thread*)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME   // restore frame up to return address
     RETURN_IF_EAX_ZERO
@@ -913,7 +1101,12 @@ DEFINE_FUNCTION art_quick_unlock_object
     jz   .Lslow_unlock
 .Lretry_unlock:
     movl MIRROR_OBJECT_LOCK_WORD_OFFSET(%edi), %ecx  // ecx := lock word
+    #ifndef MOE
     movl %gs:THREAD_ID_OFFSET, %edx       // edx := thread id
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx
+    movl THREAD_ID_OFFSET(%rdx), %edx
+    #endif
     test LITERAL(LOCK_WORD_STATE_MASK), %ecx
     jnz  .Lslow_unlock                    // lock word contains a monitor
     cmpw %cx, %dx                         // does the thread id match?
@@ -945,7 +1138,11 @@ DEFINE_FUNCTION art_quick_unlock_object
     ret
 .Lslow_unlock:
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rsi     // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rsi
+    #endif
     call SYMBOL(artUnlockObjectFromCode)  // artUnlockObjectFromCode(object, Thread*)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME   // restore frame up to return address
     RETURN_IF_EAX_ZERO
@@ -974,7 +1171,11 @@ DEFINE_FUNCTION art_quick_check_cast
     POP rsi                           // Pop arguments
     POP rdi
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
+    #ifndef MOE
     mov %gs:THREAD_SELF_OFFSET, %rdx  // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx
+    #endif
     call SYMBOL(artThrowClassCastException) // (Class* a, Class* b, Thread*)
     UNREACHABLE
 END_FUNCTION art_quick_check_cast
@@ -1044,33 +1245,46 @@ END_MACRO
      * rdi(edi) = array, rsi(esi) = index, rdx(edx) = value
      */
 DEFINE_FUNCTION art_quick_aput_obj_with_null_and_bound_check
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(MOE)
     int3
     int3
 #else
     testl %edi, %edi
 //  testq %rdi, %rdi
+    #ifndef MOE
     jnz art_quick_aput_obj_with_bound_check
     jmp art_quick_throw_null_pointer_exception
-#endif  // __APPLE__
+    #else
+    jnz _art_quick_aput_obj_with_bound_check
+    jmp _art_quick_throw_null_pointer_exception
+    #endif
+#endif  // __APPLE__ && !MOE
 END_FUNCTION art_quick_aput_obj_with_null_and_bound_check
 
 
 DEFINE_FUNCTION art_quick_aput_obj_with_bound_check
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(MOE)
     int3
     int3
 #else
     movl MIRROR_ARRAY_LENGTH_OFFSET(%edi), %ecx
 //  movl MIRROR_ARRAY_LENGTH_OFFSET(%rdi), %ecx  // This zero-extends, so value(%rcx)=value(%ecx)
     cmpl %ecx, %esi
+    #ifndef MOE
     jb art_quick_aput_obj
+    #else
+    jb _art_quick_aput_obj
+    #endif
     mov %esi, %edi
 //  mov %rsi, %rdi
     mov %ecx, %esi
 //  mov %rcx, %rsi
+    #ifndef MOE
     jmp art_quick_throw_array_bounds
-#endif  // __APPLE__
+    #else
+    jmp _art_quick_throw_array_bounds
+    #endif
+#endif  // __APPLE__ && !MOE
 END_FUNCTION art_quick_aput_obj_with_bound_check
 
 
@@ -1095,7 +1309,12 @@ DEFINE_FUNCTION art_quick_aput_obj
     POISON_HEAP_REF edx
     movl %edx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%edi, %esi, 4)
 //  movq %rdx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%rdi, %rsi, 4)
+    #ifndef MOE
     movq %gs:THREAD_CARD_TABLE_OFFSET, %rdx
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx
+    movq THREAD_CARD_TABLE_OFFSET(%rdx), %rdx
+    #endif
     shrl LITERAL(7), %edi
 //  shrl LITERAL(7), %rdi
     movb %dl, (%rdx, %rdi)                       // Note: this assumes that top 32b of %rdi are zero
@@ -1136,7 +1355,12 @@ DEFINE_FUNCTION art_quick_aput_obj
     POISON_HEAP_REF edx
     movl %edx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%edi, %esi, 4)
 //  movq %rdx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%rdi, %rsi, 4)
+    #ifndef MOE
     movq %gs:THREAD_CARD_TABLE_OFFSET, %rdx
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx
+    movq THREAD_CARD_TABLE_OFFSET(%rdx), %rdx
+    #endif
     shrl LITERAL(7), %edi
 //  shrl LITERAL(7), %rdi
     movb %dl, (%rdx, %rdi)                       // Note: this assumes that top 32b of %rdi are zero
@@ -1154,7 +1378,11 @@ DEFINE_FUNCTION art_quick_aput_obj
 
     // Outgoing argument set up.
     movq %rdx, %rsi                         // Pass arg 2 = value.
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdx       // Pass arg 3 = Thread::Current().
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx
+    #endif
                                             // Pass arg 1 = array.
     call SYMBOL(artThrowArrayStoreException) // (array, value, Thread*)
     UNREACHABLE
@@ -1162,7 +1390,13 @@ END_FUNCTION art_quick_aput_obj
 
 // TODO: This is quite silly on X86_64 now.
 DEFINE_FUNCTION art_quick_memcpy
+    #ifdef MOE
+    PUSH rdx
+    #endif
     call PLT_SYMBOL(memcpy)       // (void*, const void*, size_t)
+    #ifdef MOE
+    POP rdx
+    #endif
     ret
 END_FUNCTION art_quick_memcpy
 
@@ -1208,7 +1442,11 @@ DEFINE_FUNCTION art_quick_set64_static
     movq 8(%rsp), %rsi                   // pass referrer
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME
                                          // field_idx is in rdi
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rcx    // pass Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rcx
+    #endif
     call SYMBOL(artSet64StaticFromCode)  // (field_idx, referrer, new_val, Thread*)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME  // restore frame up to return address
     RETURN_IF_EAX_ZERO                   // return or deliver exception
@@ -1218,7 +1456,11 @@ END_FUNCTION art_quick_set64_static
 DEFINE_FUNCTION art_quick_proxy_invoke_handler
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_RDI
 
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdx       // Pass Thread::Current().
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx
+    #endif
     movq %rsp, %rcx                         // Pass SP.
     call SYMBOL(artQuickProxyInvokeHandler) // (proxy method, receiver, Thread*, SP)
     RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
@@ -1231,18 +1473,22 @@ END_FUNCTION art_quick_proxy_invoke_handler
      * rax is a hidden argument that holds the target method's dex method index.
      */
 DEFINE_FUNCTION art_quick_imt_conflict_trampoline
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(MOE)
     int3
     int3
 #else
     movq %rax, %rdi
     INVOKE_TRAMPOLINE_BODY artInvokeInterfaceTrampoline
-#endif  // __APPLE__
+#endif  // __APPLE__ && !MOE
 END_FUNCTION art_quick_imt_conflict_trampoline
 
 DEFINE_FUNCTION art_quick_resolution_trampoline
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdx
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx
+    #endif
     movq %rsp, %rcx
     call SYMBOL(artQuickResolutionTrampoline) // (called, receiver, Thread*, SP)
     movq %rax, %r10               // Remember returned code pointer in R10.
@@ -1359,7 +1605,11 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
     // (Thread*,  SP)
     //    rdi    rsi      <= C calling convention
     //  gs:...   rbp      <= where they are
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdi
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdi
+    #endif
     movq %rbp, %rsi
     call SYMBOL(artQuickGenericJniTrampoline)  // (Thread*, sp)
 
@@ -1402,14 +1652,23 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
     // (Thread*,  result, result_f)
     //   rdi      rsi   rdx       <= C calling convention
     //  gs:...    rax   xmm0      <= where they are
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdi
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdi
+    #endif
     movq %rax, %rsi
     movq %xmm0, %rdx
     call SYMBOL(artQuickGenericJniEndTrampoline)
 
     // Pending exceptions possible.
     // TODO: use cmpq, needs direct encoding because of gas bug
+    #ifndef MOE
     movq %gs:THREAD_EXCEPTION_OFFSET, %rcx
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rcx
+    movq THREAD_EXCEPTION_OFFSET(%rcx), %rcx
+    #endif
     test %rcx, %rcx
     jnz .Lexception_in_native
 
@@ -1450,7 +1709,12 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
     movq %rax, %xmm0
     ret
 .Lexception_in_native:
+    #ifndef MOE
     movq %gs:THREAD_TOP_QUICK_FRAME_OFFSET, %rsp
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rsp
+    movq THREAD_TOP_QUICK_FRAME_OFFSET(%rsp), %rsp
+    #endif
     CFI_DEF_CFA_REGISTER(rsp)
     // Do a call to push a new save-all frame required by the runtime.
     call .Lexception_call
@@ -1466,7 +1730,11 @@ END_FUNCTION art_quick_generic_jni_trampoline
      */
 DEFINE_FUNCTION art_quick_to_interpreter_bridge
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME   // Set up frame and save arguments.
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rsi      // RSI := Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rsi
+    #endif
     movq %rsp, %rdx                        // RDX := sp
     call SYMBOL(artQuickToInterpreterBridge)  // (method, Thread*, SP)
     RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME  // TODO: no need to restore arguments in this case.
@@ -1478,7 +1746,7 @@ END_FUNCTION art_quick_to_interpreter_bridge
      * Routine that intercepts method calls and returns.
      */
 DEFINE_FUNCTION art_quick_instrumentation_entry
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(MOE)
     int3
     int3
 #else
@@ -1486,7 +1754,11 @@ DEFINE_FUNCTION art_quick_instrumentation_entry
 
     movq %rdi, %r12               // Preserve method pointer in a callee-save.
 
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdx   // Pass thread.
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdx
+    #endif
     movq FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE-8(%rsp), %rcx   // Pass return PC.
 
     call SYMBOL(artInstrumentationMethodEntryFromCode) // (Method*, Object*, Thread*, LR)
@@ -1494,13 +1766,17 @@ DEFINE_FUNCTION art_quick_instrumentation_entry
                                   // %rax = result of call.
     movq %r12, %rdi               // Reload method pointer.
 
+    #ifndef MOE
     leaq art_quick_instrumentation_exit(%rip), %r12   // Set up return through instrumentation
+    #else
+    leaq _art_quick_instrumentation_exit(%rip), %r12   // Set up return through instrumentation
+    #endif
     movq %r12, FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE-8(%rsp) // exit.
 
     RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
 
     jmp *%rax                     // Tail call to intended method.
-#endif  // __APPLE__
+#endif  // __APPLE__ && !MOE
 END_FUNCTION art_quick_instrumentation_entry
 
 DEFINE_FUNCTION art_quick_instrumentation_exit
@@ -1519,7 +1795,11 @@ DEFINE_FUNCTION art_quick_instrumentation_exit
     CFI_ADJUST_CFA_OFFSET(8)
     movq %xmm0, (%rsp)
 
+    #ifndef MOE
     movq  %gs:THREAD_SELF_OFFSET, %rdi        // Pass Thread.
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdi
+    #endif
     movq  %rax, %rdx                          // Pass integer result.
     movq  %xmm0, %rcx                         // Pass floating-point result.
 
@@ -1549,7 +1829,11 @@ DEFINE_FUNCTION art_quick_deoptimize
                                        // Use hidden arg.
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
                                        // Stack should be aligned now.
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdi  // Pass Thread.
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdi
+    #endif
     call SYMBOL(artDeoptimize)         // artDeoptimize(Thread*)
     UNREACHABLE
 END_FUNCTION art_quick_deoptimize
@@ -1561,7 +1845,11 @@ END_FUNCTION art_quick_deoptimize
 DEFINE_FUNCTION art_quick_deoptimize_from_compiled_code
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
                                                 // Stack should be aligned now.
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdi           // Pass Thread.
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdi // Pass Thread.
+    #endif
     call SYMBOL(artDeoptimizeFromCompiledCode)  // artDeoptimizeFromCompiledCode(Thread*)
     UNREACHABLE
 END_FUNCTION art_quick_deoptimize_from_compiled_code

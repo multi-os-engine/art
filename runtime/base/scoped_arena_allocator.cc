@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,6 +91,7 @@ void ArenaStack::UpdateBytesAllocated() {
   }
 }
 
+#ifndef MOE
 void* ArenaStack::AllocWithMemoryTool(size_t bytes, ArenaAllocKind kind) {
   size_t rounded_bytes = RoundUp(bytes + kMemoryToolRedZoneBytes, 8);
   uint8_t* ptr = top_ptr_;
@@ -103,6 +105,7 @@ void* ArenaStack::AllocWithMemoryTool(size_t bytes, ArenaAllocKind kind) {
   MEMORY_TOOL_MAKE_NOACCESS(ptr + bytes, rounded_bytes - bytes);
   return ptr;
 }
+#endif
 
 ScopedArenaAllocator::ScopedArenaAllocator(ArenaStack* arena_stack)
   : DebugStackReference(arena_stack),

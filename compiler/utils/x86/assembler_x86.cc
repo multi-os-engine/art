@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +21,10 @@
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "memory_region.h"
 #include "thread.h"
+
+#ifdef MOE
+#include "asm_support.h"
+#endif
 
 namespace art {
 namespace x86 {
@@ -1687,6 +1692,9 @@ void X86Assembler::mfence() {
 }
 
 X86Assembler* X86Assembler::fs() {
+#ifdef MOE
+  assert("Usage of the fs register is not allowed!");
+#endif
   // TODO: fs is a prefix and not an instruction
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   EmitUint8(0x64);
@@ -1742,7 +1750,6 @@ void X86Assembler::Align(int alignment, int offset) {
     nop();
   }
 }
-
 
 void X86Assembler::Bind(Label* label) {
   int bound = buffer_.Size();
@@ -2002,21 +2009,45 @@ void X86Assembler::StoreImmediateToFrame(FrameOffset dest, uint32_t imm,
 }
 
 void X86Assembler::StoreImmediateToThread32(ThreadOffset<4> dest, uint32_t imm,
-                                          ManagedRegister) {
+#ifndef MOE
+                                            ManagedRegister) {
+#else
+                                            ManagedRegister mscratch) {
+#endif
+#ifndef MOE
   fs()->movl(Address::Absolute(dest), Immediate(imm));
+#else
+  X86ManagedRegister scratch = mscratch.AsX86();
+  gs()->movl(scratch.AsCpuRegister(), Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  movl(Address(scratch.AsCpuRegister(), dest), Immediate(imm));
+#endif
 }
 
 void X86Assembler::StoreStackOffsetToThread32(ThreadOffset<4> thr_offs,
-                                            FrameOffset fr_offs,
-                                            ManagedRegister mscratch) {
+                                              FrameOffset fr_offs,
+                                              ManagedRegister mscratch) {
   X86ManagedRegister scratch = mscratch.AsX86();
   CHECK(scratch.IsCpuRegister());
+#ifndef MOE
   leal(scratch.AsCpuRegister(), Address(ESP, fr_offs));
   fs()->movl(Address::Absolute(thr_offs), scratch.AsCpuRegister());
+#else
+  gs()->movl(scratch.AsCpuRegister(), Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  movl(Address(scratch.AsCpuRegister(), thr_offs), ESP);
+  addl(Address(scratch.AsCpuRegister(), thr_offs), Immediate(fr_offs.Int32Value()));
+#endif
 }
 
 void X86Assembler::StoreStackPointerToThread32(ThreadOffset<4> thr_offs) {
+#ifndef MOE
   fs()->movl(Address::Absolute(thr_offs), ESP);
+#else
+  pushl(EAX);
+  gs()->movl(EAX, Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  movl(Address(EAX, thr_offs), ESP);
+  addl(Address(EAX, thr_offs), Immediate(4));
+  popl(EAX);
+#endif
 }
 
 void X86Assembler::StoreSpanning(FrameOffset /*dst*/, ManagedRegister /*src*/,
@@ -2057,24 +2088,66 @@ void X86Assembler::LoadFromThread32(ManagedRegister mdest, ThreadOffset<4> src, 
     CHECK_EQ(0u, size);
   } else if (dest.IsCpuRegister()) {
     CHECK_EQ(4u, size);
+#ifndef MOE
     fs()->movl(dest.AsCpuRegister(), Address::Absolute(src));
+#else
+    gs()->movl(dest.AsCpuRegister(), Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+    movl(dest.AsCpuRegister(), Address(dest.AsCpuRegister(), src));
+#endif
   } else if (dest.IsRegisterPair()) {
     CHECK_EQ(8u, size);
+#ifndef MOE
     fs()->movl(dest.AsRegisterPairLow(), Address::Absolute(src));
     fs()->movl(dest.AsRegisterPairHigh(), Address::Absolute(ThreadOffset<4>(src.Int32Value()+4)));
+#else
+    gs()->movl(dest.AsRegisterPairLow(), Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+    movl(dest.AsRegisterPairLow(), Address(dest.AsRegisterPairLow(), src.Int32Value()));
+    gs()->movl(dest.AsRegisterPairHigh(), Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+    movl(dest.AsRegisterPairLow(), Address(dest.AsRegisterPairLow(), src.Int32Value()+4));
+#endif
   } else if (dest.IsX87Register()) {
+#ifdef MOE
+    pushl(EAX);
+    gs()->movl(EAX, Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+#endif
     if (size == 4) {
+#ifndef MOE
       fs()->flds(Address::Absolute(src));
+#else
+      flds(Address(EAX, src));
+#endif
     } else {
+#ifndef MOE
       fs()->fldl(Address::Absolute(src));
+#else
+      fldl(Address(EAX, src));
+#endif
     }
+#ifdef MOE
+    popl(EAX);
+#endif
   } else {
     CHECK(dest.IsXmmRegister());
+#ifdef MOE
+    pushl(EAX);
+    gs()->movl(EAX, Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+#endif
     if (size == 4) {
+#ifndef MOE
       fs()->movss(dest.AsXmmRegister(), Address::Absolute(src));
+#else
+      movss(dest.AsXmmRegister(), Address(EAX, src));
+#endif
     } else {
+#ifndef MOE
       fs()->movsd(dest.AsXmmRegister(), Address::Absolute(src));
+#else
+      movsd(dest.AsXmmRegister(), Address(EAX, src));
+#endif
     }
+#ifdef MOE
+    popl(EAX);
+#endif
   }
 }
 
@@ -2105,7 +2178,12 @@ void X86Assembler::LoadRawPtrFromThread32(ManagedRegister mdest,
                                         ThreadOffset<4> offs) {
   X86ManagedRegister dest = mdest.AsX86();
   CHECK(dest.IsCpuRegister());
+#ifndef MOE
   fs()->movl(dest.AsCpuRegister(), Address::Absolute(offs));
+#else
+  gs()->movl(dest.AsCpuRegister(), Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  movl(dest.AsCpuRegister(), Address(dest.AsCpuRegister(), offs));
+#endif
 }
 
 void X86Assembler::SignExtend(ManagedRegister mreg, size_t size) {
@@ -2169,7 +2247,12 @@ void X86Assembler::CopyRawPtrFromThread32(FrameOffset fr_offs,
                                         ManagedRegister mscratch) {
   X86ManagedRegister scratch = mscratch.AsX86();
   CHECK(scratch.IsCpuRegister());
+#ifndef MOE
   fs()->movl(scratch.AsCpuRegister(), Address::Absolute(thr_offs));
+#else
+  gs()->movl(scratch.AsCpuRegister(), Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  movl(scratch.AsCpuRegister(), Address(scratch.AsCpuRegister(), thr_offs));
+#endif
   Store(fr_offs, scratch, 4);
 }
 
@@ -2179,7 +2262,16 @@ void X86Assembler::CopyRawPtrToThread32(ThreadOffset<4> thr_offs,
   X86ManagedRegister scratch = mscratch.AsX86();
   CHECK(scratch.IsCpuRegister());
   Load(scratch, fr_offs, 4);
+#ifndef MOE
   fs()->movl(Address::Absolute(thr_offs), scratch.AsCpuRegister());
+#else
+  X86ManagedRegister scratch2 = !scratch.IsCpuRegister() || scratch.AsCpuRegister() != EAX ?
+      X86ManagedRegister::FromCpuRegister(EAX) : X86ManagedRegister::FromCpuRegister(EDX);
+  pushl(scratch2.AsCpuRegister());
+  gs()->movl(scratch2.AsCpuRegister(), Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  movl(Address(scratch2.AsCpuRegister(), thr_offs), scratch.AsCpuRegister());
+  popl(scratch2.AsCpuRegister());
+#endif
 }
 
 void X86Assembler::Copy(FrameOffset dest, FrameOffset src,
@@ -2321,26 +2413,54 @@ void X86Assembler::Call(FrameOffset base, Offset offset, ManagedRegister mscratc
   call(Address(scratch, offset));
 }
 
+#ifndef MOE
 void X86Assembler::CallFromThread32(ThreadOffset<4> offset, ManagedRegister /*mscratch*/) {
+#else
+void X86Assembler::CallFromThread32(ThreadOffset<4> offset, ManagedRegister mscratch) {
+#endif
+#ifndef MOE
   fs()->call(Address::Absolute(offset));
+#else
+  gs()->movl(mscratch.AsX86().AsCpuRegister(), Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  call(Address(mscratch.AsX86().AsCpuRegister(), offset));
+#endif
 }
 
 void X86Assembler::GetCurrentThread(ManagedRegister tr) {
+#ifndef MOE
   fs()->movl(tr.AsX86().AsCpuRegister(),
              Address::Absolute(Thread::SelfOffset<4>()));
+#else
+  gs()->movl(tr.AsX86().AsCpuRegister(), Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+#endif
 }
 
 void X86Assembler::GetCurrentThread(FrameOffset offset,
                                     ManagedRegister mscratch) {
   X86ManagedRegister scratch = mscratch.AsX86();
+#ifndef MOE
   fs()->movl(scratch.AsCpuRegister(), Address::Absolute(Thread::SelfOffset<4>()));
+#else
+  gs()->movl(scratch.AsCpuRegister(), Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+#endif
   movl(Address(ESP, offset), scratch.AsCpuRegister());
 }
 
+#ifndef MOE
 void X86Assembler::ExceptionPoll(ManagedRegister /*scratch*/, size_t stack_adjust) {
+#else
+void X86Assembler::ExceptionPoll(ManagedRegister mscratch, size_t stack_adjust) {
+#endif
   X86ExceptionSlowPath* slow = new X86ExceptionSlowPath(stack_adjust);
   buffer_.EnqueueSlowPath(slow);
+#ifndef MOE
   fs()->cmpl(Address::Absolute(Thread::ExceptionOffset<4>()), Immediate(0));
+#else
+  CHECK(mscratch.AsX86().IsCpuRegister());
+  Register scratch = mscratch.AsX86().AsCpuRegister();
+  gs()->movl(scratch, Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  cmpl(Address(scratch, Thread::ExceptionOffset<4>()), Immediate(0));
+#endif
   j(kNotEqual, slow->Entry());
 }
 
@@ -2353,8 +2473,17 @@ void X86ExceptionSlowPath::Emit(Assembler *sasm) {
     __ DecreaseFrameSize(stack_adjust_);
   }
   // Pass exception as argument in EAX
+#ifndef MOE
   __ fs()->movl(EAX, Address::Absolute(Thread::ExceptionOffset<4>()));
   __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(4, pDeliverException)));
+#else
+  __ gs()->movl(EAX, Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  __ movl(EAX, Address(EAX, QUICK_ENTRYPOINT_OFFSET(4, pDeliverException)));
+  __ gs()->movl(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_32), EAX);
+  __ gs()->movl(EAX, Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  __ movl(EAX, Address(EAX, Thread::ExceptionOffset<4>()));
+  __ gs()->call(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_32));
+#endif
   // this call should never return
   __ int3();
 #undef __

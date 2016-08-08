@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +19,9 @@
 
 #define ATRACE_TAG ATRACE_TAG_DALVIK
 
+#ifndef MOE
 #include <cutils/trace.h>
+#endif
 #include <dirent.h>
 #include <ScopedLocalRef.h>
 #include <ScopedUtfChars.h>
@@ -130,6 +133,7 @@ void ThreadList::DumpForSigQuit(std::ostream& os) {
   DumpUnattachedThreads(os);
 }
 
+#ifndef MOE
 static void DumpUnattachedThread(std::ostream& os, pid_t tid) NO_THREAD_SAFETY_ANALYSIS {
   // TODO: No thread safety analysis as DumpState with a null thread won't access fields, should
   // refactor DumpState to avoid skipping analysis.
@@ -142,8 +146,10 @@ static void DumpUnattachedThread(std::ostream& os, pid_t tid) NO_THREAD_SAFETY_A
   }
   os << "\n";
 }
+#endif
 
 void ThreadList::DumpUnattachedThreads(std::ostream& os) {
+#ifndef MOE
   DIR* d = opendir("/proc/self/task");
   if (!d) {
     return;
@@ -166,6 +172,7 @@ void ThreadList::DumpUnattachedThreads(std::ostream& os) {
     }
   }
   closedir(d);
+#endif
 }
 
 // Dump checkpoint timeout in milliseconds. Larger amount on the host, as dumping will invoke

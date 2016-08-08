@@ -148,7 +148,13 @@ void* MallocSpace::MoreCore(intptr_t increment) {
       // removing ignoring the memory protection change here and in Space::CreateAllocSpace. It's
       // likely just a useful debug feature.
       size_t size = -increment;
+#ifdef MOE
+      if (!kMadviseZeroes) {
+        SafeZeroAndReleaseSpace(new_end, size);
+      }
+#else
       CHECK_MEMORY_CALL(madvise, (new_end, size, MADV_DONTNEED), GetName());
+#endif
       CHECK_MEMORY_CALL(mprotect, (new_end, size, PROT_NONE), GetName());
     }
     // Update end_.

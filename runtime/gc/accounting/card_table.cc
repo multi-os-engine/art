@@ -109,7 +109,13 @@ void CardTable::ClearCardTable() {
 
 void CardTable::ClearCardRange(uint8_t* start, uint8_t* end) {
   if (!kMadviseZeroes) {
-    memset(start, 0, end - start);
+    uint8_t* start_card = CardFromAddr(start);
+    uint8_t* end_card = CardFromAddr(end);
+#ifndef MOE
+    memset(start_card, 0, end_card - start_card);
+#else
+    SafeZeroAndReleaseSpace(start_card, end_card -  start_card);
+#endif
     return;
   }
   CHECK_ALIGNED(reinterpret_cast<uintptr_t>(start), kCardSize);

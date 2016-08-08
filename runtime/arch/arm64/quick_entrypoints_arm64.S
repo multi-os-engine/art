@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +17,27 @@
 
 #include "asm_support_arm64.S"
 
+#ifdef MOE
+#define __memcmp16 ___memcmp16
+#define artDeoptimize _artDeoptimize
+#define artInstrumentationMethodEntryFromCode _artInstrumentationMethodEntryFromCode
+#define artInstrumentationMethodExitFromCode _artInstrumentationMethodExitFromCode
+#define artQuickToInterpreterBridge _artQuickToInterpreterBridge
+#define artQuickResolutionTrampoline _artQuickResolutionTrampoline
+#define artQuickGenericJniTrampoline _artQuickGenericJniTrampoline
+#define artQuickGenericJniEndTrampoline _artQuickGenericJniEndTrampoline
+#define artTestSuspendFromCode _artTestSuspendFromCode
+#define artSet64StaticFromCode _artSet64StaticFromCode
+#define artQuickProxyInvokeHandler _artQuickProxyInvokeHandler
+#define artThrowArrayStoreException _artThrowArrayStoreException
+#define artThrowClassCastException _artThrowClassCastException
+#define artUnlockObjectFromCode _artUnlockObjectFromCode
+#define artLockObjectFromCode _artLockObjectFromCode
+#define artDeliverPendingExceptionFromCode _artDeliverPendingExceptionFromCode
+#define artReadBarrierSlow _artReadBarrierSlow
+#define artDeoptimizeFromCompiledCode _artDeoptimizeFromCompiledCode
+#endif
+
 #include "arch/quick_alloc_entrypoints.S"
 
 
@@ -24,15 +46,24 @@
      * Runtime::CreateCalleeSaveMethod(kSaveAll)
      */
 .macro SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
+    #ifndef MOE
     adrp xIP0, :got:_ZN3art7Runtime9instance_E
     ldr xIP0, [xIP0, #:got_lo12:_ZN3art7Runtime9instance_E]
+    #else
+    adrp xIP0, __ZN3art7Runtime9instance_E@GOTPAGE
+	ldr	xIP0, [xIP0, __ZN3art7Runtime9instance_E@GOTPAGEOFF]
+    #endif
 
     // Our registers aren't intermixed - just spill in order.
     ldr xIP0, [xIP0]  // xIP0 = & (art::Runtime * art::Runtime.instance_) .
 
     // xIP0 = (ArtMethod*) Runtime.instance_.callee_save_methods[kRefAndArgs]  .
     // Loads appropriate callee-save-method.
+    #ifndef MOE
     ldr xIP0, [xIP0, RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET ]
+    #else
+    ldr xIP0, [xIP0, # RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET ]
+    #endif
 
     sub sp, sp, #176
     .cfi_adjust_cfa_offset 176
@@ -86,15 +117,24 @@
      * Runtime::CreateCalleeSaveMethod(kRefsOnly).
      */
 .macro SETUP_REFS_ONLY_CALLEE_SAVE_FRAME
+    #ifndef MOE
     adrp xIP0, :got:_ZN3art7Runtime9instance_E
     ldr xIP0, [xIP0, #:got_lo12:_ZN3art7Runtime9instance_E]
+    #else
+    adrp xIP0, __ZN3art7Runtime9instance_E@GOTPAGE
+	ldr	xIP0, [xIP0, __ZN3art7Runtime9instance_E@GOTPAGEOFF]
+    #endif
 
     // Our registers aren't intermixed - just spill in order.
     ldr xIP0, [xIP0]  // xIP0 = & (art::Runtime * art::Runtime.instance_) .
 
     // xIP0 = (ArtMethod*) Runtime.instance_.callee_save_methods[kRefOnly]  .
     // Loads appropriate callee-save-method.
+    #ifndef MOE
     ldr xIP0, [xIP0, RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET ]
+    #else
+    ldr xIP0, [xIP0, # RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET ]
+    #endif
 
     sub sp, sp, #96
     .cfi_adjust_cfa_offset 96
@@ -240,14 +280,23 @@
      * TODO This is probably too conservative - saving FP & LR.
      */
 .macro SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME
+    #ifndef MOE
     adrp xIP0, :got:_ZN3art7Runtime9instance_E
     ldr xIP0, [xIP0, #:got_lo12:_ZN3art7Runtime9instance_E]
+    #else
+    adrp xIP0, __ZN3art7Runtime9instance_E@GOTPAGE
+	ldr	xIP0, [xIP0, __ZN3art7Runtime9instance_E@GOTPAGEOFF]
+    #endif
 
     // Our registers aren't intermixed - just spill in order.
     ldr xIP0, [xIP0]  // xIP0 = & (art::Runtime * art::Runtime.instance_) .
 
     // xIP0 = (ArtMethod*) Runtime.instance_.callee_save_methods[kRefAndArgs]  .
+    #ifndef MOE
     ldr xIP0, [xIP0, RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET ]
+    #else
+    ldr xIP0, [xIP0, # RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET ]
+    #endif
 
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_INTERNAL
 
@@ -366,30 +415,54 @@
 .endm
 
 .macro NO_ARG_RUNTIME_EXCEPTION c_name, cxx_name
+    #ifndef MOE
     .extern \cxx_name
+    #else
+    .extern _\cxx_name
+    #endif
 ENTRY \c_name
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
     mov x0, xSELF                     // pass Thread::Current
+    #ifndef MOE
     b   \cxx_name                     // \cxx_name(Thread*)
+    #else
+    b   _\cxx_name                     // \cxx_name(Thread*)
+    #endif
 END \c_name
 .endm
 
 .macro ONE_ARG_RUNTIME_EXCEPTION c_name, cxx_name
+    #ifndef MOE
     .extern \cxx_name
+    #else
+    .extern _\cxx_name
+    #endif
 ENTRY \c_name
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context.
     mov x1, xSELF                     // pass Thread::Current.
+    #ifndef MOE
     b   \cxx_name                     // \cxx_name(arg, Thread*).
+    #else
+    b   _\cxx_name                     // \cxx_name(arg, Thread*).
+    #endif
     brk 0
 END \c_name
 .endm
 
 .macro TWO_ARG_RUNTIME_EXCEPTION c_name, cxx_name
+    #ifndef MOE
     .extern \cxx_name
+    #else
+    .extern _\cxx_name
+    #endif
 ENTRY \c_name
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
     mov x2, xSELF                     // pass Thread::Current
+    #ifndef MOE
     b   \cxx_name                     // \cxx_name(arg1, arg2, Thread*)
+    #else
+    b   _\cxx_name                     // \cxx_name(arg1, arg2, Thread*)
+    #endif
     brk 0
 END \c_name
 .endm
@@ -446,14 +519,22 @@ ONE_ARG_RUNTIME_EXCEPTION art_quick_throw_no_such_method, artThrowNoSuchMethodFr
      * Clobbers xIP0.
      */
 .macro INVOKE_TRAMPOLINE_BODY cxx_name
+    #ifndef MOE
     .extern \cxx_name
+    #else
+    .extern _\cxx_name
+    #endif
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME  // save callee saves in case allocation triggers GC
     // Helper signature is always
     // (method_idx, *this_object, *caller_method, *self, sp)
 
     mov    x2, xSELF                      // pass Thread::Current
     mov    x3, sp
+    #ifndef MOE
     bl     \cxx_name                      // (method_idx, this, Thread*, SP)
+    #else
+    bl     _\cxx_name                     // (method_idx, this, Thread*, SP)
+    #endif
     mov    xIP0, x1                       // save Method*->code_
     RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
     cbz    x0, 1f                         // did we find the target? if not go to exception delivery
@@ -673,6 +754,9 @@ ENTRY art_quick_invoke_stub
     adr  x12, .LstoreX2
     adr  x13, .LstoreS0
     adr  x14, .LstoreD0
+    #ifdef MOE
+    adr  x16, .LstoreX2Ref
+    #endif
 
     // Initialize routine offsets to 0 for integers and floats.
     // x8 for integers, x15 for floating point.
@@ -681,6 +765,9 @@ ENTRY art_quick_invoke_stub
 
     add x10, x5, #1         // Load shorty address, plus one to skip return value.
     ldr w1, [x9],#4         // Load "this" parameter, and increment arg pointer.
+    #ifdef MOE
+    LOAD_REF_UNSAFE x1
+    #endif
 
     // Loop to fill registers.
 .LfillRegisters:
@@ -690,7 +777,11 @@ ENTRY art_quick_invoke_stub
     cmp  w17, #'F' // is this a float?
     bne .LisDouble
 
+    #ifndef MOE
     cmp x15, # 8*12         // Skip this load if all registers full.
+    #else
+    cmp x15, # 8*28         // Skip this load if all registers full.
+    #endif
     beq .Ladvance4
 
     add x17, x13, x15       // Calculate subroutine to jump to.
@@ -700,7 +791,11 @@ ENTRY art_quick_invoke_stub
     cmp w17, #'D'           // is this a double?
     bne .LisLong
 
+    #ifndef MOE
     cmp x15, # 8*12         // Skip this load if all registers full.
+    #else
+    cmp x15, # 8*28         // Skip this load if all registers full.
+    #endif
     beq .Ladvance8
 
     add x17, x14, x15       // Calculate subroutine to jump to.
@@ -708,16 +803,40 @@ ENTRY art_quick_invoke_stub
 
 .LisLong:
     cmp w17, #'J'           // is this a long?
+    #ifndef MOE
     bne .LisOther
+    #else
+    bne .LisReference
+    #endif
 
+    #ifndef MOE
     cmp x8, # 6*12          // Skip this load if all registers full.
+    #else
+    cmp x8, # 6*28          // Skip this load if all registers full.
+    #endif
     beq .Ladvance8
 
     add x17, x12, x8        // Calculate subroutine to jump to.
     br x17
 
+#ifdef MOE
+.LisReference:
+    cmp w17, #'L'           // is this a reference?
+    bne .LisOther
+
+    cmp x8, # 6*28          // Skip this load if all registers full.
+    beq .Ladvance4
+
+    add x17, x16, x8        // Calculate subroutine to jump to.
+    br x17
+#endif
+
 .LisOther:                  // Everything else takes one vReg.
+    #ifndef MOE
     cmp x8, # 6*12          // Skip this load if all registers full.
+    #else
+    cmp x8, # 6*28          // Skip this load if all registers full.
+    #endif
     beq .Ladvance4
 
     add x17, x11, x8        // Calculate subroutine to jump to.
@@ -737,9 +856,31 @@ ENTRY art_quick_invoke_stub
 //  register - the name of the register to be loaded.
 .macro LOADREG counter size register return
     ldr \register , [x9], #\size
+    #ifndef MOE
     add \counter, \counter, 12
+    #else
+    add \counter, \counter, 28
+    #endif
+    b \return
+    #ifdef MOE
+    nop
+    nop
+    nop
+    nop
+    #endif
+.endm
+
+#ifdef MOE
+.macro LOADREGREF counter reg_64 reg_32 return
+    ldr \reg_32 , [x9], #4
+    cmp \reg_32, #0
+    csinc \reg_32, \reg_32, \reg_32, eq
+    bfm	\reg_64, \reg_64, #32, #1
+    and \reg_64, \reg_64, #0x1FFFFFFFE
+    add \counter, \counter, 28
     b \return
 .endm
+#endif
 
 // Store ints.
 .LstoreW2:
@@ -758,6 +899,16 @@ ENTRY art_quick_invoke_stub
     LOADREG x8 8 x5 .LfillRegisters
     LOADREG x8 8 x6 .LfillRegisters
     LOADREG x8 8 x7 .LfillRegisters
+
+#ifdef MOE
+.LstoreX2Ref:
+    LOADREGREF x8 x2 w2 .LfillRegisters
+    LOADREGREF x8 x3 w3 .LfillRegisters
+    LOADREGREF x8 x4 w4 .LfillRegisters
+    LOADREGREF x8 x5 w5 .LfillRegisters
+    LOADREGREF x8 x6 w6 .LfillRegisters
+    LOADREGREF x8 x7 w7 .LfillRegisters
+#endif
 
 // Store singles.
 .LstoreS0:
@@ -807,6 +958,9 @@ ENTRY art_quick_invoke_static_stub
     adr  x12, .LstoreX1_2
     adr  x13, .LstoreS0_2
     adr  x14, .LstoreD0_2
+    #ifdef MOE
+    adr  x16, .LstoreX1Ref_2
+    #endif
 
     // Initialize routine offsets to 0 for integers and floats.
     // x8 for integers, x15 for floating point.
@@ -823,7 +977,11 @@ ENTRY art_quick_invoke_static_stub
     cmp  w17, #'F'          // is this a float?
     bne .LisDouble2
 
+    #ifndef MOE
     cmp x15, # 8*12         // Skip this load if all registers full.
+    #else
+    cmp x15, # 8*28         // Skip this load if all registers full.
+    #endif
     beq .Ladvance4_2
 
     add x17, x13, x15       // Calculate subroutine to jump to.
@@ -833,7 +991,11 @@ ENTRY art_quick_invoke_static_stub
     cmp w17, #'D'           // is this a double?
     bne .LisLong2
 
+    #ifndef MOE
     cmp x15, # 8*12         // Skip this load if all registers full.
+    #else
+    cmp x15, # 8*28         // Skip this load if all registers full.
+    #endif
     beq .Ladvance8_2
 
     add x17, x14, x15       // Calculate subroutine to jump to.
@@ -841,16 +1003,40 @@ ENTRY art_quick_invoke_static_stub
 
 .LisLong2:
     cmp w17, #'J'           // is this a long?
+    #ifndef MOE
     bne .LisOther2
+    #else
+    bne .LisReference2
+    #endif
 
+    #ifndef MOE
     cmp x8, # 7*12          // Skip this load if all registers full.
+    #else
+    cmp x8, # 7*28          // Skip this load if all registers full.
+    #endif
     beq .Ladvance8_2
 
     add x17, x12, x8        // Calculate subroutine to jump to.
     br x17
 
+#ifdef MOE
+.LisReference2:
+    cmp w17, #'L'           // is this a reference?
+    bne .LisOther2
+
+    cmp x8, # 7*28          // Skip this load if all registers full.
+    beq .Ladvance4_2
+
+    add x17, x16, x8        // Calculate subroutine to jump to.
+    br x17
+#endif
+
 .LisOther2:                 // Everything else takes one vReg.
+    #ifndef MOE
     cmp x8, # 7*12          // Skip this load if all registers full.
+    #else
+    cmp x8, # 7*28          // Skip this load if all registers full.
+    #endif
     beq .Ladvance4_2
 
     add x17, x11, x8        // Calculate subroutine to jump to.
@@ -883,6 +1069,17 @@ ENTRY art_quick_invoke_static_stub
     LOADREG x8 8 x5 .LfillRegisters2
     LOADREG x8 8 x6 .LfillRegisters2
     LOADREG x8 8 x7 .LfillRegisters2
+
+#ifdef MOE
+.LstoreX1Ref_2:
+    LOADREGREF x8 x1 w1 .LfillRegisters2
+    LOADREGREF x8 x2 w2 .LfillRegisters2
+    LOADREGREF x8 x3 w3 .LfillRegisters2
+    LOADREGREF x8 x4 w4 .LfillRegisters2
+    LOADREGREF x8 x5 w5 .LfillRegisters2
+    LOADREGREF x8 x6 w6 .LfillRegisters2
+    LOADREGREF x8 x7 w7 .LfillRegisters2
+#endif
 
 // Store singles.
 .LstoreS0_2:
@@ -947,7 +1144,13 @@ ENTRY art_quick_do_long_jump
     ldp x24, x25, [x0], #-16
     ldp x22, x23, [x0], #-16
     ldp x20, x21, [x0], #-16
+    #ifndef MOE
     ldp x18, x19, [x0], #-16
+    #else
+    // On iOS x18 register is reserved by the system
+    ldr x19, [x0, #8]
+    sub x0, x0, #16
+    #endif
     ldp x16, x17, [x0], #-16
     ldp x14, x15, [x0], #-16
     ldp x12, x13, [x0], #-16
@@ -1088,7 +1291,11 @@ ENTRY art_quick_check_cast
     .cfi_rel_offset x30, 24
 
     // Call runtime code
+    #ifndef MOE
     bl artIsAssignableFromCode
+    #else
+    bl _artIsAssignableFromCode
+    #endif
 
     // Check for exception
     cbz x0, .Lthrow_class_cast_exception
@@ -1155,9 +1362,15 @@ END art_quick_check_cast
     mov w2, #\offset                // pass offset
     bl artReadBarrierSlow           // artReadBarrierSlow(ref, xObj, offset)
     // No need to unpoison return value in w0, artReadBarrierSlow() would do the unpoisoning.
+    #ifndef MOE
     .ifnc \wDest, w0
         mov \wDest, w0              // save return value in wDest
     .endif
+    #else
+    .ifnc \xDest, x0
+        mov \xDest, x0              // save return value in wDest
+    .endif
+    #endif
 
     // Conditionally restore saved registers
     POP_REG_NE x0, 0, \xDest
@@ -1171,7 +1384,11 @@ END art_quick_check_cast
     .cfi_adjust_cfa_offset -48
 #else
     ldr \wDest, [\xObj, #\offset]   // Heap reference = 32b. This also zero-extends to \xDest.
+#ifndef MOE
     UNPOISON_HEAP_REF \wDest
+#else
+    LOAD_REF_SAFE \xDest
+#endif
 #endif  // USE_READ_BARRIER
 .endm
 
@@ -1189,17 +1406,30 @@ END art_quick_check_cast
      */
 ENTRY art_quick_aput_obj_with_null_and_bound_check
     tst x0, x0
+    #ifndef MOE
     bne art_quick_aput_obj_with_bound_check
     b art_quick_throw_null_pointer_exception
+    #else
+    bne _art_quick_aput_obj_with_bound_check
+    b _art_quick_throw_null_pointer_exception
+    #endif
 END art_quick_aput_obj_with_null_and_bound_check
 
 ENTRY art_quick_aput_obj_with_bound_check
     ldr w3, [x0, #MIRROR_ARRAY_LENGTH_OFFSET]
     cmp w3, w1
+    #ifndef MOE
     bhi art_quick_aput_obj
+    #else
+    bhi _art_quick_aput_obj
+    #endif
     mov x0, x1
     mov x1, x3
+    #ifndef MOE
     b art_quick_throw_array_bounds
+    #else
+    b _art_quick_throw_array_bounds
+    #endif
 END art_quick_aput_obj_with_bound_check
 
 #ifdef USE_READ_BARRIER
@@ -1242,7 +1472,11 @@ ENTRY art_quick_aput_obj
     // Call runtime code
     mov x0, x3              // Heap reference, 32b, "uncompress" = do nothing, already zero-extended
     mov x1, x4              // Heap reference, 32b, "uncompress" = do nothing, already zero-extended
+    #ifndef MOE
     bl artIsAssignableFromCode
+    #else
+    bl _artIsAssignableFromCode
+    #endif
 
     // Check for exception
     cbz x0, .Lthrow_array_store_exception
@@ -1283,11 +1517,19 @@ END art_quick_aput_obj
 
 // Macro to facilitate adding new allocation entrypoints.
 .macro ONE_ARG_DOWNCALL name, entrypoint, return
+    #ifndef MOE
     .extern \entrypoint
+    #else
+    .extern _\entrypoint
+    #endif
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME // save callee saves in case of GC
     mov    x1, xSELF                  // pass Thread::Current
+    #ifndef MOE
     bl     \entrypoint                // (uint32_t type_idx, Method* method, Thread*)
+    #else
+    bl     _\entrypoint                // (uint32_t type_idx, Method* method, Thread*)
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
 END \name
@@ -1295,11 +1537,19 @@ END \name
 
 // Macro to facilitate adding new allocation entrypoints.
 .macro TWO_ARG_DOWNCALL name, entrypoint, return
+    #ifndef MOE
     .extern \entrypoint
+    #else
+    .extern _\entrypoint
+    #endif
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME // save callee saves in case of GC
     mov    x2, xSELF                  // pass Thread::Current
+    #ifndef MOE
     bl     \entrypoint                // (uint32_t type_idx, Method* method, Thread*)
+    #else
+    bl     _\entrypoint                // (uint32_t type_idx, Method* method, Thread*)
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
 END \name
@@ -1307,11 +1557,19 @@ END \name
 
 // Macro to facilitate adding new allocation entrypoints.
 .macro THREE_ARG_DOWNCALL name, entrypoint, return
+    #ifndef MOE
     .extern \entrypoint
+    #else
+    .extern _\entrypoint
+    #endif
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME // save callee saves in case of GC
     mov    x3, xSELF                  // pass Thread::Current
+    #ifndef MOE
     bl     \entrypoint
+    #else
+    bl     _\entrypoint
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
 END \name
@@ -1319,11 +1577,19 @@ END \name
 
 // Macro to facilitate adding new allocation entrypoints.
 .macro FOUR_ARG_DOWNCALL name, entrypoint, return
+    #ifndef MOE
     .extern \entrypoint
+    #else
+    .extern _\entrypoint
+    #endif
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME // save callee saves in case of GC
     mov    x4, xSELF                  // pass Thread::Current
+    #ifndef MOE
     bl     \entrypoint                //
+    #else
+    bl     _\entrypoint               //
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
     DELIVER_PENDING_EXCEPTION
@@ -1332,36 +1598,63 @@ END \name
 
 // Macros taking opportunity of code similarities for downcalls with referrer.
 .macro ONE_ARG_REF_DOWNCALL name, entrypoint, return
+    #ifndef MOE
     .extern \entrypoint
+    #else
+    .extern _\entrypoint
+    #endif
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  // save callee saves in case of GC
     ldr    x1, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE] // Load referrer
     mov    x2, xSELF                  // pass Thread::Current
+    #ifndef MOE
     bl     \entrypoint                // (uint32_t type_idx, Method* method, Thread*, SP)
+    #else
+    LOAD_REF_SAFE x1
+    bl     _\entrypoint                // (uint32_t type_idx, Method* method, Thread*, SP)
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
 END \name
 .endm
 
 .macro TWO_ARG_REF_DOWNCALL name, entrypoint, return
+    #ifndef MOE
     .extern \entrypoint
+    #else
+    .extern _\entrypoint
+    #endif
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  // save callee saves in case of GC
     ldr    x2, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE] // Load referrer
     mov    x3, xSELF                  // pass Thread::Current
+    #ifndef MOE
     bl     \entrypoint
+    #else
+    LOAD_REF_SAFE x2
+    bl     _\entrypoint
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
 END \name
 .endm
 
 .macro THREE_ARG_REF_DOWNCALL name, entrypoint, return
+    #ifndef MOE
     .extern \entrypoint
+    #else
+    .extern _\entrypoint
+    #endif
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  // save callee saves in case of GC
     ldr    x3, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE] // Load referrer
     mov    x4, xSELF                  // pass Thread::Current
+    #ifndef MOE
     bl     \entrypoint
+    #else
+    LOAD_REF_SAFE x3
+    bl     _\entrypoint
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
 END \name
@@ -1423,6 +1716,9 @@ ENTRY art_quick_set64_static
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  // save callee saves in case of GC
     ldr    x1, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE] // Load referrer
                                       // x2 contains the parameter
+    #ifdef MOE
+    LOAD_REF_UNSAFE x1
+    #endif
     mov    x3, xSELF                  // pass Thread::Current
     bl     artSet64StaticFromCode
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
@@ -1472,7 +1768,11 @@ ENTRY art_quick_proxy_invoke_handler
     mov     x2, xSELF                   // pass Thread::Current
     mov     x3, sp                      // pass SP
     bl      artQuickProxyInvokeHandler  // (Method* proxy method, receiver, Thread*, SP)
+    #ifndef MOE
     ldr     x2, [xSELF, THREAD_EXCEPTION_OFFSET]
+    #else
+    ldr     x2, [xSELF, # THREAD_EXCEPTION_OFFSET]
+    #endif
     cbnz    x2, .Lexception_in_proxy    // success if no exception is pending
     RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME // Restore frame
     fmov    d0, x0                      // Store result in d0 in case it was float or double
@@ -1500,6 +1800,9 @@ ENTRY art_quick_resolution_trampoline
     cbz x0, 1f
     mov xIP0, x0            // Remember returned code pointer in xIP0.
     ldr x0, [sp, #0]        // artQuickResolutionTrampoline puts called method in *SP.
+    #ifdef MOE
+    LOAD_REF_UNSAFE x0
+    #endif
     RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
     br xIP0
 1:
@@ -1627,7 +1930,11 @@ ENTRY art_quick_generic_jni_trampoline
     bl artQuickGenericJniEndTrampoline
 
     // Pending exceptions possible.
+    #ifndef MOE
     ldr x2, [xSELF, THREAD_EXCEPTION_OFFSET]
+    #else
+    ldr x2, [xSELF, # THREAD_EXCEPTION_OFFSET]
+    #endif
     cbnz x2, .Lexception_in_native
 
     // Tear down the alloca.
@@ -1692,7 +1999,12 @@ ENTRY art_quick_instrumentation_entry
     mov   x0, x20             // Reload method reference.
 
     RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME  // Note: will restore xSELF
+    #ifndef MOE
     adr   xLR, art_quick_instrumentation_exit
+    #else
+    adrp  xLR, _art_quick_instrumentation_exit@PAGE
+	add   xLR, xLR, _art_quick_instrumentation_exit@PAGEOFF
+    #endif
     br    xIP0                // Tail-call method with lr set to art_quick_instrumentation_exit.
 END art_quick_instrumentation_entry
 

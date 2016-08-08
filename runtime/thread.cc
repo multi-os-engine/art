@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +17,15 @@
 
 #define ATRACE_TAG ATRACE_TAG_DALVIK
 
+#ifdef MOE
+#include "moe_entry.h"
+#endif
+
 #include "thread.h"
 
+#ifndef MOE
 #include <cutils/trace.h>
+#endif
 #include <pthread.h>
 #include <signal.h>
 #include <sys/resource.h>
@@ -396,6 +403,12 @@ void Thread::InitAfterFork() {
 }
 
 void* Thread::CreateCallback(void* arg) {
+#if defined(MOE) && defined(__arm__)
+    __asm__ volatile("vmrs r0, fpscr\n"
+                     "bic r0, $(1 << 24)\n"
+                     "vmsr fpscr, r0" : : : "r0");
+#endif
+
   Thread* self = reinterpret_cast<Thread*>(arg);
   Runtime* runtime = Runtime::Current();
   if (runtime == nullptr) {
@@ -549,6 +562,23 @@ void Thread::InstallImplicitProtection() {
   madvise(pregion, unwanted_size, MADV_DONTNEED);
 }
 
+// [XRT] Begin
+Thread* Thread::FindThread(pthread_t thread)
+{
+  std::list<Thread*> thread_list = Runtime::Current()->GetThreadList()->GetList();
+  
+  for (Thread* thrd : thread_list)
+  {
+    if(thrd->GetPthread() == thread)
+    {
+      return thrd;
+    }
+  }
+  
+  return NULL;
+}
+// [XRT] End
+  
 void Thread::CreateNativeThread(JNIEnv* env, jobject java_peer, size_t stack_size, bool is_daemon) {
   CHECK(java_peer != nullptr);
   Thread* self = static_cast<JNIEnvExt*>(env)->self;
@@ -664,6 +694,7 @@ bool Thread::Init(ThreadList* thread_list, JavaVMExt* java_vm, JNIEnvExt* jni_en
 
   SetUpAlternateSignalStack();
   if (!InitStackHwm()) {
+    TearDownAlternateSignalStack();
     return false;
   }
   InitCpu();
@@ -1537,8 +1568,12 @@ void Thread::Startup() {
   }
 
   // Allocate a TLS slot.
+#if !defined(MOE) || defined(__arm__) || defined(__arm64__)
   CHECK_PTHREAD_CALL(pthread_key_create, (&Thread::pthread_key_self_, Thread::ThreadExitCallback),
                      "self key");
+#else
+  Thread::pthread_key_self_ = MOE_TLS_THREAD_KEY;
+#endif
 
   // Double-check the TLS slot allocation.
   if (pthread_getspecific(pthread_key_self_) != nullptr) {
@@ -1762,7 +1797,9 @@ Thread::~Thread() {
 
   Runtime::Current()->GetHeap()->AssertThreadLocalBuffersAreRevoked(this);
 
-  TearDownAlternateSignalStack();
+  if (initialized) {
+    TearDownAlternateSignalStack();
+  }
 }
 
 void Thread::HandleUncaughtExceptions(ScopedObjectAccess& soa) {

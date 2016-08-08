@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -190,7 +191,13 @@ mirror::Object* StackVisitor::GetThisObject() const {
       bool success = GetVReg(m, reg, kReferenceVReg, &value);
       // We currently always guarantee the `this` object is live throughout the method.
       CHECK(success) << "Failed to read the this object in " << PrettyMethod(m);
+#ifndef MOE
       return reinterpret_cast<mirror::Object*>(value);
+#else
+      mirror::ObjectReference<false, mirror::Object>* value_ref =
+          reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&value);
+      return value_ref->AsMirrorPtr();
+#endif
     }
   }
 }

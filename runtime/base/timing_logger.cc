@@ -17,7 +17,9 @@
 
 #define ATRACE_TAG ATRACE_TAG_DALVIK
 #include <stdio.h>
+#ifndef MOE
 #include <cutils/trace.h>
+#endif
 
 #include "timing_logger.h"
 

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +20,10 @@
 
 #include "base/mutex.h"  // For Locks::mutator_lock_.
 #include "globals.h"
+
+#ifdef MOE
+#include "moe_entry.h"
+#endif
 
 namespace art {
 namespace mirror {
@@ -63,12 +68,23 @@ class MANAGED ObjectReference {
   // Compress reference to its bit representation.
   static uint32_t Compress(MirrorType* mirror_ptr) SHARED_REQUIRES(Locks::mutator_lock_) {
     uintptr_t as_bits = reinterpret_cast<uintptr_t>(mirror_ptr);
+#ifndef MOE
     return static_cast<uint32_t>(kPoisonReferences ? -as_bits : as_bits);
+#else
+    return static_cast<uint32_t>(as_bits);
+#endif
   }
 
   // Uncompress an encoded reference from its bit representation.
   MirrorType* UnCompress() const SHARED_REQUIRES(Locks::mutator_lock_) {
+#ifndef MOE
     uintptr_t as_bits = kPoisonReferences ? -reference_ : reference_;
+#else
+    uintptr_t as_bits = reference_;
+    if (as_bits != 0) {
+      as_bits |= MOE_MAP_BEGIN;
+    }
+#endif
     return reinterpret_cast<MirrorType*>(as_bits);
   }
 

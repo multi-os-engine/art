@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,7 +128,11 @@ void* RosAlloc::AllocPages(Thread* self, size_t num_pages, uint8_t page_map_type
     DCHECK_EQ(fpr_byte_size % kPageSize, static_cast<size_t>(0));
     if (req_byte_size <= fpr_byte_size) {
       // Found one.
+#ifndef MOE
       free_page_runs_.erase(it++);
+#else
+      it = free_page_runs_.erase(it);
+#endif
       if (kTraceRosAlloc) {
         LOG(INFO) << "RosAlloc::AllocPages() : Erased run 0x"
                   << std::hex << reinterpret_cast<intptr_t>(fpr)
@@ -377,7 +382,11 @@ size_t RosAlloc::FreePages(Thread* self, void* ptr, bool already_zero) {
           if (kIsDebugBuild) {
             h->magic_num_ = 0;
           }
+#ifndef MOE
           free_page_runs_.erase(it++);
+#else
+          it = free_page_runs_.erase(it);
+#endif
           if (kTraceRosAlloc) {
             LOG(INFO) << "RosAlloc::FreePages() : (coalesce) Erased run 0x" << std::hex
                       << reinterpret_cast<intptr_t>(h)
@@ -415,7 +424,14 @@ size_t RosAlloc::FreePages(Thread* self, void* ptr, bool already_zero) {
           if (kTraceRosAlloc) {
             LOG(INFO) << "Success";
           }
+#ifndef MOE
           free_page_runs_.erase(it--);
+#else
+          it = free_page_runs_.erase(it);
+          if (!to_exit_loop) {
+            it--;
+          }
+#endif
           if (kTraceRosAlloc) {
             LOG(INFO) << "RosAlloc::FreePages() : (coalesce) Erased run 0x" << std::hex
                       << reinterpret_cast<intptr_t>(l)
@@ -1393,9 +1409,15 @@ bool RosAlloc::Trim() {
       DCHECK_ALIGNED(madvise_begin, kPageSize);
       DCHECK_EQ(RoundUp(madvise_size, kPageSize), madvise_size);
       if (!kMadviseZeroes) {
+#ifndef MOE
         memset(madvise_begin, 0, madvise_size);
+#else
+        SafeZeroAndReleaseSpace(madvise_begin, madvise_size);
+#endif
       }
+#ifndef MOE
       CHECK_EQ(madvise(madvise_begin, madvise_size, MADV_DONTNEED), 0);
+#endif
     }
     if (madvise_begin - zero_begin) {
       memset(zero_begin, 0, madvise_begin - zero_begin);
@@ -2062,9 +2084,15 @@ size_t RosAlloc::ReleasePageRange(uint8_t* start, uint8_t* end) {
   }
   if (!kMadviseZeroes) {
     // TODO: Do this when we resurrect the page instead.
+#ifndef MOE
     memset(start, 0, end - start);
+#else
+    SafeZeroAndReleaseSpace(start, end - start);
+#endif
   }
+#ifndef MOE
   CHECK_EQ(madvise(start, end - start, MADV_DONTNEED), 0);
+#endif
   size_t pm_idx = ToPageMapIndex(start);
   size_t reclaimed_bytes = 0;
   // Calculate reclaimed bytes and upate page map.

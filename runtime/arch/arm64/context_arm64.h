@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,7 +91,11 @@ class Arm64Context : public Context {
   // Pointers to register locations, initialized to null or the specific registers below. We need
   // an additional one for the PC.
   uintptr_t* gprs_[kNumberOfXRegisters + 1];
+#ifndef MOE
   uint64_t * fprs_[kNumberOfDRegisters];
+#else
+  uintptr_t * fprs_[kNumberOfDRegisters];
+#endif
   // Hold values for sp, pc and arg0 if they are not located within a stack frame.
   uintptr_t sp_, pc_, arg0_;
 };

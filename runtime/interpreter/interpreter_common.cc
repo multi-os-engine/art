@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -461,11 +462,16 @@ static inline void AssignRegister(ShadowFrame* new_shadow_frame, const ShadowFra
   // Uint required, so that sign extension does not make this wrong on 64b systems
   uint32_t src_value = shadow_frame.GetVReg(src_reg);
   mirror::Object* o = shadow_frame.GetVRegReference<kVerifyNone>(src_reg);
-
   // If both register locations contains the same value, the register probably holds a reference.
   // Note: As an optimization, non-moving collectors leave a stale reference value
   // in the references array even after the original vreg was overwritten to a non-reference.
+#ifndef MOE
   if (src_value == reinterpret_cast<uintptr_t>(o)) {
+#else
+  mirror::ObjectReference<false, mirror::Object>* ref =
+      reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&src_value);
+  if (ref->AsMirrorPtr() == o) {
+#endif
     new_shadow_frame->SetVRegReference(dest_reg, o);
   } else {
     new_shadow_frame->SetVReg(dest_reg, src_value);

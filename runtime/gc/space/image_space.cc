@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +37,11 @@
 #include "os.h"
 #include "space-inl.h"
 #include "utils.h"
+
+#ifdef MOE
+#include <mach/mach_time.h>
+#include "patchoat.h"
+#endif
 
 namespace art {
 namespace gc {
@@ -174,6 +180,7 @@ static void MarkZygoteStart(const InstructionSet isa, const uint32_t max_failed_
 
 static bool GenerateImage(const std::string& image_filename, InstructionSet image_isa,
                           std::string* error_msg) {
+  #ifndef MOE
   const std::string boot_class_path_string(Runtime::Current()->GetBootClassPathString());
   std::vector<std::string> boot_class_path;
   Split(boot_class_path_string, ':', &boot_class_path);
@@ -229,6 +236,9 @@ static bool GenerateImage(const std::string& image_filename, InstructionSet imag
   std::string command_line(Join(arg_vector, ' '));
   LOG(INFO) << "GenerateImage: " << command_line;
   return Exec(arg_vector, error_msg);
+#else
+  return false;
+#endif
 }
 
 bool ImageSpace::FindImageFilename(const char* image_location,
@@ -243,7 +253,11 @@ bool ImageSpace::FindImageFilename(const char* image_location,
   *has_cache = false;
   // image_location = /system/framework/boot.art
   // system_image_location = /system/framework/<image_isa>/boot.art
+#ifndef MOE
   std::string system_image_filename(GetSystemImageFilename(image_location, image_isa));
+#else
+  std::string system_image_filename(image_location);
+#endif
   if (OS::FileExists(system_image_filename.c_str())) {
     *system_filename = system_image_filename;
     *has_system = true;
@@ -286,6 +300,7 @@ static bool ReadSpecificImageHeader(const char* filename, ImageHeader* image_hea
 // Relocate the image at image_location to dest_filename and relocate it by a random amount.
 static bool RelocateImage(const char* image_location, const char* dest_filename,
                                InstructionSet isa, std::string* error_msg) {
+#ifndef MOE
   // We should clean up so we are more likely to have room for the image.
   if (Runtime::Current()->IsZygote()) {
     LOG(INFO) << "Pruning dalvik-cache since we are relocating an image and will need to recompile";
@@ -328,6 +343,9 @@ static bool RelocateImage(const char* image_location, const char* dest_filename,
   std::string command_line(Join(argv, ' '));
   LOG(INFO) << "RelocateImage: " << command_line;
   return Exec(argv, error_msg);
+#else
+  return false;
+#endif
 }
 
 static ImageHeader* ReadSpecificImageHeader(const char* filename, std::string* error_msg) {
@@ -474,6 +492,9 @@ static bool CheckSpace(const std::string& cache_filename, std::string* error_msg
 ImageSpace* ImageSpace::Create(const char* image_location,
                                const InstructionSet image_isa,
                                std::string* error_msg) {
+#ifdef MOE
+  return ImageSpace::Init("", image_location, false, error_msg);
+#else
   std::string system_filename;
   bool has_system = false;
   std::string cache_filename;
@@ -642,6 +663,7 @@ ImageSpace* ImageSpace::Create(const char* image_location,
     }
     return space;
   }
+#endif
 }
 
 void ImageSpace::VerifyImageAllocations() {
@@ -669,6 +691,15 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
     LOG(INFO) << "ImageSpace::Init entering image_filename=" << image_filename;
   }
 
+#ifdef MOE
+  size_t image_file_size;
+  uint8_t* image_data = get_art_data(&image_file_size);
+  if (image_data == nullptr) {
+    *error_msg = StringPrintf("Invalid image header in '__ARTDATA'");
+    return nullptr;
+  }
+  ImageHeader& image_header = *reinterpret_cast<ImageHeader*>(image_data);
+#else
   std::unique_ptr<File> file(OS::OpenFileForReading(image_filename));
   if (file.get() == nullptr) {
     *error_msg = StringPrintf("Failed to open '%s'", image_filename);
@@ -680,6 +711,8 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
     *error_msg = StringPrintf("Invalid image header in '%s'", image_filename);
     return nullptr;
   }
+#endif
+#ifndef MOE
   // Check that the file is large enough.
   uint64_t image_file_size = static_cast<uint64_t>(file->GetLength());
   if (image_header.GetImageSize() > image_file_size) {
@@ -687,6 +720,7 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
                               image_file_size, image_header.GetImageSize());
     return nullptr;
   }
+#endif
 
   if (kIsDebugBuild) {
     LOG(INFO) << "Dumping image sections";
@@ -708,10 +742,17 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
     return nullptr;
   }
 
+#ifndef MOE
   // Note: The image header is part of the image due to mmap page alignment required of offset.
   std::unique_ptr<MemMap> map(MemMap::MapFileAtAddress(
       image_header.GetImageBegin(), image_header.GetImageSize(),
       PROT_READ | PROT_WRITE, MAP_PRIVATE, file->Fd(), 0, false, image_filename, error_msg));
+#else
+  std::unique_ptr<MemMap> map(MemMap::MapAlias("map_image_space_data_alias",
+      image_header.GetImageBegin(), reinterpret_cast<uint8_t *>(image_data),
+      image_header.GetImageSize(), PROT_READ | PROT_WRITE, error_msg));
+#endif
+
   if (map.get() == nullptr) {
     DCHECK(!error_msg->empty());
     return nullptr;
@@ -719,9 +760,16 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
   CHECK_EQ(image_header.GetImageBegin(), map->Begin());
   DCHECK_EQ(0, memcmp(&image_header, map->Begin(), sizeof(ImageHeader)));
 
+#ifndef MOE
   std::unique_ptr<MemMap> image_map(MemMap::MapFileAtAddress(
       nullptr, bitmap_section.Size(), PROT_READ, MAP_PRIVATE, file->Fd(),
       bitmap_section.Offset(), false, image_filename, error_msg));
+#else
+  uint8_t* image_start = reinterpret_cast<uint8_t *>(image_data) + bitmap_section.Offset();
+  std::unique_ptr<MemMap> image_map(MemMap::MapAlias("image_map_image_space_data_alias",
+      image_start, image_start, bitmap_section.Size(), PROT_READ | PROT_WRITE, error_msg));
+#endif
+
   if (image_map.get() == nullptr) {
     *error_msg = StringPrintf("Failed to map image bitmap: %s", error_msg->c_str());
     return nullptr;
@@ -737,13 +785,13 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
     *error_msg = StringPrintf("Could not create bitmap '%s'", bitmap_name.c_str());
     return nullptr;
   }
-
+  
   // We only want the mirror object, not the ArtFields and ArtMethods.
   uint8_t* const image_end =
       map->Begin() + image_header.GetImageSection(ImageHeader::kSectionObjects).End();
   std::unique_ptr<ImageSpace> space(new ImageSpace(image_filename, image_location,
                                                    map.release(), bitmap.release(), image_end));
-
+  
   // VerifyImageAllocations() will be called later in Runtime::Init()
   // as some class roots like ArtMethod::java_lang_reflect_ArtMethod_
   // and ArtField::java_lang_reflect_ArtField_, which are used from
@@ -764,6 +812,14 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
 
   Runtime* runtime = Runtime::Current();
   runtime->SetInstructionSet(space->oat_file_->GetOatHeader().GetInstructionSet());
+  
+#ifdef MOE
+  {
+    TimingLogger timings("patcher", false, false);
+    std::unique_ptr<MemMap> patcher_input(MemMap::MapAlias("patcher_input", image_data, image_data, image_file_size, PROT_READ | PROT_WRITE, error_msg));
+    PatchOat::Patch(runtime->GetInstructionSet(), patcher_input.release(), space->GetLiveBitmap(), space->GetMemMap(), &timings);
+  }
+#endif
 
   runtime->SetResolutionMethod(image_header.GetImageMethod(ImageHeader::kResolutionMethod));
   runtime->SetImtConflictMethod(image_header.GetImageMethod(ImageHeader::kImtConflictMethod));

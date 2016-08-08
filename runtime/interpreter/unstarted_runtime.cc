@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -850,7 +851,11 @@ void UnstartedRuntime::UnstartedJNIVMRuntimeNewUnpaddedArray(
     uint32_t* args, JValue* result) {
   int32_t length = args[1];
   DCHECK_GE(length, 0);
+#ifndef MOE
   mirror::Class* element_class = reinterpret_cast<mirror::Object*>(args[0])->AsClass();
+#else
+  mirror::Class* element_class = reinterpret_cast<mirror::ObjectReference<false, mirror::Class>*>(&args[0])->AsMirrorPtr();
+#endif
   Runtime* runtime = Runtime::Current();
   mirror::Class* array_class = runtime->GetClassLinker()->FindArrayClass(self, &element_class);
   DCHECK(array_class != nullptr);
@@ -925,7 +930,11 @@ void UnstartedRuntime::UnstartedJNIObjectNotifyAll(
 void UnstartedRuntime::UnstartedJNIStringCompareTo(
     Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver, uint32_t* args,
     JValue* result) {
+#ifndef MOE
   mirror::String* rhs = reinterpret_cast<mirror::Object*>(args[0])->AsString();
+#else
+  mirror::String* rhs = reinterpret_cast<mirror::ObjectReference<false, mirror::String>*>(&args[0])->AsMirrorPtr();
+#endif
   if (rhs == nullptr) {
     AbortTransactionOrFail(self, "String.compareTo with null object");
   }
@@ -948,8 +957,13 @@ void UnstartedRuntime::UnstartedJNIArrayCreateMultiArray(
     Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver ATTRIBUTE_UNUSED,
     uint32_t* args, JValue* result) {
   StackHandleScope<2> hs(self);
+#ifndef MOE
   auto h_class(hs.NewHandle(reinterpret_cast<mirror::Class*>(args[0])->AsClass()));
   auto h_dimensions(hs.NewHandle(reinterpret_cast<mirror::IntArray*>(args[1])->AsIntArray()));
+#else
+  auto h_class(hs.NewHandle(reinterpret_cast<mirror::ObjectReference<false, mirror::Class>*>(&args[0])->AsMirrorPtr()));
+  auto h_dimensions(hs.NewHandle(reinterpret_cast<mirror::ObjectReference<false, mirror::IntArray>*>(&args[1])->AsMirrorPtr()));
+#endif
   result->SetL(mirror::Array::CreateMultiArray(self, h_class, h_dimensions));
 }
 
@@ -961,7 +975,11 @@ void UnstartedRuntime::UnstartedJNIArrayCreateObjectArray(
     ThrowNegativeArraySizeException(length);
     return;
   }
+#ifndef MOE
   mirror::Class* element_class = reinterpret_cast<mirror::Class*>(args[0])->AsClass();
+#else
+  mirror::Class* element_class = reinterpret_cast<mirror::ObjectReference<false, mirror::Class>*>(args[0])->AsMirrorPtr();
+#endif
   Runtime* runtime = Runtime::Current();
   ClassLinker* class_linker = runtime->GetClassLinker();
   mirror::Class* array_class = class_linker->FindArrayClass(self, &element_class);
@@ -989,7 +1007,11 @@ void UnstartedRuntime::UnstartedJNIThrowableNativeFillInStackTrace(
 void UnstartedRuntime::UnstartedJNISystemIdentityHashCode(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result) {
+#ifndef MOE
   mirror::Object* obj = reinterpret_cast<mirror::Object*>(args[0]);
+#else
+  mirror::Object* obj = reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&args[0])->AsMirrorPtr();
+#endif
   result->SetI((obj != nullptr) ? obj->IdentityHashCode() : 0);
 }
 
@@ -1002,7 +1024,11 @@ void UnstartedRuntime::UnstartedJNIByteOrderIsLittleEndian(
 void UnstartedRuntime::UnstartedJNIUnsafeCompareAndSwapInt(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result) {
+#ifndef MOE
   mirror::Object* obj = reinterpret_cast<mirror::Object*>(args[0]);
+#else
+  mirror::Object* obj = reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&args[0])->AsMirrorPtr();
+#endif
   jlong offset = (static_cast<uint64_t>(args[2]) << 32) | args[1];
   jint expectedValue = args[3];
   jint newValue = args[4];
@@ -1020,9 +1046,17 @@ void UnstartedRuntime::UnstartedJNIUnsafeCompareAndSwapInt(
 void UnstartedRuntime::UnstartedJNIUnsafePutObject(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result ATTRIBUTE_UNUSED) {
+#ifndef MOE
   mirror::Object* obj = reinterpret_cast<mirror::Object*>(args[0]);
+#else
+  mirror::Object* obj = reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&args[0])->AsMirrorPtr();
+#endif
   jlong offset = (static_cast<uint64_t>(args[2]) << 32) | args[1];
+#ifndef MOE
   mirror::Object* newValue = reinterpret_cast<mirror::Object*>(args[3]);
+#else
+  mirror::Object* newValue = reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&args[3])->AsMirrorPtr();
+#endif
   if (Runtime::Current()->IsActiveTransaction()) {
     obj->SetFieldObject<true>(MemberOffset(offset), newValue);
   } else {
@@ -1033,7 +1067,11 @@ void UnstartedRuntime::UnstartedJNIUnsafePutObject(
 void UnstartedRuntime::UnstartedJNIUnsafeGetArrayBaseOffsetForComponentType(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result) {
+#ifndef MOE
   mirror::Class* component = reinterpret_cast<mirror::Object*>(args[0])->AsClass();
+#else
+  mirror::Class* component = reinterpret_cast<mirror::ObjectReference<false, mirror::Class>*>(&args[0])->AsMirrorPtr();
+#endif
   Primitive::Type primitive_type = component->GetPrimitiveType();
   result->SetI(mirror::Array::DataOffset(Primitive::ComponentSize(primitive_type)).Int32Value());
 }
@@ -1041,7 +1079,11 @@ void UnstartedRuntime::UnstartedJNIUnsafeGetArrayBaseOffsetForComponentType(
 void UnstartedRuntime::UnstartedJNIUnsafeGetArrayIndexScaleForComponentType(
     Thread* self ATTRIBUTE_UNUSED, ArtMethod* method ATTRIBUTE_UNUSED,
     mirror::Object* receiver ATTRIBUTE_UNUSED, uint32_t* args, JValue* result) {
+#ifndef MOE
   mirror::Class* component = reinterpret_cast<mirror::Object*>(args[0])->AsClass();
+#else
+  mirror::Class* component = reinterpret_cast<mirror::ObjectReference<false, mirror::Class>*>(&args[0])->AsMirrorPtr();
+#endif
   Primitive::Type primitive_type = component->GetPrimitiveType();
   result->SetI(Primitive::ComponentSize(primitive_type));
 }

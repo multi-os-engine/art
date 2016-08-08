@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +42,7 @@ class TestVisitor : public StackVisitor {
       found_method_index_ = 1;
       uint32_t value = 0;
       CHECK(GetVReg(m, 1, kReferenceVReg, &value));
-      CHECK_EQ(reinterpret_cast<mirror::Object*>(value), this_value_);
+      CHECK_EQ((reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&value)->AsMirrorPtr()), this_value_);
       CHECK_EQ(GetThisObject(), this_value_);
     } else if (m_name.compare("testThisWithStaticCall") == 0) {
       found_method_index_ = 2;

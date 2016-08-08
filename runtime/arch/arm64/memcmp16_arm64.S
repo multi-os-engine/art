@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,8 +107,13 @@ ENTRY __memcmp16
   /* Sources are mutually aligned, but are not currently at an
      alignment boundary.  Round down the addresses and then mask off
      the bytes that precede the start point.  */
+  #ifndef MOE
   bic     src1, src1, #7
   bic     src2, src2, #7
+  #else
+  and     src1, src1, #-8
+  and     src2, src2, #-8
+  #endif
   add     limit, limit, tmp1  /* Adjust the limit for the extra.  */
   lsl     tmp1, tmp1, #3    /* Bytes beyond alignment -> bits.  */
   ldr     data1, [src1], #8

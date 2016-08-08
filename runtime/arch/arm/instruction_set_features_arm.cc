@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -189,10 +190,17 @@ const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromHwcap() {
 static void bad_divide_inst_handle(int signo ATTRIBUTE_UNUSED, siginfo_t* si ATTRIBUTE_UNUSED,
                                    void* data) {
 #if defined(__arm__)
+#ifndef MOE
   struct ucontext *uc = (struct ucontext *)data;
   struct sigcontext *sc = &uc->uc_mcontext;
   sc->arm_r0 = 0;     // Set R0 to #0 to signal error.
   sc->arm_pc += 4;    // Skip offending instruction.
+#else
+  __darwin_ucontext *uc = reinterpret_cast<__darwin_ucontext *>(data);
+  _STRUCT_MCONTEXT *sc = uc->uc_mcontext;
+  sc->__ss.__r[0] = 0;   // Set R0 to #0 to signal error.
+  sc->__ss.__pc += 4;    // Skip offending instruction.
+#endif
 #else
   UNUSED(data);
 #endif

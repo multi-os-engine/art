@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,11 +63,15 @@ DlMallocSpace* DlMallocSpace::CreateFromMemMap(MemMap* mem_map, const std::strin
 
   // Everything is set so record in immutable structure and leave
   uint8_t* begin = mem_map->Begin();
+#ifndef MOE
   if (Runtime::Current()->IsRunningOnMemoryTool()) {
     return new MemoryToolMallocSpace<DlMallocSpace, kDefaultMemoryToolRedZoneBytes, true, false>(
         mem_map, initial_size, name, mspace, begin, end, begin + capacity, growth_limit,
         can_move_objects, starting_size);
   } else {
+#else
+  {
+#endif
     return new DlMallocSpace(mem_map, initial_size, name, mspace, begin, end, begin + capacity,
                              growth_limit, can_move_objects, starting_size);
   }
@@ -152,11 +157,15 @@ MallocSpace* DlMallocSpace::CreateInstance(MemMap* mem_map, const std::string& n
                                            void* allocator, uint8_t* begin, uint8_t* end,
                                            uint8_t* limit, size_t growth_limit,
                                            bool can_move_objects) {
+#ifndef MOE
   if (Runtime::Current()->IsRunningOnMemoryTool()) {
     return new MemoryToolMallocSpace<DlMallocSpace, kDefaultMemoryToolRedZoneBytes, true, false>(
         mem_map, initial_size_, name, allocator, begin, end, limit, growth_limit,
         can_move_objects, starting_size_);
   } else {
+#else
+  {
+#endif
     return new DlMallocSpace(mem_map, initial_size_, name, allocator, begin, end, limit,
                              growth_limit, can_move_objects, starting_size_);
   }

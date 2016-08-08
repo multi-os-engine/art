@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,6 +68,10 @@ class Arm64JniCallingConvention FINAL : public JniCallingConvention {
   bool IsCurrentParamOnStack() OVERRIDE;
   ManagedRegister CurrentParamRegister() OVERRIDE;
   FrameOffset CurrentParamStackOffset() OVERRIDE;
+
+#ifdef MOE
+  size_t ParamSize(unsigned int param) const OVERRIDE;
+#endif
 
   // aarch64 calling convention leaves upper bits undefined.
   bool RequiresSmallResultTypeExtension() const OVERRIDE {

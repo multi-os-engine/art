@@ -590,6 +590,19 @@ class Dbg {
     return IsForcedInterpreterNeededForExceptionImpl(thread);
   }
 
+  // Indicates whether we need to force the use of stack instrumentation when entering a
+  // a state where we possibly want to debug one of the the direct or indirect upcalls.
+  // This is useful when we step out a java method that has been called by jni, because
+  // we can do nothing with the native frames, but if those frames get popped then we
+  // possibly want to debug the Java code that invoked the JNI function.
+  static bool IsForcedInstrumentationNeededForUpcall(Thread* thread)
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+      if (!IsDebuggerActive()) {
+        return false;
+      }
+      return IsForcedInstrumentationNeededForUpcallImpl(thread);
+  }
+
   // Single-stepping.
   static JDWP::JdwpError ConfigureStep(JDWP::ObjectId thread_id, JDWP::JdwpStepSize size,
                                        JDWP::JdwpStepDepth depth)
@@ -750,6 +763,9 @@ class Dbg {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   static bool IsForcedInterpreterNeededForExceptionImpl(Thread* thread)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+    
+  static bool IsForcedInstrumentationNeededForUpcallImpl(Thread* thread)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Indicates whether the debugger is making requests.

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +37,11 @@
 #include "base/bit_vector.h"
 #include "base/stl_util.h"
 #include "base/unix_file/fd_file.h"
-#include "elf_file.h"
+#ifndef MOE
 #include "elf_utils.h"
+#else
+#include "macho_file.h"
+#endif
 #include "oat.h"
 #include "mem_map.h"
 #include "mirror/class.h"
@@ -88,6 +92,7 @@ void OatFile::CheckLocation(const std::string& location) {
   CHECK(!location.empty());
 }
 
+#ifndef MOE
 OatFile* OatFile::OpenWithElfFile(ElfFile* elf_file,
                                   const std::string& location,
                                   const char* abs_dex_location,
@@ -102,6 +107,7 @@ OatFile* OatFile::OpenWithElfFile(ElfFile* elf_file,
   // Ignore the optional .bss section when opening non-executable.
   return oat_file->Setup(abs_dex_location, error_msg) ? oat_file.release() : nullptr;
 }
+#endif
 
 OatFile* OatFile::Open(const std::string& filename,
                        const std::string& location,
@@ -122,6 +128,7 @@ OatFile* OatFile::Open(const std::string& filename,
   // we only use dlopen if we are the target or we do not already have the dex file opened. Having
   // the same library loaded multiple times at different addresses is required for class unloading
   // and for having dex caches arrays in the .bss section.
+#ifndef MOE
   Runtime* const runtime = Runtime::Current();
   OatFileManager* const manager = (runtime != nullptr) ? &runtime->GetOatFileManager() : nullptr;
   if (kUseDlopen && executable) {
@@ -149,6 +156,7 @@ OatFile* OatFile::Open(const std::string& filename,
       }
     }
   }
+#endif
 
   // If we aren't trying to execute, we just use our own ElfFile loader for a couple reasons:
   //
@@ -163,6 +171,7 @@ OatFile* OatFile::Open(const std::string& filename,
   //
   // Another independent reason is the absolute placement of boot.oat. dlopen on the host usually
   // does honor the virtual address encoded in the ELF file only for ET_EXEC files, not ET_DYN.
+#ifndef MOE
   std::unique_ptr<File> file(OS::OpenFileForReading(filename.c_str()));
   if (file == nullptr) {
     *error_msg = StringPrintf("Failed to open oat filename for reading: %s", strerror(errno));
@@ -170,6 +179,9 @@ OatFile* OatFile::Open(const std::string& filename,
   }
   ret.reset(OpenElfFile(file.get(), location, requested_base, oat_file_begin, false, executable,
                         abs_dex_location, error_msg));
+#else
+  ret.reset(OpenThisDlopen(requested_base, error_msg));
+#endif
 
   // It would be nice to unlink here. But we might have opened the file created by the
   // ScopedLock, which we better not delete to avoid races. TODO: Investigate how to fix the API
@@ -203,6 +215,20 @@ OatFile* OatFile::OpenDlopen(const std::string& elf_filename,
   }
   return oat_file.release();
 }
+
+#ifdef MOE
+OatFile* OatFile::OpenThisDlopen(uint8_t* requested_base, std::string* error_msg) {
+    if (requested_base == nullptr) {
+        return nullptr;
+    }
+    std::unique_ptr<OatFile> oat_file(new OatFile("oatdata_symbol", true));
+    bool success = oat_file->ThisDlopen(requested_base, error_msg);
+    if (!success) {
+        return nullptr;
+    }
+    return oat_file.release();
+}
+#endif
 
 OatFile* OatFile::OpenElfFile(File* file,
                               const std::string& location,
@@ -243,6 +269,39 @@ OatFile::~OatFile() {
     runtime->GetOatFileManager().UnRegisterOatFileLocation(location_);
   }
 }
+
+#ifdef MOE
+static inline MemMap* get_oat_data_map(uint8_t* addr,  std::string* error_msg) {
+  size_t size;
+  void* slided = get_oat_data(&size);
+  if (!slided) {
+    return nullptr;
+  }
+
+  return MemMap::MapAlias("__oatdata_alias", addr, reinterpret_cast<uint8_t*>(slided), size, PROT_READ | PROT_EXEC, error_msg);
+}
+
+bool OatFile::ThisDlopen(uint8_t* requested_base, std::string* error_msg) {
+  mem_map_.reset(get_oat_data_map(requested_base, error_msg));
+  if (mem_map_.get() == nullptr) {
+    LOG(WARNING) << "Failed to find oatdata symbol in executable" << ": " << dlerror();
+    return false;
+  }
+
+  begin_ = mem_map_->Begin();
+  end_ = mem_map_->End();
+
+  if (requested_base != nullptr && begin_ != requested_base) {
+    std::string maps;
+    LOG(WARNING) << "Failed to find oatdata symbol at expected address: oatdata="
+    << reinterpret_cast<const void*>(begin_) << " != expected="
+    << reinterpret_cast<const void*>(requested_base) << "\n";
+    return false;
+  }
+
+  return Setup(nullptr, error_msg);
+}
+#endif
 
 bool OatFile::Dlopen(const std::string& elf_filename, uint8_t* requested_base,
                      const char* abs_dex_location, std::string* error_msg) {
@@ -357,19 +416,30 @@ bool OatFile::ElfFileOpen(File* file, uint8_t* requested_base, uint8_t* oat_file
                           bool writable, bool executable,
                           const char* abs_dex_location,
                           std::string* error_msg) {
+#ifndef MOE
   // TODO: rename requested_base to oat_data_begin
   elf_file_.reset(ElfFile::Open(file, writable, /*program_header_only*/true, error_msg,
                                 oat_file_begin));
   if (elf_file_ == nullptr) {
+#else
+  macho_file_.reset(MachOFile::Open(file, writable, error_msg));
+  if (macho_file_ == nullptr) {
+#endif
     DCHECK(!error_msg->empty());
     return false;
   }
+#ifndef MOE
   bool loaded = elf_file_->Load(executable, error_msg);
   if (!loaded) {
     DCHECK(!error_msg->empty());
     return false;
   }
+#endif
+#ifndef MOE
   begin_ = elf_file_->FindDynamicSymbolAddress("oatdata");
+#else
+  begin_ = macho_file_->Begin();
+#endif
   if (begin_ == nullptr) {
     *error_msg = StringPrintf("Failed to find oatdata symbol in '%s'", file->GetPath().c_str());
     return false;
@@ -381,6 +451,7 @@ bool OatFile::ElfFileOpen(File* file, uint8_t* requested_base, uint8_t* oat_file
                               begin_, requested_base);
     return false;
   }
+#ifndef MOE
   end_ = elf_file_->FindDynamicSymbolAddress("oatlastword");
   if (end_ == nullptr) {
     *error_msg = StringPrintf("Failed to find oatlastword symbol in '%s'", file->GetPath().c_str());
@@ -404,6 +475,9 @@ bool OatFile::ElfFileOpen(File* file, uint8_t* requested_base, uint8_t* oat_file
     // Readjust to be non-inclusive upper bound.
     bss_end_ += sizeof(uint32_t);
   }
+#else
+  end_ = begin_ + file->GetLength();
+#endif
 
   return Setup(abs_dex_location, error_msg);
 }

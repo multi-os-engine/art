@@ -263,8 +263,20 @@ bool IndirectReferenceTable::Remove(uint32_t cookie, IndirectRef iref) {
 void IndirectReferenceTable::Trim() {
   const size_t top_index = Capacity();
   auto* release_start = AlignUp(reinterpret_cast<uint8_t*>(&table_[top_index]), kPageSize);
+#ifndef MOE
   uint8_t* release_end = table_mem_map_->End();
   madvise(release_start, release_end - release_start, MADV_DONTNEED);
+#else
+  // On iOS arm64 - without AlignUp - 'release_end' could be less than 'release_start'
+  // causing the memset size to be huge. This is due to kPageSize being 16K on iOS/arm64.
+  // In other cases release_end seems to always be a multiple of 4K, thus skipping AlignUp
+  // did not cause issues.
+  uint8_t* release_end = AlignUp(table_mem_map_->End(), kPageSize);
+  CHECK(release_start <= release_end);
+  if (!kMadviseZeroes) {
+    SafeZeroAndReleaseSpace(release_start, release_end - release_start);
+  }
+#endif
 }
 
 void IndirectReferenceTable::VisitRoots(RootVisitor* visitor, const RootInfo& root_info) {

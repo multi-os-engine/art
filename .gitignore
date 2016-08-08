@@ -1,2 +1,16 @@
 JIT_ART
 **/__pycache__/**
+
+test/**/*.class
+test/**/.jar
+test/**/*.lst
+test/**/*.dex
+test/023-many-interfaces/iface-gen
+test/023-many-interfaces/func-decl
+test/023-many-interfaces/src/Interface*.java
+test/056-const-string-jumbo/src/Zorch*.java
+test/303-verification-stress/src/Test*.java
+test/303-verification-stress/src/MainTest.java
+test/303-verification-stress/classes-gen
+test/701-easy-div-rem/src/Main.java
+test/702-LargeBranchOffset/src/Main.java

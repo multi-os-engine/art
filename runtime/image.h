@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,15 +84,30 @@ class PACKED(4) ImageHeader {
         oat_data_begin_(0U), oat_data_end_(0U), oat_file_end_(0U), patch_delta_(0),
         image_roots_(0U), pointer_size_(0U), compile_pic_(0) {}
 
+#ifndef MOE
   ImageHeader(uint32_t image_begin,
+#else
+  ImageHeader(uint64_t image_begin,
+#endif
               uint32_t image_size_,
               ImageSection* sections,
+#ifndef MOE
               uint32_t image_roots,
+#else
+              uint64_t image_roots,
+#endif
               uint32_t oat_checksum,
+#ifndef MOE
               uint32_t oat_file_begin,
               uint32_t oat_data_begin,
               uint32_t oat_data_end,
               uint32_t oat_file_end,
+#else
+              uint64_t oat_file_begin,
+              uint64_t oat_data_begin,
+              uint64_t oat_data_end,
+              uint64_t oat_file_end,
+#endif
               uint32_t pointer_size,
               bool compile_pic_);
 
@@ -201,7 +217,11 @@ class PACKED(4) ImageHeader {
   uint8_t version_[4];
 
   // Required base address for mapping the image.
+#ifndef MOE
   uint32_t image_begin_;
+#else
+  uint64_t image_begin_;
+#endif
 
   // Image size, not page aligned.
   uint32_t image_size_;
@@ -210,23 +230,47 @@ class PACKED(4) ImageHeader {
   uint32_t oat_checksum_;
 
   // Start address for oat file. Will be before oat_data_begin_ for .so files.
+#ifndef MOE
   uint32_t oat_file_begin_;
+#else
+  uint64_t oat_file_begin_;
+#endif
 
   // Required oat address expected by image Method::GetCode() pointers.
+#ifndef MOE
   uint32_t oat_data_begin_;
+#else
+  uint64_t oat_data_begin_;
+#endif
 
   // End of oat data address range for this image file.
+#ifndef MOE
   uint32_t oat_data_end_;
+#else
+  uint64_t oat_data_end_;
+#endif
 
   // End of oat file address range. will be after oat_data_end_ for
   // .so files. Used for positioning a following alloc spaces.
+#ifndef MOE
   uint32_t oat_file_end_;
+#else
+  uint64_t oat_file_end_;
+#endif
 
   // The total delta that this image has been patched.
+#ifndef MOE
   int32_t patch_delta_;
+#else
+  int64_t patch_delta_;
+#endif
 
   // Absolute address of an Object[] of objects needed to reinitialize from an image.
+#ifndef MOE
   uint32_t image_roots_;
+#else
+  uint64_t image_roots_;
+#endif
 
   // Pointer size, this affects the size of the ArtMethods.
   uint32_t pointer_size_;

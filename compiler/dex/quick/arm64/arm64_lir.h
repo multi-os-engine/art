@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -238,6 +239,9 @@ enum A64Opcode {
   kA64Asr3rrd,       // asr [0001001100] immr[21-16] imms[15-10] rn[9-5] rd[4-0].
   kA64Asr3rrr,       // asr alias of "sbfm arg0, arg1, arg2, {#31/#63}".
   kA64B2ct,          // b.cond [01010100] imm_19[23-5] [0] cond[3-0].
+//#ifdef MOE // operator generator get confused by nested directives
+  kA64Bfm4rrdd,
+//#endif
   kA64Blr1x,         // blr [1101011000111111000000] rn[9-5] [00000].
   kA64Br1x,          // br  [1101011000011111000000] rn[9-5] [00000].
   kA64Bl1t,          // bl  [100101] imm26[25-0].

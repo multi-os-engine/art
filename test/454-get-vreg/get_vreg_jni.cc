@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +57,7 @@ class TestVisitor : public StackVisitor {
       }
 
       CHECK(GetVReg(m, 3, kReferenceVReg, &value));
-      CHECK_EQ(reinterpret_cast<mirror::Object*>(value), this_value_);
+      CHECK_EQ((reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&value)->AsMirrorPtr()), this_value_);
 
       CHECK(GetVReg(m, 4, kIntVReg, &value));
       CHECK_EQ(value, 1u);
@@ -94,7 +95,7 @@ class TestVisitor : public StackVisitor {
 
       uint32_t value32 = 0;
       CHECK(GetVReg(m, 6, kReferenceVReg, &value32));
-      CHECK_EQ(reinterpret_cast<mirror::Object*>(value32), this_value_);
+      CHECK_EQ((reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&value32)->AsMirrorPtr()), this_value_);
 
       CHECK(GetVRegPair(m, 7, kLongLoVReg, kLongHiVReg, &value));
       CHECK_EQ(static_cast<int64_t>(value), std::numeric_limits<int64_t>::min());

@@ -1,0 +1,20 @@
+// Create sections from the art and oat files.
+MOE_SECT_OAT = -sectcreate __OATDATA __oatdata "${SRCROOT}/build/moe/main/xcode/${CONFIGURATION}${EFFECTIVE_PLATFORM_NAME}/${arch}.oat"
+MOE_SECT_ART = -sectcreate __ARTDATA __artdata "${SRCROOT}/build/moe/main/xcode/${CONFIGURATION}${EFFECTIVE_PLATFORM_NAME}/${arch}.art"
+
+// Set the maximum and initial virtual memory protection for the segments.
+MOE_SEGPROT[sdk=iphoneos*] = -segprot __OATDATA rx rx -segprot __ARTDATA rw rw
+MOE_SEGPROT[sdk=iphonesimulator*] = -segprot __OATDATA rwx rx -segprot __ARTDATA rwx rw
+
+// Set the __PAGEZERO segment size.
+MOE_PAGEZERO[sdk=iphoneos*] = 
+MOE_PAGEZERO[sdk=iphonesimulator*] = -pagezero_size 4096
+
+MOE_FRAMEWORK_PATH[sdk=iphonesimulator*] = ${MOE_HOME}/sdk/iphonesimulator
+MOE_FRAMEWORK_PATH[sdk=iphoneos*] = ${MOE_HOME}/sdk/iphoneos
+
+// Collect all MOE linker flags.
+MOE_OTHER_LDFLAGS = ${MOE_SECT_OAT} ${MOE_SECT_ART} ${MOE_SEGPROT} ${MOE_PAGEZERO} -lstdc++
+
+// Disable BitCode.
+ENABLE_BITCODE = NO

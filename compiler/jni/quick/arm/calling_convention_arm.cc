@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -214,10 +215,12 @@ ArmJniCallingConvention::ArmJniCallingConvention(bool is_static, bool is_synchro
   size_t padding = 0;
   for (size_t cur_arg = IsStatic() ? 0 : 1, cur_reg = 2; cur_arg < NumArgs(); cur_arg++) {
     if (IsParamALongOrDouble(cur_arg)) {
+#ifndef MOE
       if ((cur_reg & 1) != 0) {
         padding += 4;
         cur_reg++;  // additional bump to ensure alignment
       }
+#endif
       cur_reg++;  // additional bump to skip extra long word
     }
     cur_reg++;  // bump the iterator for every argument
@@ -277,10 +280,12 @@ void ArmJniCallingConvention::Next() {
   if ((itr_args_ >= 2) &&
       (arg_pos < NumArgs()) &&
       IsParamALongOrDouble(arg_pos)) {
+#ifndef MOE
     // itr_slots_ needs to be an even number, according to AAPCS.
     if ((itr_slots_ & 0x1u) != 0) {
       itr_slots_++;
     }
+#endif
   }
 }
 
@@ -289,7 +294,18 @@ bool ArmJniCallingConvention::IsCurrentParamInRegister() {
 }
 
 bool ArmJniCallingConvention::IsCurrentParamOnStack() {
+#ifndef MOE
   return !IsCurrentParamInRegister();
+#else
+  if (itr_slots_ < 3) {
+    return false;
+  } else if (itr_slots_ > 3) {
+    return true;
+  } else {
+    size_t arg_pos = itr_args_ - NumberOfExtraArgumentsForJni();
+    return IsParamALongOrDouble(arg_pos);
+  }
+#endif
 }
 
 static const Register kJniArgumentRegisters[] = {
@@ -298,8 +314,15 @@ static const Register kJniArgumentRegisters[] = {
 ManagedRegister ArmJniCallingConvention::CurrentParamRegister() {
   CHECK_LT(itr_slots_, 4u);
   int arg_pos = itr_args_ - NumberOfExtraArgumentsForJni();
+#ifdef MOE
+  if ((itr_slots_ == 3) && IsParamALongOrDouble(arg_pos)) {
+    return ArmManagedRegister::FromCoreRegister(R3);
+  }
+#endif
   if ((itr_args_ >= 2) && IsParamALongOrDouble(arg_pos)) {
+#ifndef MOE
     CHECK_EQ(itr_slots_, 2u);
+#endif
     return ArmManagedRegister::FromRegisterPair(R2_R3);
   } else {
     return
@@ -308,8 +331,20 @@ ManagedRegister ArmJniCallingConvention::CurrentParamRegister() {
 }
 
 FrameOffset ArmJniCallingConvention::CurrentParamStackOffset() {
+#ifndef MOE
   CHECK_GE(itr_slots_, 4u);
   size_t offset = displacement_.Int32Value() - OutArgSize() + ((itr_slots_ - 4) * kFramePointerSize);
+#else
+  size_t offset;
+  if (itr_slots_ == 3) {
+    int arg_pos = itr_args_ - NumberOfExtraArgumentsForJni();
+    CHECK(IsParamALongOrDouble(arg_pos));
+    offset = displacement_.Int32Value() - OutArgSize();
+  } else {
+    CHECK_GE(itr_slots_, 4u);
+    offset = displacement_.Int32Value() - OutArgSize() + ((itr_slots_ - 4) * kFramePointerSize);
+  }
+#endif
   CHECK_LT(offset, OutArgSize());
   return FrameOffset(offset);
 }

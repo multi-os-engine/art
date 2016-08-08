@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -535,7 +536,18 @@ LIR* X86Mir2Lir::OpThreadMem(OpKind op, ThreadOffset<4> thread_offset) {
       LOG(FATAL) << "Bad opcode: " << op;
       break;
   }
+#ifndef MOE
   return NewLIR1(opcode, thread_offset.Int32Value());
+#else
+  int scratch = rAX;
+  NewLIR1(kX86Push32R, scratch);
+  NewLIR2(kX86Mov32RT, scratch, MOE_TLS_THREAD_OFFSET_32);
+  NewLIR3(kX86Mov32RM, scratch, scratch, thread_offset.Int32Value());
+  NewLIR2(kX86Mov32TR, MOE_TLS_SCRATCH_OFFSET_32, scratch);
+  NewLIR1(kX86Pop32R, scratch);
+
+  return NewLIR1(opcode, MOE_TLS_SCRATCH_OFFSET_32);
+#endif
 }
 
 LIR* X86Mir2Lir::OpThreadMem(OpKind op, ThreadOffset<8> thread_offset) {
@@ -548,7 +560,18 @@ LIR* X86Mir2Lir::OpThreadMem(OpKind op, ThreadOffset<8> thread_offset) {
       LOG(FATAL) << "Bad opcode: " << op;
       break;
   }
+#ifndef MOE
   return NewLIR1(opcode, thread_offset.Int32Value());
+#else
+  int scratch = rAX;
+  NewLIR1(kX86Push32R, scratch);
+  NewLIR2(kX86Mov64RT, scratch, MOE_TLS_THREAD_OFFSET_64);
+  NewLIR3(kX86Mov64RM, scratch, scratch, thread_offset.Int32Value());
+  NewLIR2(kX86Mov64TR, MOE_TLS_SCRATCH_OFFSET_64, scratch);
+  NewLIR1(kX86Pop32R, scratch);
+
+  return NewLIR1(opcode, MOE_TLS_SCRATCH_OFFSET_64);
+#endif
 }
 
 LIR* X86Mir2Lir::OpMem(OpKind op, RegStorage r_base, int disp) {

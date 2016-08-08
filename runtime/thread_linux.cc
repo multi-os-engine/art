@@ -30,9 +30,11 @@ int Thread::GetNativePriority() {
 }
 
 static void SigAltStack(stack_t* new_stack, stack_t* old_stack) {
+#ifndef MOE
   if (sigaltstack(new_stack, old_stack) == -1) {
     PLOG(FATAL) << "sigaltstack failed";
   }
+#endif
 }
 
 // The default SIGSTKSZ on linux is 8K.  If we do any logging in a signal
@@ -44,6 +46,7 @@ static constexpr int kHostAltSigStackSize =
 
 void Thread::SetUpAlternateSignalStack() {
   // Create and set an alternate signal stack.
+#ifndef MOE
 #ifdef __ANDROID__
   LOG(FATAL) << "Invalid use of alternate signal stack on Android";
 #endif
@@ -58,9 +61,13 @@ void Thread::SetUpAlternateSignalStack() {
   ss.ss_sp = nullptr;
   SigAltStack(nullptr, &ss);
   VLOG(threads) << "Alternate signal stack is " << PrettySize(ss.ss_size) << " at " << ss.ss_sp;
+#else
+  return;
+#endif
 }
 
 void Thread::TearDownAlternateSignalStack() {
+#ifndef MOE
   // Get the pointer so we can free the memory.
   stack_t ss;
   SigAltStack(nullptr, &ss);
@@ -74,6 +81,9 @@ void Thread::TearDownAlternateSignalStack() {
 
   // Free it.
   delete[] allocated_signal_stack;
+#else
+  return;
+#endif
 }
 
 }  // namespace art

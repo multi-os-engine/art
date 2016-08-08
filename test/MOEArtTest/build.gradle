@@ -1,0 +1,69 @@
+/************************/
+/** Build Script Setup **/
+/************************/
+
+buildscript {
+	// Add central and local Maven repos
+	repositories {
+		mavenCentral()
+		jcenter()
+
+		maven {
+			url uri(System.getenv("MOE_HOME") + "/gradle")
+		}
+	}
+	dependencies {
+		// MOE plugin
+		classpath 'org.moe.gradle:moeGradlePlugin:1.1.+'
+	}
+}
+
+/*******************/
+/** Project Setup **/
+/*******************/
+
+// Apply plugins
+apply plugin: 'eclipse'
+apply plugin: 'moe'
+apply plugin: 'idea'
+
+// Set source and target to Java 8
+sourceCompatibility = "1.8"
+targetCompatibility = "1.8"
+
+// Set maven repository
+repositories {
+	maven {
+		url uri(System.getenv("MOE_HOME") + "/gradle")
+	}
+	mavenCentral()
+}
+
+// Exclude all files from Gradle's test runner
+test { exclude '**' }
+
+// Setup MOE
+moe {
+	xcode {
+		mainTarget = 'moeArtTest'
+		testTarget = 'moeArtTest-Test'
+		mainProductName = 'moeArtTest'
+		testProductName = 'moeArtTest-Test'
+
+		xcodeProjectDirPath = ""
+		generateProject false
+	}
+}
+
+// Set dependencies
+dependencies {
+	// Compile with 'jar' files in the project's 'lib' directory
+	compile fileTree(dir: 'lib', include: '*.jar')
+}
+
+// Setup Idea
+//idea {
+//    module {
+//        jdkName = 'MOE SDK'
+//    }
+//}

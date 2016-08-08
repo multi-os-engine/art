@@ -1,0 +1,9 @@
+getDisplayName: Moscow Standard Time
+getID: Europe/Moscow
+getOffset: 10800000
+getDisplayName: Pacific Standard Time
+getID: America/Los_Angeles
+getOffset: -25200000
+getDisplayName: Central European Standard Time
+getID: Europe/Copenhagen
+getOffset: 7200000

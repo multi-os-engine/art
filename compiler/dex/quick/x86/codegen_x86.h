@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -466,6 +467,9 @@ class X86Mir2Lir FINAL : public Mir2Lir {
                     int32_t raw_disp, int32_t imm);
   void EmitRegThread(const X86EncodingMap* entry, int32_t raw_reg, int32_t disp);
   void EmitRegReg(const X86EncodingMap* entry, int32_t raw_reg1, int32_t raw_reg2);
+#ifdef MOE
+  void EmitThreadReg(const X86EncodingMap* entry, int32_t disp, int32_t raw_reg);
+#endif
   void EmitRegRegImm(const X86EncodingMap* entry, int32_t raw_reg1, int32_t raw_reg2, int32_t imm);
   void EmitRegMemImm(const X86EncodingMap* entry, int32_t raw_reg1, int32_t raw_base, int32_t disp,
                      int32_t imm);

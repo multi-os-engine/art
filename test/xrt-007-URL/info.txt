@@ -1,0 +1,1 @@
+The test verifies a URL class instance can be created.

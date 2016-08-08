@@ -202,6 +202,22 @@ bool PatchOat::Patch(const std::string& image_location, off_t delta,
   return true;
 }
 
+#ifdef MOE
+bool PatchOat::Patch(InstructionSet isa, MemMap* image, gc::accounting::ContinuousSpaceBitmap* bitmap,
+    MemMap* heap, TimingLogger* timings) {
+  TimingLogger::ScopedTiming t("Image patching", timings);
+    
+  PatchOat p(isa, image, bitmap, heap, ((ImageHeader*)image->Begin())->GetPatchDelta(), timings);
+  t.NewTiming("Patching files");
+  if (!p.PatchImage()) {
+    LOG(ERROR) << "Failed to patch image data [" << image->Begin() << ", " << image->End() << ")";
+    return false;
+  }
+  
+  return true;
+}
+#endif
+  
 bool PatchOat::Patch(File* input_oat, const std::string& image_location, off_t delta,
                      File* output_oat, File* output_image, InstructionSet isa,
                      TimingLogger* timings,
@@ -522,8 +538,14 @@ void PatchOat::PatchInternedStrings(const ImageHeader* image_header) {
 void PatchOat::PatchDexFileArrays(mirror::ObjectArray<mirror::Object>* img_roots) {
   auto* dex_caches = down_cast<mirror::ObjectArray<mirror::DexCache>*>(
       img_roots->Get(ImageHeader::kDexCaches));
+#ifdef MOE
+  dex_caches = RelocatedAddressOfPointer(dex_caches);
+#endif
   for (size_t i = 0, count = dex_caches->GetLength(); i < count; ++i) {
     auto* orig_dex_cache = dex_caches->GetWithoutChecks(i);
+#ifdef MOE
+    orig_dex_cache = RelocatedAddressOfPointer(orig_dex_cache);
+#endif
     auto* copy_dex_cache = RelocatedCopyOf(orig_dex_cache);
     const size_t pointer_size = InstructionSetPointerSize(isa_);
     // Though the DexCache array fields are usually treated as native pointers, we set the full
@@ -536,6 +558,9 @@ void PatchOat::PatchDexFileArrays(mirror::ObjectArray<mirror::Object>* img_roots
         mirror::DexCache::StringsOffset(),
         static_cast<int64_t>(reinterpret_cast<uintptr_t>(relocated_strings)));
     if (orig_strings != nullptr) {
+#ifdef MOE
+      orig_strings = relocated_strings;
+#endif
       GcRoot<mirror::String>* copy_strings = RelocatedCopyOf(orig_strings);
       for (size_t j = 0, num = orig_dex_cache->NumStrings(); j != num; ++j) {
         copy_strings[j] = GcRoot<mirror::String>(RelocatedAddressOfPointer(orig_strings[j].Read()));
@@ -547,6 +572,9 @@ void PatchOat::PatchDexFileArrays(mirror::ObjectArray<mirror::Object>* img_roots
         mirror::DexCache::ResolvedTypesOffset(),
         static_cast<int64_t>(reinterpret_cast<uintptr_t>(relocated_types)));
     if (orig_types != nullptr) {
+#ifdef MOE
+      orig_types = relocated_types;
+#endif
       GcRoot<mirror::Class>* copy_types = RelocatedCopyOf(orig_types);
       for (size_t j = 0, num = orig_dex_cache->NumResolvedTypes(); j != num; ++j) {
         copy_types[j] = GcRoot<mirror::Class>(RelocatedAddressOfPointer(orig_types[j].Read()));
@@ -558,6 +586,9 @@ void PatchOat::PatchDexFileArrays(mirror::ObjectArray<mirror::Object>* img_roots
         mirror::DexCache::ResolvedMethodsOffset(),
         static_cast<int64_t>(reinterpret_cast<uintptr_t>(relocated_methods)));
     if (orig_methods != nullptr) {
+#ifdef MOE
+      orig_methods = relocated_methods;
+#endif
       ArtMethod** copy_methods = RelocatedCopyOf(orig_methods);
       for (size_t j = 0, num = orig_dex_cache->NumResolvedMethods(); j != num; ++j) {
         ArtMethod* orig = mirror::DexCache::GetElementPtrSize(orig_methods, j, pointer_size);
@@ -571,6 +602,9 @@ void PatchOat::PatchDexFileArrays(mirror::ObjectArray<mirror::Object>* img_roots
         mirror::DexCache::ResolvedFieldsOffset(),
         static_cast<int64_t>(reinterpret_cast<uintptr_t>(relocated_fields)));
     if (orig_fields != nullptr) {
+#ifdef MOE
+      orig_fields = relocated_fields;
+#endif
       ArtField** copy_fields = RelocatedCopyOf(orig_fields);
       for (size_t j = 0, num = orig_dex_cache->NumResolvedFields(); j != num; ++j) {
         ArtField* orig = mirror::DexCache::GetElementPtrSize(orig_fields, j, pointer_size);
@@ -605,7 +639,9 @@ bool PatchOat::PatchImage() {
   CHECK_GT(image_->Size(), sizeof(ImageHeader));
   // These are the roots from the original file.
   auto* img_roots = image_header->GetImageRoots();
+#ifndef MOE
   image_header->RelocateImage(delta_);
+#endif
 
   PatchArtFields(image_header);
   PatchArtMethods(image_header);
@@ -613,7 +649,31 @@ bool PatchOat::PatchImage() {
   // Patch dex file int/long arrays which point to ArtFields.
   PatchDexFileArrays(img_roots);
 
+#ifdef MOE
+  bitmap_->Walk([](mirror::Object* obj, void* arg) {
+    mirror::Class* klass = obj->GetClass<kVerifyNone>();
+    obj->SetClass<kVerifyNone>(reinterpret_cast<PatchOat*>(arg)->RelocatedAddressOfPointer(klass));
+  }, this);
+  
+  bitmap_->Walk([](mirror::Object* obj, void* arg) {
+    if (obj->IsClass<kVerifyNone>()) {
+      mirror::Class* klass = (mirror::Class*)obj;
+      off_t delta = reinterpret_cast<off_t>(arg);
+      
+      if (klass->IsArrayClass<kVerifyNone>()) {
+        mirror::Class* old_component_type = klass->GetComponentType<kVerifyNone>();
+        if (old_component_type != nullptr) {
+          mirror::Class* component_type = reinterpret_cast<PatchOat*>(arg)->RelocatedAddressOfPointer(old_component_type);
+          klass->SetFieldObjectWithoutWriteBarrier<false, false, kVerifyNone, false>(klass->ComponentTypeOffset(), component_type);
+        }
+      }
+    }
+  }, this);
+#endif
+  
+#ifndef MOE
   VisitObject(img_roots);
+#endif
   if (!image_header->IsValid()) {
     LOG(ERROR) << "reloction renders image header invalid";
     return false;
@@ -637,6 +697,13 @@ bool PatchOat::InHeap(mirror::Object* o) {
 
 void PatchOat::PatchVisitor::operator() (mirror::Object* obj, MemberOffset off,
                                          bool is_static_unused ATTRIBUTE_UNUSED) const {
+#ifdef MOE
+  if (off.Uint32Value() == mirror::Object::ClassOffset().Uint32Value() ||
+      (obj->IsClass<kVerifyNone>() && off.Uint32Value() ==
+      art::mirror::Class::ComponentTypeOffset().Uint32Value())) {
+    return;
+  }
+#endif
   mirror::Object* referent = obj->GetFieldObject<mirror::Object, kVerifyNone>(off);
   DCHECK(patcher_->InHeap(referent)) << "Referent is not in the heap.";
   mirror::Object* moved_object = patcher_->RelocatedAddressOfPointer(referent);
@@ -665,7 +732,9 @@ void PatchOat::VisitObject(mirror::Object* object) {
     }
   }
   PatchOat::PatchVisitor visitor(this, copy);
+#ifndef MOE
   object->VisitReferences<kVerifyNone>(visitor, visitor);
+#endif
   if (object->IsClass<kVerifyNone>()) {
     auto* klass = object->AsClass();
     auto* copy_klass = down_cast<mirror::Class*>(copy);
@@ -675,6 +744,13 @@ void PatchOat::VisitObject(mirror::Object* object) {
     copy_klass->SetDirectMethodsPtrUnchecked(
         RelocatedAddressOfPointer(klass->GetDirectMethodsPtr()));
     copy_klass->SetVirtualMethodsPtr(RelocatedAddressOfPointer(klass->GetVirtualMethodsPtr()));
+#ifdef MOE
+  }
+  object->VisitReferences<kVerifyNone>(visitor, visitor);
+  if (object->IsClass<kVerifyNone>()) {
+    auto* klass = object->AsClass();
+    auto* copy_klass = down_cast<mirror::Class*>(copy);
+#endif
     auto* vtable = klass->GetVTable();
     if (vtable != nullptr) {
       FixupNativePointerArray(vtable);
@@ -712,7 +788,9 @@ void PatchOat::VisitObject(mirror::Object* object) {
 
 void PatchOat::FixupMethod(ArtMethod* object, ArtMethod* copy) {
   const size_t pointer_size = InstructionSetPointerSize(isa_);
+#ifndef MOE
   copy->CopyFrom(object, pointer_size);
+#endif
   // Just update the entry points if it looks like we should.
   // TODO: sanity check all the pointers' values
   copy->SetDeclaringClass(RelocatedAddressOfPointer(object->GetDeclaringClass()));
@@ -1441,6 +1519,8 @@ static int patchoat(int argc, char **argv) {
 
 }  // namespace art
 
+#ifndef MOE
 int main(int argc, char **argv) {
   return art::patchoat(argc, argv);
 }
+#endif

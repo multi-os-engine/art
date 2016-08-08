@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +23,11 @@
 DEFINE_FUNCTION art_jni_dlsym_lookup_stub
     subl LITERAL(8), %esp         // align stack
     CFI_ADJUST_CFA_OFFSET(8)
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     call SYMBOL(artFindNativeMethod)  // (Thread*)
     addl LITERAL(12), %esp        // remove argument & padding

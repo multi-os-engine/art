@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,9 +31,15 @@
 #include "compiled_method.h"
 #include "dex_file-inl.h"
 #include "driver/compiler_driver.h"
+#ifndef MOE
 #include "elf_file.h"
 #include "elf_utils.h"
 #include "elf_writer.h"
+#else
+#include "macho_file.h"
+#include "macho_writer.h"
+#define ElfFile MachOFile
+#endif
 #include "gc/accounting/card_table-inl.h"
 #include "gc/accounting/heap_bitmap.h"
 #include "gc/accounting/space_bitmap-inl.h"
@@ -161,7 +168,11 @@ bool ImageWriter::Write(const std::string& image_filename,
 
   size_t oat_loaded_size = 0;
   size_t oat_data_offset = 0;
+#ifndef MOE
   ElfWriter::GetOatElfInformation(oat_file.get(), &oat_loaded_size, &oat_data_offset);
+#else
+  MachOWriter::GetOatMachOInformation(oat_file.get(), &oat_loaded_size, &oat_data_offset);
+#endif
 
   {
     ScopedObjectAccess soa(Thread::Current());
@@ -201,14 +212,28 @@ bool ImageWriter::Write(const std::string& image_filename,
 
   // Write out the image bitmap at the page aligned start of the image end.
   const ImageSection& bitmap_section = image_header->GetImageSection(ImageHeader::kSectionImageBitmap);
+#ifndef MOE
   CHECK_ALIGNED(bitmap_section.Offset(), kPageSize);
+#else
+  CHECK_ALIGNED_PARAM(bitmap_section.Offset(), instruction_set_ == kArm64 ? (4*4096) : 4096);
+#endif
   if (!image_file->Write(reinterpret_cast<char*>(image_bitmap_->Begin()),
+#ifndef MOE
                          bitmap_section.Size(), bitmap_section.Offset())) {
+#else
+                         image_bitmap_->Size(), bitmap_section.Offset())) {
+#endif
     PLOG(ERROR) << "Failed to write image file " << image_filename;
     image_file->Erase();
     return false;
   }
 
+#ifdef MOE
+  if (bitmap_section.Size() > image_bitmap_->Size()) {
+    image_file->SetLength(image_file->GetLength() + (bitmap_section.Size() - image_bitmap_->Size()));
+  }
+#endif
+      
   CHECK_EQ(bitmap_section.End(), static_cast<size_t>(image_file->GetLength()));
   if (image_file->FlushCloseOrErase() != 0) {
     PLOG(ERROR) << "Failed to flush and close image file " << image_filename;
@@ -497,8 +522,13 @@ ImageWriter::BinSlot ImageWriter::GetImageBinSlot(mirror::Object* object) const 
 }
 
 bool ImageWriter::AllocMemory() {
+#ifndef MOE
   const size_t length = RoundUp(image_objects_offset_begin_ + GetBinSizeSum() + intern_table_bytes_,
                                 kPageSize);
+#else
+  const size_t length = RoundUp(image_objects_offset_begin_ + GetBinSizeSum() + intern_table_bytes_,
+                                instruction_set_ == kArm64 ? (4*4096) : 4096);
+#endif
   std::string error_msg;
   image_.reset(MemMap::MapAnonymous("image writer image", nullptr, length, PROT_READ | PROT_WRITE,
                                     false, false, &error_msg));
@@ -510,7 +540,11 @@ bool ImageWriter::AllocMemory() {
   // Create the image bitmap, only needs to cover mirror object section which is up to image_end_.
   CHECK_LE(image_end_, length);
   image_bitmap_.reset(gc::accounting::ContinuousSpaceBitmap::Create(
+#ifndef MOE
       "image bitmap", image_->Begin(), RoundUp(image_end_, kPageSize)));
+#else
+      "image bitmap", image_->Begin(), RoundUp(image_end_, instruction_set_ == kArm64 ? (4*4096) : 4096)));
+#endif
   if (image_bitmap_.get() == nullptr) {
     LOG(ERROR) << "Failed to allocate memory for image bitmap";
     return false;
@@ -1018,7 +1052,12 @@ void ImageWriter::CreateHeader(size_t oat_loaded_size, size_t oat_data_offset) {
   // Finally bitmap section.
   const size_t bitmap_bytes = image_bitmap_->Size();
   auto* bitmap_section = &sections[ImageHeader::kSectionImageBitmap];
+#ifndef MOE
   *bitmap_section = ImageSection(RoundUp(cur_pos, kPageSize), RoundUp(bitmap_bytes, kPageSize));
+#else
+  size_t page_size = instruction_set_ == kArm64 ? (4*4096) : 4096;
+  *bitmap_section = ImageSection(RoundUp(cur_pos, page_size), RoundUp(bitmap_bytes, page_size));
+#endif
   cur_pos = bitmap_section->End();
   if (kIsDebugBuild) {
     size_t idx = 0;
@@ -1029,7 +1068,11 @@ void ImageWriter::CreateHeader(size_t oat_loaded_size, size_t oat_data_offset) {
     LOG(INFO) << "Methods: clean=" << clean_methods_ << " dirty=" << dirty_methods_;
   }
   const size_t image_end = static_cast<uint32_t>(interned_strings_section->End());
+#ifndef MOE
   CHECK_EQ(AlignUp(image_begin_ + image_end, kPageSize), oat_file_begin) <<
+#else
+  CHECK_EQ(AlignUp(image_begin_ + image_end, instruction_set_ == kArm64 ? (4*4096) : 4096), oat_file_begin) <<
+#endif
       "Oat file should be right after the image.";
   // Create the header.
   new (image_->Begin()) ImageHeader(
@@ -1547,12 +1590,16 @@ void ImageWriter::CopyAndFixupMethod(ArtMethod* orig, ArtMethod* copy) {
 }
 
 static OatHeader* GetOatHeaderFromElf(ElfFile* elf) {
+#ifndef MOE
   uint64_t data_sec_offset;
   bool has_data_sec = elf->GetSectionOffsetAndSize(".rodata", &data_sec_offset, nullptr);
   if (!has_data_sec) {
     return nullptr;
   }
   return reinterpret_cast<OatHeader*>(elf->Begin() + data_sec_offset);
+#else
+  return reinterpret_cast<OatHeader*>(elf->Begin());
+#endif
 }
 
 void ImageWriter::SetOatChecksumFromElfFile(File* elf_file) {
@@ -1605,7 +1652,12 @@ uint8_t* ImageWriter::GetOatFileBegin() const {
       bin_slot_sizes_[kBinArtField] + bin_slot_sizes_[kBinArtMethodDirty] +
       bin_slot_sizes_[kBinArtMethodClean] + bin_slot_sizes_[kBinDexCacheArray] +
       intern_table_bytes_;
+#ifndef MOE
   return image_begin_ + RoundUp(image_end_ + native_sections_size, kPageSize);
+#else
+  size_t page_size = instruction_set_ == kArm64 ? (4*4096) : 4096;
+  return image_begin_ + RoundUp(image_end_ + native_sections_size, page_size);
+#endif
 }
 
 ImageWriter::Bin ImageWriter::BinTypeForNativeRelocationType(NativeObjectRelocationType type) {

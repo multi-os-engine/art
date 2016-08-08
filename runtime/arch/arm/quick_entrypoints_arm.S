@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +17,45 @@
 
 #include "asm_support_arm.S"
 
+#ifdef MOE
+#define artLockObjectFromCode _artLockObjectFromCode
+#define artUnlockObjectFromCode _artUnlockObjectFromCode
+#define artThrowClassCastException _artThrowClassCastException
+#define artGet64InstanceFromCode _artGet64InstanceFromCode
+#define artSet64StaticFromCode _artSet64StaticFromCode
+#define artSet64InstanceFromCode _artSet64InstanceFromCode
+#define artGet64StaticFromCode _artGet64StaticFromCode
+#define artTestSuspendFromCode _artTestSuspendFromCode
+#define artQuickProxyInvokeHandler _artQuickProxyInvokeHandler
+#define artQuickResolutionTrampoline _artQuickResolutionTrampoline
+#define artQuickToInterpreterBridge _artQuickToInterpreterBridge
+#define artInstrumentationMethodEntryFromCode _artInstrumentationMethodEntryFromCode
+#define artInstrumentationMethodExitFromCode _artInstrumentationMethodExitFromCode
+#define artDeoptimize _artDeoptimize
+#define artDeliverPendingExceptionFromCode _artDeliverPendingExceptionFromCode
+#define memcpy _memcpy
+#define __memcmp16 ___memcmp16
+#define artIsAssignableFromCode _artIsAssignableFromCode
+#define artThrowArrayStoreException _artThrowArrayStoreException
+#define artQuickGenericJniTrampoline _artQuickGenericJniTrampoline
+#define artQuickGenericJniEndTrampoline _artQuickGenericJniEndTrampoline
+#define art_f2l _art_f2l
+#define art_d2l _art_d2l
+#define art_l2f _art_l2f
+#define fmodf _fmodf
+#define fmod _fmod
+#define artDeoptimizeFromCompiledCode _artDeoptimizeFromCompiledCode
+#define artAllocObjectFromCodeRosAlloc _artAllocObjectFromCodeRosAlloc
+#endif
+
 #include "arch/quick_alloc_entrypoints.S"
 
     /* Deliver the given exception */
+    #ifndef MOE
     .extern artDeliverExceptionFromCode
+    #else
+    .extern _artDeliverExceptionFromCode
+    #endif
     /* Deliver an exception pending on a thread */
     .extern artDeliverPendingException
 
@@ -185,37 +221,63 @@
      * exception is Thread::Current()->exception_
      */
 .macro DELIVER_PENDING_EXCEPTION
+    #ifndef MOE
     .fnend
     .fnstart
+    #endif
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r0, r1    @ save callee saves for throw
     mov    r0, r9                              @ pass Thread::Current
     b      artDeliverPendingExceptionFromCode  @ artDeliverPendingExceptionFromCode(Thread*)
 .endm
 
 .macro NO_ARG_RUNTIME_EXCEPTION c_name, cxx_name
+    #ifndef MOE
     .extern \cxx_name
+    #else
+    .extern _\cxx_name
+    #endif
 ENTRY \c_name
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  r0, r1 // save all registers as basis for long jump context
     mov r0, r9                      @ pass Thread::Current
+    #ifndef MOE
     b   \cxx_name                   @ \cxx_name(Thread*)
+    #else
+    b   _\cxx_name                  @ \cxx_name(Thread*)
+    #endif
 END \c_name
 .endm
 
 .macro ONE_ARG_RUNTIME_EXCEPTION c_name, cxx_name
+    #ifndef MOE
     .extern \cxx_name
+    #else
+    .extern _\cxx_name
+    #endif
 ENTRY \c_name
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r1, r2  // save all registers as basis for long jump context
     mov r1, r9                      @ pass Thread::Current
+    #ifndef MOE
     b   \cxx_name                   @ \cxx_name(Thread*)
+    #else
+    b   _\cxx_name                  @ \cxx_name(Thread*)
+    #endif
 END \c_name
 .endm
 
 .macro TWO_ARG_RUNTIME_EXCEPTION c_name, cxx_name
+    #ifndef MOE
     .extern \cxx_name
+    #else
+    .extern _\cxx_name
+    #endif
 ENTRY \c_name
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  r2, r3  // save all registers as basis for long jump context
     mov r2, r9                      @ pass Thread::Current
+    #ifndef MOE
     b   \cxx_name                   @ \cxx_name(Thread*)
+    #else
+    b   _\cxx_name                  @ \cxx_name(Thread*)
+    #endif
 END \c_name
 .endm
 
@@ -243,37 +305,67 @@ END \c_name
 
 // Macros taking opportunity of code similarities for downcalls with referrer for non-wide fields.
 .macro  ONE_ARG_REF_DOWNCALL name, entrypoint, return
+    #ifndef MOE
     .extern \entrypoint
+    #else
+    .extern _\entrypoint
+    #endif
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r1, r2  @ save callee saves in case of GC
     ldr    r1, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE]  @ pass referrer
     mov    r2, r9                        @ pass Thread::Current
+    #ifdef MOE
+    mov    r10, r9
+    bl     _\entrypoint                   @ (uint32_t field_idx, const Method* referrer, Thread*)
+    mov    r9, r10
+    #else
     bl     \entrypoint                   @ (uint32_t field_idx, const Method* referrer, Thread*)
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
 END \name
 .endm
 
 .macro  TWO_ARG_REF_DOWNCALL name, entrypoint, return
+    #ifndef MOE
     .extern \entrypoint
+    #else
+    .extern _\entrypoint
+    #endif
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r2, r3  @ save callee saves in case of GC
     ldr    r2, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE]  @ pass referrer
     mov    r3, r9                        @ pass Thread::Current
+    #ifdef MOE
+    mov    r10, r9
+    bl     _\entrypoint                   @ (field_idx, Object*, referrer, Thread*)
+    mov    r9, r10
+    #else
     bl     \entrypoint                   @ (field_idx, Object*, referrer, Thread*)
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
 END \name
 .endm
 
 .macro THREE_ARG_REF_DOWNCALL name, entrypoint, return
+    #ifndef MOE
     .extern \entrypoint
+    #else
+    .extern _\entrypoint
+    #endif
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r3, r12  @ save callee saves in case of GC
     ldr    r3, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE]  @ pass referrer
     str    r9, [sp, #-16]!               @ expand the frame and pass Thread::Current
     .cfi_adjust_cfa_offset 16
+    #ifdef MOE
+    mov    r10, r9
+    bl     _\entrypoint                   @ (field_idx, Object*, new_val, referrer, Thread*)
+    mov    r9, r10
+    #else
     bl     \entrypoint                   @ (field_idx, Object*, new_val, referrer, Thread*)
+    #endif
     add    sp, #16                       @ release out args
     .cfi_adjust_cfa_offset -16
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME   @ TODO: we can clearly save an add here
@@ -329,12 +421,26 @@ ONE_ARG_RUNTIME_EXCEPTION art_quick_throw_no_such_method, artThrowNoSuchMethodFr
      * pointing back to the original caller.
      */
 .macro INVOKE_TRAMPOLINE_BODY cxx_name
+    #ifndef MOE
     .extern \cxx_name
+    #else
+    .extern _\cxx_name
+    #endif
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME r2, r3  @ save callee saves in case allocation triggers GC
     mov    r2, r9                         @ pass Thread::Current
     mov    r3, sp
+    #ifdef MOE
+    mov    r11, r9
+    #endif
+    #ifndef MOE
     bl     \cxx_name                      @ (method_idx, this, Thread*, SP)
+    #else
+    bl     _\cxx_name                     @ (method_idx, this, Thread*, SP)
+    #endif
     mov    r12, r1                        @ save Method*->code_
+    #ifdef MOE
+    mov    r9, r11
+    #endif
     RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
     cbz    r0, 1f                         @ did we find the target? if not go to exception delivery
     bx     r12                            @ tail call to target
@@ -396,6 +502,9 @@ ENTRY art_quick_invoke_stub_internal
 
     mov    r4, r0                          @ save method*
     add    r0, sp, #4                      @ pass stack pointer + method ptr as dest for memcpy
+    #ifdef MOE
+    mov    r10, r9                         @ MOE: save r9
+    #endif
     bl     memcpy                          @ memcpy (dest, src, bytes)
     mov    ip, #0                          @ set ip to 0
     str    ip, [sp]                        @ store null for method* at bottom of frame
@@ -408,11 +517,14 @@ ENTRY art_quick_invoke_stub_internal
     add    ip, ip, #4                      @ skip r0
     ldm    ip, {r1-r3}                     @ copy r1 - r3
 
-#ifdef ARM_R4_SUSPEND_FLAG
+    #ifdef ARM_R4_SUSPEND_FLAG
     mov    r4, #SUSPEND_CHECK_INTERVAL     @ reset r4 to suspend check interval
-#endif
+    #endif
 
     ldr    ip, [r0, #ART_METHOD_QUICK_CODE_OFFSET_32]  @ get pointer to the code
+    #ifdef MOE
+    mov    r9, r10                         @ MOE: restore r9
+    #endif
     blx    ip                              @ call the method
 
     mov    sp, r11                         @ restore the stack pointer
@@ -422,7 +534,11 @@ ENTRY art_quick_invoke_stub_internal
     ldr    r9, [sp, #36]                   @ load the result pointer
     cmp    r4, #0
     ite    eq
+    #ifndef MOE
     strdeq r0, [r9]                        @ store r0/r1 into result pointer
+    #else
+    strdeq r0, r1, [r9]                    @ store r0/r1 into result pointer
+    #endif
     vstrne d0, [r9]                        @ store s0-s1/d0 into result pointer
 
     pop    {r4, r5, r6, r7, r8, r9, r10, r11, pc}               @ restore spill regs
@@ -488,7 +604,13 @@ ENTRY art_quick_lock_object
 .Lslow_lock:
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r1, r2  @ save callee saves in case we block
     mov    r1, r9                     @ pass Thread::Current
+    #ifdef MOE
+    mov    r10, r9
+    #endif
     bl     artLockObjectFromCode      @ (Object* obj, Thread*)
+    #ifdef MOE
+    mov    r9, r10
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     RETURN_IF_RESULT_IS_ZERO
     DELIVER_PENDING_EXCEPTION
@@ -545,7 +667,13 @@ ENTRY art_quick_unlock_object
     @ save callee saves in case exception allocation triggers GC
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r1, r2
     mov    r1, r9                     @ pass Thread::Current
+    #ifdef MOE
+    mov    r10, r9
+    #endif
     bl     artUnlockObjectFromCode    @ (Object* obj, Thread*)
+    #ifdef MOE
+    mov    r9, r10
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     RETURN_IF_RESULT_IS_ZERO
     DELIVER_PENDING_EXCEPTION
@@ -557,26 +685,48 @@ END art_quick_unlock_object
      */
     .extern artThrowClassCastException
 ENTRY art_quick_check_cast
+    #ifndef MOE
     push {r0-r1, lr}                    @ save arguments, link register and pad
     .cfi_adjust_cfa_offset 12
+    #else
+    push {r0-r1, r9, lr}                    @ save arguments, link register and pad
+    .cfi_adjust_cfa_offset 16
+    #endif
     .cfi_rel_offset r0, 0
     .cfi_rel_offset r1, 4
+    #ifndef MOE
     .cfi_rel_offset lr, 8
+    #else
+    .cfi_rel_offset r9, 8
+    .cfi_rel_offset lr, 12
+    #endif
     sub sp, #4
     .cfi_adjust_cfa_offset 4
     bl artIsAssignableFromCode
     cbz    r0, .Lthrow_class_cast_exception
     add sp, #4
     .cfi_adjust_cfa_offset -4
+    #ifndef MOE
     pop {r0-r1, pc}
+    #else
+    pop {r0-r1, r9, pc}
+    #endif
     .cfi_adjust_cfa_offset 4        @ Reset unwind info so following code unwinds.
 .Lthrow_class_cast_exception:
     add sp, #4
     .cfi_adjust_cfa_offset -4
+    #ifndef MOE
     pop {r0-r1, lr}
     .cfi_adjust_cfa_offset -12
+    #else
+    pop {r0-r1, r9, lr}
+    .cfi_adjust_cfa_offset -16
+    #endif
     .cfi_restore r0
     .cfi_restore r1
+    #ifdef MOE
+    .cfi_restore r9
+    #endif
     .cfi_restore lr
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r2, r3  // save all registers as basis for long jump context
     mov r2, r9                      @ pass Thread::Current
@@ -644,24 +794,51 @@ END art_quick_check_cast
      */
 ENTRY art_quick_aput_obj_with_null_and_bound_check
     tst r0, r0
+    #ifdef MOE
+    IT NE
+    bne _art_quick_aput_obj_with_bound_check
+    b _art_quick_throw_null_pointer_exception
+    #else
     bne art_quick_aput_obj_with_bound_check
     b art_quick_throw_null_pointer_exception
+    #endif
 END art_quick_aput_obj_with_null_and_bound_check
 
+    #ifndef MOE
     .hidden art_quick_aput_obj_with_bound_check
+    #else
+    .private_extern _art_quick_aput_obj_with_bound_check
+    #endif
 ENTRY art_quick_aput_obj_with_bound_check
     ldr r3, [r0, #MIRROR_ARRAY_LENGTH_OFFSET]
     cmp r3, r1
+    #ifdef MOE
+    IT HI
+    bhi _art_quick_aput_obj
+    #else
     bhi art_quick_aput_obj
+    #endif
     mov r0, r1
     mov r1, r3
+    #ifndef MOE
     b art_quick_throw_array_bounds
+    #else
+    b _art_quick_throw_array_bounds
+    #endif
 END art_quick_aput_obj_with_bound_check
 
 #ifdef USE_READ_BARRIER
+# ifndef MOE
     .extern artReadBarrierSlow
+# else
+    .private_extern _artReadBarrierSlow
+# endif
 #endif
+#ifndef MOE
     .hidden art_quick_aput_obj
+#else
+    .private_extern _art_quick_aput_obj
+#endif
 ENTRY art_quick_aput_obj
 #ifdef USE_READ_BARRIER
     @ The offset to .Ldo_aput_null is too large to use cbz due to expansion from READ_BARRIER macro.
@@ -688,22 +865,42 @@ ENTRY art_quick_aput_obj
     str r2, [r3, r1, lsl #2]
     blx lr
 .Lcheck_assignability:
+    #ifndef MOE
     push {r0-r2, lr}             @ save arguments
     .cfi_adjust_cfa_offset 16
     .cfi_rel_offset r0, 0
     .cfi_rel_offset r1, 4
     .cfi_rel_offset r2, 8
     .cfi_rel_offset lr, 12
+    #else
+    push {r0-r2, r9, lr}             @ save arguments
+    .cfi_adjust_cfa_offset 20
+    .cfi_rel_offset r0, 0
+    .cfi_rel_offset r1, 4
+    .cfi_rel_offset r2, 8
+    .cfi_rel_offset r9, 12
+    .cfi_rel_offset lr, 16
+    #endif
     mov r1, ip
     mov r0, r3
     bl artIsAssignableFromCode
     cbz r0, .Lthrow_array_store_exception
+    #ifndef MOE
     pop {r0-r2, lr}
     .cfi_restore r0
     .cfi_restore r1
     .cfi_restore r2
     .cfi_restore lr
     .cfi_adjust_cfa_offset -16
+    #else
+    pop {r0-r2, r9, lr}
+    .cfi_restore r0
+    .cfi_restore r1
+    .cfi_restore r2
+    .cfi_restore r9
+    .cfi_restore lr
+    .cfi_adjust_cfa_offset -20
+    #endif
     add r3, r0, #MIRROR_OBJECT_ARRAY_DATA_OFFSET
     POISON_HEAP_REF r2
     str r2, [r3, r1, lsl #2]
@@ -712,7 +909,11 @@ ENTRY art_quick_aput_obj
     strb r3, [r3, r0]
     blx lr
 .Lthrow_array_store_exception:
+    #ifndef MOE
     pop {r0-r2, lr}
+    #else
+    pop {r0-r2, r9, lr}
+    #endif
     /* No need to repeat restore cfi directives, the ones above apply here. */
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r3, ip
     mov r1, r2
@@ -726,8 +927,18 @@ END art_quick_aput_obj
     .extern \entrypoint
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  r1, r2  @ save callee saves in case of GC
+    #ifdef MOE
+    mov    r10, r9
+    #endif
     mov    r1, r9                     @ pass Thread::Current
+    #ifndef MOE
     bl     \entrypoint     @ (uint32_t type_idx, Method* method, Thread*)
+    #else
+    bl     _\entrypoint    @ (uint32_t type_idx, Method* method, Thread*)
+    #endif
+    #ifdef MOE
+    mov    r9, r10
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
 END \name
@@ -738,8 +949,18 @@ END \name
     .extern \entrypoint
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  r2, r3  @ save callee saves in case of GC
+    #ifdef MOE
+    mov    r10, r9
+    #endif
     mov    r2, r9                     @ pass Thread::Current
+    #ifndef MOE
     bl     \entrypoint     @ (uint32_t type_idx, Method* method, Thread*)
+    #else
+    bl     _\entrypoint    @ (uint32_t type_idx, Method* method, Thread*)
+    #endif
+    #ifdef MOE
+    mov    r9, r10
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
 END \name
@@ -750,9 +971,19 @@ END \name
     .extern \entrypoint
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  r3, r12  @ save callee saves in case of GC
+    #ifdef MOE
+    mov    r10, r9
+    #endif
     mov    r3, r9                     @ pass Thread::Current
     @ (uint32_t type_idx, Method* method, int32_t component_count, Thread*)
+    #ifndef MOE
     bl     \entrypoint
+    #else
+    bl     _\entrypoint
+    #endif
+    #ifdef MOE
+    mov    r9, r10
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
 END \name
@@ -763,12 +994,24 @@ END \name
     .extern \entrypoint
 ENTRY \name
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  r3, r12  @ save callee saves in case of GC
+    #ifdef MOE
+    mov    r10, r9
+    #endif
     str    r9, [sp, #-16]!            @ expand the frame and pass Thread::Current
+    #ifndef MOE
     .pad #16
+    #endif
     .cfi_adjust_cfa_offset 16
+    #ifndef MOE
     bl     \entrypoint
+    #else
+    bl     _\entrypoint
+    #endif
     add    sp, #16                    @ strip the extra frame
     .cfi_adjust_cfa_offset -16
+    #ifdef MOE
+    mov    r9, r10
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     \return
 END \name
@@ -795,7 +1038,13 @@ ENTRY art_quick_get64_static
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r2, r3  @ save callee saves in case of GC
     ldr    r1, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE]  @ pass referrer
     mov    r2, r9                        @ pass Thread::Current
+    #ifdef MOE
+    mov    r10, r9
+    #endif
     bl     artGet64StaticFromCode        @ (uint32_t field_idx, const Method* referrer, Thread*)
+    #ifdef MOE
+    mov    r9, r10
+    #endif
     ldr    r2, [r9, #THREAD_EXCEPTION_OFFSET]  @ load Thread::Current()->exception_
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     cbnz   r2, 1f                        @ success if no exception pending
@@ -821,7 +1070,13 @@ ENTRY art_quick_get64_instance
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  r2, r3  @ save callee saves in case of GC
     ldr    r2, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE]  @ pass referrer
     mov    r3, r9                        @ pass Thread::Current
+    #ifdef MOE
+    mov    r10, r9
+    #endif
     bl     artGet64InstanceFromCode      @ (field_idx, Object*, referrer, Thread*)
+    #ifdef MOE
+    mov    r9, r10
+    #endif
     ldr    r2, [r9, #THREAD_EXCEPTION_OFFSET]  @ load Thread::Current()->exception_
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     cbnz   r2, 1f                        @ success if no exception pending
@@ -848,7 +1103,13 @@ ENTRY art_quick_set64_static
     ldr    r1, [sp, #FRAME_SIZE_REFS_ONLY_CALLEE_SAVE]  @ pass referrer
     str    r9, [sp, #-16]!               @ expand the frame and pass Thread::Current
     .cfi_adjust_cfa_offset 16
+    #ifdef MOE
+    mov    r10, r9
+    #endif
     bl     artSet64StaticFromCode        @ (field_idx, referrer, new_val, Thread*)
+    #ifdef MOE
+    mov    r9, r10
+    #endif
     add    sp, #16                       @ release out args
     .cfi_adjust_cfa_offset -16
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME  @ TODO: we can clearly save an add here
@@ -875,7 +1136,13 @@ ENTRY art_quick_set64_instance
     .cfi_adjust_cfa_offset 12
     str    r12, [sp, #-4]!               @ expand the frame and pass the referrer
     .cfi_adjust_cfa_offset 4
+    #ifdef MOE
+    mov    r10, r9
+    #endif
     bl     artSet64InstanceFromCode      @ (field_idx, Object*, new_val, Method* referrer, Thread*)
+    #ifdef MOE
+    mov    r9, r10
+    #endif
     add    sp, #16                       @ release out args
     .cfi_adjust_cfa_offset -16
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME  @ TODO: we can clearly save an add here
@@ -990,8 +1257,14 @@ ENTRY art_quick_alloc_object_rosalloc
 
 .Lart_quick_alloc_object_rosalloc_slow_path:
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  r2, r3  @ save callee saves in case of GC
+    #ifdef MOE
+    mov    r10, r9
+    #endif
     mov    r2, r9                     @ pass Thread::Current
     bl     artAllocObjectFromCodeRosAlloc     @ (uint32_t type_idx, Method* method, Thread*)
+    #ifdef MOE
+    mov    r9, r10
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
     RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 END art_quick_alloc_object_rosalloc
@@ -1011,14 +1284,26 @@ ENTRY art_quick_test_suspend
     mov    r0, rSELF
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r1, r2   @ save callee saves for GC stack crawl
     @ TODO: save FPRs to enable access in the debugger?
+    #ifdef MOE
+    mov    r10, r9
+    #endif
     bl     artTestSuspendFromCode             @ (Thread*)
+    #ifdef MOE
+    mov    r9, r10
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME_AND_RETURN
 END art_quick_test_suspend
 
 ENTRY art_quick_implicit_suspend
     mov    r0, rSELF
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r1, r2   @ save callee saves for stack crawl
+    #ifdef MOE
+    mov    r10, r9
+    #endif
     bl     artTestSuspendFromCode             @ (Thread*)
+    #ifdef MOE
+    mov    r9, r10
+    #endif
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME_AND_RETURN
 END art_quick_implicit_suspend
 
@@ -1030,9 +1315,15 @@ END art_quick_implicit_suspend
      .extern artQuickProxyInvokeHandler
 ENTRY art_quick_proxy_invoke_handler
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_R0
+    #ifdef MOE
+    mov     r11, r9
+    #endif
     mov     r2, r9                 @ pass Thread::Current
     mov     r3, sp                 @ pass SP
     blx     artQuickProxyInvokeHandler  @ (Method* proxy method, receiver, Thread*, SP)
+    #ifdef MOE
+    mov     r9, r11
+    #endif
     ldr     r2, [r9, #THREAD_EXCEPTION_OFFSET]  @ load Thread::Current()->exception_
     // Tear down the callee-save frame. Skip arg registers.
     add     sp, #(FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE - FRAME_SIZE_REFS_ONLY_CALLEE_SAVE)
@@ -1057,9 +1348,15 @@ END art_quick_imt_conflict_trampoline
     .extern artQuickResolutionTrampoline
 ENTRY art_quick_resolution_trampoline
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME r2, r3
+    #ifdef MOE
+    mov     r11, r9
+    #endif
     mov     r2, r9                 @ pass Thread::Current
     mov     r3, sp                 @ pass SP
     blx     artQuickResolutionTrampoline  @ (Method* called, receiver, Thread*, SP)
+    #ifdef MOE
+    mov     r9, r11
+    #endif
     cbz     r0, 1f                 @ is code pointer null? goto exception
     mov     r12, r0
     ldr  r0, [sp, #0]              @ load resolved method in r0
@@ -1092,6 +1389,11 @@ ENTRY art_quick_generic_jni_trampoline
     mov r0, rSELF   // Thread*
     mov r1, r10
     blx artQuickGenericJniTrampoline  // (Thread*, sp)
+
+    #ifdef MOE
+    // Restore self pointer.
+    mov r9, r11
+    #endif
 
     // The C call will have registered the complete save-frame on success.
     // The result of the call is:
@@ -1162,9 +1464,15 @@ END art_quick_generic_jni_trampoline
     .extern artQuickToInterpreterBridge
 ENTRY art_quick_to_interpreter_bridge
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME r1, r2
+    #ifdef MOE
+    mov     r11, r9
+    #endif
     mov     r1, r9                 @ pass Thread::Current
     mov     r2, sp                 @ pass SP
     blx     artQuickToInterpreterBridge    @ (Method* method, Thread*, SP)
+    #ifdef MOE
+    mov     r9, r11
+    #endif
     ldr     r2, [r9, #THREAD_EXCEPTION_OFFSET]  @ load Thread::Current()->exception_
     // Tear down the callee-save frame. Skip arg registers.
     add     sp, #(FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE - FRAME_SIZE_REFS_ONLY_CALLEE_SAVE)
@@ -1189,17 +1497,33 @@ ENTRY art_quick_instrumentation_entry
     str   r0, [sp, #4]
     mov   r2, r9         @ pass Thread::Current
     mov   r3, lr         @ pass LR
+    #ifdef MOE
+    mov     r11, r9
+    #endif
     blx   artInstrumentationMethodEntryFromCode  @ (Method*, Object*, Thread*, LR)
+    #ifdef MOE
+    mov     r9, r11
+    #endif
     mov   r12, r0        @ r12 holds reference to code
     ldr   r0, [sp, #4]   @ restore r0
     RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
     blx   r12            @ call method with lr set to art_quick_instrumentation_exit
 @ Deliberate fall-through into art_quick_instrumentation_exit.
+#ifndef MOE
     .type art_quick_instrumentation_exit, #function
     .global art_quick_instrumentation_exit
 art_quick_instrumentation_exit:
+#else
+    .thumb_func _art_quick_instrumentation_exit
+    .thumb
+    .global _art_quick_instrumentation_exit
+_art_quick_instrumentation_exit:
+#endif
     mov   lr, #0         @ link register is to here, so clobber with 0 for later checks
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME r2, r3  @ set up frame knowing r2 and r3 must be dead on exit
+    #ifdef MOE
+    mov     r11, r9
+    #endif
     mov   r12, sp        @ remember bottom of caller's frame
     push  {r0-r1}        @ save return value
     .cfi_adjust_cfa_offset 8
@@ -1218,7 +1542,9 @@ art_quick_instrumentation_exit:
     blx   artInstrumentationMethodExitFromCode  @ (Thread*, SP, gpr_res, fpr_res)
     add   sp, #8
     .cfi_adjust_cfa_offset -8
-
+    #ifdef MOE
+    mov     r9, r11
+    #endif
     mov   r2, r0         @ link register saved by instrumentation
     mov   lr, r1         @ r1 is holding link register if we're to bounce to deoptimize
     vpop  {d0}           @ restore fp return value
@@ -1227,7 +1553,13 @@ art_quick_instrumentation_exit:
     .cfi_adjust_cfa_offset -8
     .cfi_restore r0
     .cfi_restore r1
+    #ifndef MOE
     add sp, #32          @ remove callee save frame
+    #else
+    add sp, #24
+    pop {r11}
+    add sp, #4
+    #endif
     .cfi_adjust_cfa_offset -32
     bx    r2             @ return
 END art_quick_instrumentation_entry
@@ -1240,7 +1572,13 @@ END art_quick_instrumentation_entry
 ENTRY art_quick_deoptimize
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r0, r1
     mov    r0, r9         @ Set up args.
+    #ifdef MOE
+    mov     r11, r9
+    #endif
     blx    artDeoptimize  @ artDeoptimize(Thread*)
+    #ifdef MOE
+    mov     r9, r11
+    #endif
 END art_quick_deoptimize
 
     /*
@@ -1250,8 +1588,14 @@ END art_quick_deoptimize
     .extern artDeoptimizeFromCompiledCode
 ENTRY art_quick_deoptimize_from_compiled_code
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r0, r1
+    #ifdef MOE
+    mov     r11, r9
+    #endif
     mov    r0, r9                         @ Set up args.
     blx    artDeoptimizeFromCompiledCode  @ artDeoptimizeFromCompiledCode(Thread*)
+    #ifdef MOE
+    mov     r9, r11
+    #endif
 END art_quick_deoptimize_from_compiled_code
 
     /*
@@ -1308,6 +1652,9 @@ ARM_ENTRY art_quick_shl_long            @ ARM code as thumb code requires spills
     rsb     r3, r2, #32                 @  r3<- 32 - r2
     orr     r1, r1, r0, lsr r3          @  r1<- r1 | (r0 << (32-r2))
     subs    ip, r2, #32                 @  ip<- r2 - 32
+    #ifdef MOE
+    it PL
+    #endif
     movpl   r1, r0, asl ip              @  if r2 >= 32, r1<- r0 << (r2-32)
     mov     r0, r0, asl r2              @  r0<- r0 << r2
     bx      lr
@@ -1330,6 +1677,9 @@ ARM_ENTRY art_quick_shr_long            @ ARM code as thumb code requires spills
     rsb     r3, r2, #32                 @  r3<- 32 - r2
     orr     r0, r0, r1, asl r3          @  r0<- r0 | (r1 << (32-r2))
     subs    ip, r2, #32                 @  ip<- r2 - 32
+    #ifdef MOE
+    it PL
+    #endif
     movpl   r0, r1, asr ip              @  if r2 >= 32, r0<-r1 >> (r2-32)
     mov     r1, r1, asr r2              @  r1<- r1 >> r2
     bx      lr
@@ -1352,6 +1702,9 @@ ARM_ENTRY art_quick_ushr_long           @ ARM code as thumb code requires spills
     rsb     r3, r2, #32                 @  r3<- 32 - r2
     orr     r0, r0, r1, asl r3          @  r0<- r0 | (r1 << (32-r2))
     subs    ip, r2, #32                 @  ip<- r2 - 32
+    #ifdef MOE
+    it PL
+    #endif
     movpl   r0, r1, lsr ip              @  if r2 >= 32, r0<-r1 >>> (r2-32)
     mov     r1, r1, lsr r2              @  r1<- r1 >>> r2
     bx      lr
@@ -1601,9 +1954,16 @@ END art_quick_string_compareto
     /* double fmod(double a, double b) */
     .extern fmod
 ENTRY art_quick_fmod
+    #ifndef MOE
     push  {lr}
     .cfi_adjust_cfa_offset 4
     .cfi_rel_offset lr, 0
+    #else
+    push  {r9, lr}
+    .cfi_adjust_cfa_offset 8
+    .cfi_rel_offset r9, 0
+    .cfi_rel_offset lr, 4
+    #endif
     sub   sp, #4
     .cfi_adjust_cfa_offset 4
     vmov  r0, r1, d0
@@ -1612,15 +1972,26 @@ ENTRY art_quick_fmod
     vmov  d0, r0, r1
     add   sp, #4
     .cfi_adjust_cfa_offset -4
+    #ifndef MOE
     pop   {pc}
+    #else
+    pop   {r9, pc}
+    #endif
 END art_quick_fmod
 
     /* float fmodf(float a, float b) */
      .extern fmodf
 ENTRY art_quick_fmodf
+    #ifndef MOE
     push  {lr}
     .cfi_adjust_cfa_offset 4
     .cfi_rel_offset lr, 0
+    #else
+    push  {r9, lr}
+    .cfi_adjust_cfa_offset 8
+    .cfi_rel_offset r9, 0
+    .cfi_rel_offset lr, 4
+    #endif
     sub   sp, #4
     .cfi_adjust_cfa_offset 4
     vmov  r0, r1, d0
@@ -1628,34 +1999,65 @@ ENTRY art_quick_fmodf
     vmov  s0, r0
     add   sp, #4
     .cfi_adjust_cfa_offset -4
+    #ifndef MOE
     pop   {pc}
+    #else
+    pop   {r9, pc}
+    #endif
 END art_quick_fmod
 
     /* int64_t art_d2l(double d) */
     .extern art_d2l
 ENTRY art_quick_d2l
+    #ifdef MOE
+    push {r9, lr}
+    #endif
     vmov  r0, r1, d0
+    #ifndef MOE
     b     art_d2l
+    #else
+    bl    art_d2l
+    pop {r9, pc}
+    #endif
 END art_quick_d2l
 
     /* int64_t art_f2l(float f) */
     .extern art_f2l
 ENTRY art_quick_f2l
+    #ifdef MOE
+    push {r9, lr}
+    #endif
     vmov  r0, s0
+    #ifndef MOE
     b     art_f2l
+    #else
+    bl    art_f2l
+    pop {r9, pc}
+    #endif
 END art_quick_f2l
 
     /* float art_l2f(int64_t l) */
     .extern art_l2f
 ENTRY art_quick_l2f
+    #ifndef MOE
     push  {lr}
     .cfi_adjust_cfa_offset 4
     .cfi_rel_offset lr, 0
+    #else
+    push  {r9, lr}
+    .cfi_adjust_cfa_offset 8
+    .cfi_rel_offset r9, 0
+    .cfi_rel_offset lr, 4
+    #endif
     sub   sp, #4
     .cfi_adjust_cfa_offset 4
     bl    art_l2f
     vmov  s0, r0
     add   sp, #4
     .cfi_adjust_cfa_offset -4
+    #ifndef MOE
     pop   {pc}
+    #else
+    pop   {r9, pc}
+    #endif
 END art_quick_l2f

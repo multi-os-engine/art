@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +44,25 @@ static constexpr bool kMadviseZeroes = true;
 static constexpr bool kMadviseZeroes = false;
 #endif
 
+#ifdef MOE
+inline void SafeZeroAndReleaseSpace(void* addr, size_t size) {
+  constexpr size_t big_step = kPageSize * 256;
+  size_t i = 0;
+  for (; i + big_step < size; i += big_step) {
+    uint8_t* slot = (uint8_t*)addr + i;
+    memset(slot, 0, big_step);
+    madvise(slot, big_step, MADV_FREE);
+  }
+    
+  if (i < size) {
+    uint8_t* slot = (uint8_t*)addr + i;
+    size_t ssize = size - i;
+    memset(slot, 0, ssize);
+    madvise(slot, ssize, MADV_FREE);
+  }
+}
+#endif
+    
 // Used to keep track of mmap segments.
 //
 // On 64b systems not supporting MAP_32BIT, the implementation of MemMap will do a linear scan
@@ -62,7 +82,17 @@ class MemMap {
   //
   // On success, returns returns a MemMap instance.  On failure, returns null.
   static MemMap* MapAnonymous(const char* ashmem_name, uint8_t* addr, size_t byte_count, int prot,
+#ifndef MOE
                               bool low_4gb, bool reuse, std::string* error_msg);
+#else
+                              bool low_4gb, bool reuse, std::string* error_msg,
+                              bool preferred = false);
+#endif
+
+#ifdef MOE
+  static MemMap* MapAlias(const char* name, uint8_t* expected, uint8_t* addr, size_t byte_count,
+                          int prot, std::string* error_msg);
+#endif
 
   // Create placeholder for a region allocated by direct call to mmap.
   // This is useful when we do not have control over the code calling mmap,
@@ -172,6 +202,10 @@ class MemMap {
   size_t base_size_;  // Length of mapping. May be changed by RemapAtEnd (ie Zygote).
   int prot_;  // Protection of the map.
 
+#ifdef MOE
+  bool alias_;
+#endif
+
   // When reuse_ is true, this is just a view of an existing mapping
   // and we do not take ownership and are not responsible for
   // unmapping.
@@ -180,7 +214,7 @@ class MemMap {
   const size_t redzone_size_;
 
 #if USE_ART_LOW_4G_ALLOCATOR
-  static uintptr_t next_mem_pos_;   // Next memory location to check for low_4g extent.
+  static uintptr_t next_mem_pos_;   // next memory location to check for low_4g extent
 #endif
 
   // All the non-empty MemMaps. Use a multimap as we do a reserve-and-divide (eg ElfMap::Load()).

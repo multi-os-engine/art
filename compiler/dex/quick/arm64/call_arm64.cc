@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -267,7 +268,11 @@ void Arm64Mir2Lir::GenMoveException(RegLocation rl_dest) {
   int ex_offset = Thread::ExceptionOffset<8>().Int32Value();
   RegLocation rl_result = EvalLoc(rl_dest, kRefReg, true);
   LoadRefDisp(rs_xSELF, ex_offset, rl_result.reg, kNotVolatile);
+#ifndef MOE
   StoreRefDisp(rs_xSELF, ex_offset, rs_xzr, kNotVolatile);
+#else
+  StoreBaseDisp(rs_xSELF, ex_offset, rs_xzr, k64, kNotVolatile);
+#endif
   StoreValue(rl_dest, rl_result);
 }
 

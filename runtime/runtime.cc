@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +25,9 @@
 #endif
 
 #define ATRACE_TAG ATRACE_TAG_DALVIK
+#ifndef MOE
 #include <cutils/trace.h>
+#endif
 #include <signal.h>
 #include <sys/syscall.h>
 #include "base/memory_tool.h"
@@ -135,6 +138,64 @@
 #include "utils.h"
 #include "verifier/method_verifier.h"
 #include "well_known_classes.h"
+
+#ifdef MOE
+#include <mach-o/getsect.h>
+#include <mach-o/dyld.h>
+#include <TargetConditionals.h>
+
+extern __attribute((visibility("default"))) const char* __moe_art_oat_framework = "ArtOat";
+
+uint8_t* get_slided_section_data(const char* seg, const char* sect, size_t* size) {
+  uint8_t* data = nullptr;
+  for (unsigned i = 0, n = _dyld_image_count(); i < n && !data; i++) {
+    const mach_header* header = _dyld_get_image_header(i);
+    if (header->filetype == MH_EXECUTE) {
+#if __LP64__
+      data = getsectiondata((mach_header_64*)header, seg, sect, size);
+#else
+      data = getsectiondata(header, seg, sect, size);
+#endif
+    }
+  }
+  if (!data)
+    data = (uint8_t*)getsectdatafromFramework(__moe_art_oat_framework, seg,
+                                              sect, size);
+  return data;
+}
+
+uint8_t* get_art_data(size_t* size) {
+  static struct Loader {
+    void* data;
+    size_t size;
+    Loader() {
+      data = get_slided_section_data("__ARTDATA", "__artdata", &size);
+    }
+  } loader;
+
+  if (size) {
+    *size = loader.size;
+  }
+
+  return static_cast<uint8_t*>(loader.data);
+}
+
+uint8_t* get_oat_data(size_t* size) {
+  static struct Loader {
+    void* data;
+    size_t size;
+    Loader() {
+      data = get_slided_section_data("__OATDATA", "__oatdata", &size);
+    }
+  } loader;
+
+  if (size) {
+    *size = loader.size;
+  }
+
+  return static_cast<uint8_t*>(loader.data);
+}
+#endif
 
 namespace art {
 
@@ -655,7 +716,6 @@ bool Runtime::InitZygote() {
       return false;
     }
   }
-
   return true;
 #else
   UNIMPLEMENTED(FATAL);
@@ -735,6 +795,7 @@ void Runtime::StartDaemonThreads() {
 static bool OpenDexFilesFromImage(const std::string& image_location,
                                   std::vector<std::unique_ptr<const DexFile>>* dex_files,
                                   size_t* failures) {
+#ifndef MOE
   DCHECK(dex_files != nullptr) << "OpenDexFilesFromImage: out-param is nullptr";
   std::string system_filename;
   bool has_system = false;
@@ -788,8 +849,10 @@ static bool OpenDexFilesFromImage(const std::string& image_location,
   }
   Runtime::Current()->GetOatFileManager().RegisterOatFile(std::move(oat_file));
   return true;
+#else
+  return false;
+#endif
 }
-
 
 static size_t OpenDexFiles(const std::vector<std::string>& dex_filenames,
                            const std::vector<std::string>& dex_locations,
@@ -898,6 +961,10 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
 
   XGcOption xgc_option = runtime_options.GetOrDefault(Opt::GcOption);
   ATRACE_BEGIN("CreateHeap");
+#ifdef MOE
+  // MOE: We need a class linker for art patching.
+  class_linker_ = new ClassLinker(intern_table_);
+#endif
   heap_ = new gc::Heap(runtime_options.GetOrDefault(Opt::MemoryInitialSize),
                        runtime_options.GetOrDefault(Opt::HeapGrowthLimit),
                        runtime_options.GetOrDefault(Opt::HeapMinFree),
@@ -976,9 +1043,11 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     case kX86_64:
     case kMips:
     case kMips64:
+#if !defined(MOE) || (TARGET_OS_IPHONE && TARGET_OS_IOS)
       implicit_null_checks_ = true;
       // Installing stack protection does not play well with valgrind.
       implicit_so_checks_ = !(RUNNING_ON_MEMORY_TOOL && kMemoryToolIsValgrind);
+#endif
       break;
     default:
       // Keep the defaults.
@@ -1037,7 +1106,9 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   GetHeap()->EnableObjectValidation();
 
   CHECK_GE(GetHeap()->GetContinuousSpaces().size(), 1U);
+#ifndef MOE
   class_linker_ = new ClassLinker(intern_table_);
+#endif
   if (GetHeap()->HasImageSpace()) {
     ATRACE_BEGIN("InitFromImage");
     class_linker_->InitFromImage();
@@ -1196,9 +1267,18 @@ void Runtime::InitNativeMethods() {
   // the library that implements System.loadLibrary!
   {
     std::string reason;
+#ifndef MOE
     if (!java_vm_->LoadNativeLibrary(env, "libjavacore.so", nullptr, &reason)) {
       LOG(FATAL) << "LoadNativeLibrary failed for \"libjavacore.so\": " << reason;
     }
+#else
+    if (!java_vm_->LoadNativeLibrary(env, "javacore", nullptr, &reason)) {
+      LOG(FATAL) << "Could not load \"javacore\": " << reason;
+    }
+    if (!java_vm_->LoadNativeLibrary(env, "database", nullptr, &reason)) {
+        LOG(FATAL) << "Could not load \"darabase\": " << reason;
+    }
+#endif
   }
 
   // Initialize well known classes that may invoke runtime native methods.
@@ -1242,7 +1322,9 @@ void Runtime::RegisterRuntimeNativeMethods(JNIEnv* env) {
   register_dalvik_system_VMDebug(env);
   register_dalvik_system_VMRuntime(env);
   register_dalvik_system_VMStack(env);
+#ifndef MOE
   register_dalvik_system_ZygoteHooks(env);
+#endif
   register_java_lang_Class(env);
   register_java_lang_DexCache(env);
   register_java_lang_Object(env);

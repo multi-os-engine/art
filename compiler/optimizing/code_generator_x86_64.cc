@@ -32,6 +32,10 @@
 #include "utils/x86_64/assembler_x86_64.h"
 #include "utils/x86_64/managed_register_x86_64.h"
 
+#ifdef MOE
+#include "asm_support.h"
+#endif
+
 namespace art {
 
 namespace x86_64 {
@@ -481,8 +485,15 @@ void CodeGeneratorX86_64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invo
   switch (invoke->GetMethodLoadKind()) {
     case HInvokeStaticOrDirect::MethodLoadKind::kStringInit:
       // temp = thread->string_init_entrypoint
+#ifndef MOE
       __ gs()->movl(temp.AsRegister<CpuRegister>(),
                     Address::Absolute(invoke->GetStringInitOffset(), true));
+#else
+      __ gs()->movq(temp.AsRegister<CpuRegister>(),
+                    Address::Absolute(MOE_TLS_THREAD_OFFSET_64, true));
+      __ movl(temp.AsRegister<CpuRegister>(), Address(temp.AsRegister<CpuRegister>(),
+                                                      invoke->GetStringInitOffset()));
+#endif
       break;
     case HInvokeStaticOrDirect::MethodLoadKind::kRecursive:
       callee_method = invoke->GetLocations()->InAt(invoke->GetCurrentMethodInputIndex());
@@ -646,7 +657,16 @@ void CodeGeneratorX86_64::InvokeRuntime(int32_t entry_point_offset,
                                         uint32_t dex_pc,
                                         SlowPathCode* slow_path) {
   ValidateInvokeRuntime(instruction, slow_path);
+#ifndef MOE
   __ gs()->call(Address::Absolute(entry_point_offset, true));
+#else
+  __ pushq(CpuRegister(RAX));
+  __ gs()->movq(CpuRegister(RAX), Address::Absolute(MOE_TLS_THREAD_OFFSET_64, true));
+  __ movq(CpuRegister(RAX), Address(CpuRegister(RAX), entry_point_offset));
+  __ gs()->movq(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true), CpuRegister(RAX));
+  __ popq(CpuRegister(RAX));
+  __ gs()->call(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true));
+#endif
   RecordPcInfo(instruction, dex_pc, slow_path);
 }
 
@@ -4427,8 +4447,13 @@ void CodeGeneratorX86_64::MarkGCCard(CpuRegister temp,
     __ testl(value, value);
     __ j(kEqual, &is_null);
   }
+#ifndef MOE
   __ gs()->movq(card, Address::Absolute(
       Thread::CardTableOffset<kX86_64WordSize>().Int32Value(), true));
+#else
+  __ gs()->movq(card, Address::Absolute(MOE_TLS_THREAD_OFFSET_64, true));
+  __ movq(card, Address(card, Thread::CardTableOffset<kX86_64WordSize>().Int32Value()));
+#endif
   __ movq(temp, object);
   __ shrq(temp, Immediate(gc::accounting::CardTable::kCardShift));
   __ movb(Address(temp, card, TIMES_1, 0), card);
@@ -4487,8 +4512,17 @@ void InstructionCodeGeneratorX86_64::GenerateSuspendCheck(HSuspendCheck* instruc
     DCHECK_EQ(slow_path->GetSuccessor(), successor);
   }
 
+#ifndef MOE
   __ gs()->cmpw(Address::Absolute(
       Thread::ThreadFlagsOffset<kX86_64WordSize>().Int32Value(), true), Immediate(0));
+#else
+  __ gs()->movq(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true), CpuRegister(RAX));
+  __ gs()->movq(CpuRegister(RAX), Address::Absolute(MOE_TLS_THREAD_OFFSET_64, true));
+  __ movzxw(CpuRegister(RAX), Address(CpuRegister(RAX),
+                                      Thread::ThreadFlagsOffset<kX86_64WordSize>().Int32Value()));
+  __ cmpq(CpuRegister(RAX), Immediate(0));
+  __ gs()->movq(CpuRegister(RAX), Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true));
+#endif
   if (successor == nullptr) {
     __ j(kNotEqual, slow_path->GetEntryLabel());
     __ Bind(slow_path->GetReturnLabel());
@@ -4801,9 +4835,15 @@ void InstructionCodeGeneratorX86_64::VisitLoadString(HLoadString* load) {
   __ Bind(slow_path->GetExitLabel());
 }
 
+#ifndef MOE
 static Address GetExceptionTlsAddress() {
   return Address::Absolute(Thread::ExceptionOffset<kX86_64WordSize>().Int32Value(), true);
 }
+#else
+static Address GetExceptionTlsAddress(CpuRegister base) {
+  return Address(base, Thread::ExceptionOffset<kX86_64WordSize>().Int32Value());
+}
+#endif
 
 void LocationsBuilderX86_64::VisitLoadException(HLoadException* load) {
   LocationSummary* locations =
@@ -4812,7 +4852,13 @@ void LocationsBuilderX86_64::VisitLoadException(HLoadException* load) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitLoadException(HLoadException* load) {
+#ifndef MOE
   __ gs()->movl(load->GetLocations()->Out().AsRegister<CpuRegister>(), GetExceptionTlsAddress());
+#else
+  CpuRegister out = load->GetLocations()->Out().AsRegister<CpuRegister>();
+  __ gs()->movq(out, Address::Absolute(MOE_TLS_THREAD_OFFSET_64, true));
+  __ movl(out, GetExceptionTlsAddress(out));
+#endif
 }
 
 void LocationsBuilderX86_64::VisitClearException(HClearException* clear) {
@@ -4820,7 +4866,14 @@ void LocationsBuilderX86_64::VisitClearException(HClearException* clear) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitClearException(HClearException* clear ATTRIBUTE_UNUSED) {
+#ifndef MOE
   __ gs()->movl(GetExceptionTlsAddress(), Immediate(0));
+#else
+  __ gs()->movq(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true), CpuRegister(RAX));
+  __ gs()->movq(CpuRegister(RAX), Address::Absolute(MOE_TLS_THREAD_OFFSET_64, true));
+  __ movl(GetExceptionTlsAddress(CpuRegister(RAX)), Immediate(0));
+  __ gs()->movq(CpuRegister(RAX), Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true));
+#endif
 }
 
 void LocationsBuilderX86_64::VisitThrow(HThrow* instruction) {

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +18,9 @@
 #include "jni_internal.h"
 
 #define ATRACE_TAG ATRACE_TAG_DALVIK
+#ifndef MOE
 #include <cutils/trace.h>
+#endif
 #include <dlfcn.h>
 
 #include "art_method.h"
@@ -738,6 +741,12 @@ bool JavaVMExt::LoadNativeLibrary(JNIEnv* env, const std::string& path, jobject 
   Locks::mutator_lock_->AssertNotHeld(self);
   const char* path_str = path.empty() ? nullptr : path.c_str();
   void* handle = dlopen(path_str, RTLD_NOW);
+#ifdef MOE
+  bool is_dynamic = handle != nullptr;
+  if (!is_dynamic) {
+    handle = dlopen(nullptr, RTLD_NOW);
+  }
+#endif
   bool needs_native_bridge = false;
   if (handle == nullptr) {
     if (android::NativeBridgeIsSupported(path_str)) {
@@ -785,8 +794,26 @@ bool JavaVMExt::LoadNativeLibrary(JNIEnv* env, const std::string& path, jobject 
   void* sym;
   if (needs_native_bridge) {
     library->SetNeedsNativeBridge();
+#ifdef MOE
+    if (is_dynamic) {
+#endif
+    sym = library->FindSymbol("JNI_OnLoad", nullptr);
+#ifdef MOE
+    } else {
+      sym = library->FindSymbol(((std::string)"JNI_OnLoad_" + path).c_str(), nullptr);
+    }
+#endif
+  } else {
+#ifdef MOE
+    if (is_dynamic) {
+#endif
+    sym = dlsym(handle, "JNI_OnLoad");
+#ifdef MOE
+    } else {
+      sym = dlsym(handle, ((std::string)"JNI_OnLoad_" + path).c_str());
+    }
+#endif
   }
-  sym = library->FindSymbol("JNI_OnLoad", nullptr);
   if (sym == nullptr) {
     VLOG(jni) << "[No JNI_OnLoad found in \"" << path << "\"]";
     was_successful = true;

@@ -28,6 +28,13 @@
 #include "thread-inl.h"
 #include "verify_object-inl.h"
 
+// [XRT] Begin
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+#include "xrt/MachException.h"
+#endif
+// [XRT] End
+
 // Note on nested signal support
 // -----------------------------
 //
@@ -78,6 +85,15 @@ extern "C" __attribute__((visibility("default"))) void art_sigsegv_fault() {
   VLOG(signals)<< "Caught unknown SIGSEGV in ART fault handler - chaining to next handler.";
 }
 
+// [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+extern "C" __attribute__((visibility("default"))) void art_sigbus_fault() {
+  // Set a breakpoint here to be informed when a SIGBUS is unhandled by ART.
+  VLOG(signals)<< "Caught unknown SIGBUS in ART fault handler - chaining to next handler.";
+}
+#endif
+// [XRT] End
+
 // Signal handler called on SIGSEGV.
 static void art_fault_handler(int sig, siginfo_t* info, void* context) {
   fault_manager.HandleFault(sig, info, context);
@@ -90,6 +106,11 @@ static void art_nested_signal_handler(int sig, siginfo_t* info, void* context) {
 
 FaultManager::FaultManager() : initialized_(false) {
   sigaction(SIGSEGV, nullptr, &oldaction_);
+  // [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+  sigaction(SIGBUS, nullptr, &oldaction_bus_);
+#endif
+  // [XRT] End
 }
 
 FaultManager::~FaultManager() {
@@ -108,6 +129,11 @@ void FaultManager::EnsureArtActionInFrontOfSignalChain() {
   if (initialized_) {
     struct sigaction action;
     SetUpArtAction(&action);
+    // [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+    EnsureFrontOfChain(SIGBUS, &action);
+#endif
+    // [XRT] End
     EnsureFrontOfChain(SIGSEGV, &action);
   } else {
     LOG(WARNING) << "Can't call " << __FUNCTION__ << " due to unitialized fault manager";
@@ -119,18 +145,44 @@ void FaultManager::Init() {
   struct sigaction action;
   SetUpArtAction(&action);
 
+  // [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+  InstallMachExceptionHandler();
+#endif
+  // [XRT] End
+  
   // Set our signal handler now.
   int e = sigaction(SIGSEGV, &action, &oldaction_);
   if (e != 0) {
     VLOG(signals) << "Failed to claim SEGV: " << strerror(errno);
   }
+  
+  // [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+  e = sigaction(SIGBUS, &action, &oldaction_bus_);
+  if (e != 0) {
+    VLOG(signals) << "Failed to claim BUS: " << strerror(errno);
+  }
+#endif
+  // [XRT] End
+  
   // Make sure our signal handler is called before any user handlers.
+  // [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+  ClaimSignalChain(SIGBUS, &oldaction_bus_);
+#endif
+  // [XRT] End
   ClaimSignalChain(SIGSEGV, &oldaction_);
   initialized_ = true;
 }
 
 void FaultManager::Release() {
   if (initialized_) {
+    // [XRT] Begin
+#if TARGET_OS_IPHONE && TARGET_OS_IOS
+    UnclaimSignalChain(SIGBUS);
+#endif
+    // [XRT] End
     UnclaimSignalChain(SIGSEGV);
     initialized_ = false;
   }
@@ -146,7 +198,11 @@ void FaultManager::Shutdown() {
   }
 }
 
+#ifndef MOE
 void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
+#else
+bool FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
+#endif
   // BE CAREFUL ALLOCATING HERE INCLUDING USING LOG(...)
   //
   // If malloc calls abort, it will be holding its lock.
@@ -165,12 +221,17 @@ void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
 #else
         // We have handled a signal so it's time to return from the
         // signal handler to the appropriate place.
+#ifndef MOE
         return;
+#else
+        return true;
+#endif
 #endif
       }
     }
   }
 
+#ifndef MOE
   // We hit a signal we didn't handle.  This might be something for which
   // we can give more information about so call all registered handlers to see
   // if it is.
@@ -271,6 +332,9 @@ void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
 
   // Pass this on to the next handler in the chain, or the default if none.
   InvokeUserSignalHandler(sig, info, context);
+#else
+  return InvokeUserSignalHandler(sig, info, context);
+#endif
 }
 
 void FaultManager::AddHandler(FaultHandler* handler, bool generated_code) {

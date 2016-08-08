@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +40,12 @@
 #include "quick/quick_method_frame_info.h"
 #include "runtime_stats.h"
 #include "safe_map.h"
+
+#ifdef MOE
+extern uint8_t* get_slided_section_data(const char* seg, const char* sect, size_t* size);
+extern uint8_t* get_art_data(size_t* size);
+extern uint8_t* get_oat_data(size_t* size);
+#endif
 
 namespace art {
 

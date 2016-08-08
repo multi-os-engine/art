@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -302,9 +303,11 @@ class ArenaAllocator
 
   // Returns zeroed memory.
   void* Alloc(size_t bytes, ArenaAllocKind kind = kArenaAllocMisc) ALWAYS_INLINE {
+#ifndef MOE
     if (UNLIKELY(IsRunningOnMemoryTool())) {
       return AllocWithMemoryTool(bytes, kind);
     }
+#endif
     bytes = RoundUp(bytes, kAlignment);
     if (UNLIKELY(ptr_ + bytes > end_)) {
       // Obtain a new block.
@@ -348,7 +351,9 @@ class ArenaAllocator
     return static_cast<T*>(Alloc(length * sizeof(T), kind));
   }
 
+#ifndef MOE
   void* AllocWithMemoryTool(size_t bytes, ArenaAllocKind kind);
+#endif
 
   void ObtainNewArenaForAllocation(size_t allocation_size);
 

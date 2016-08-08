@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,10 +160,13 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
   }
 
   CHECK_EQ(dex_files_->size(), oat_dex_files_.size());
-  CHECK_EQ(compiler->IsImage(), image_writer_ != nullptr);
+#ifndef MOE
   CHECK_EQ(compiler->IsImage(),
            key_value_store_->find(OatHeader::kImageLocationKey) == key_value_store_->end());
   CHECK_ALIGNED(image_patch_delta_, kPageSize);
+#else
+  CHECK_ALIGNED_PARAM(image_patch_delta_, instruction_set == kArm64 ? (4*4096) : 4096);
+#endif
 }
 
 OatWriter::~OatWriter() {
@@ -1103,7 +1107,11 @@ size_t OatWriter::InitOatCode(size_t offset) {
   size_t old_offset = offset;
   size_t adjusted_offset = offset;
   // required to be on a new page boundary
+#ifndef MOE
   offset = RoundUp(offset, kPageSize);
+#else
+  offset = RoundUp(offset, compiler_driver_->GetInstructionSet() == kArm64 ? (4*4096) : 4096);
+#endif
   oat_header_->SetExecutableOffset(offset);
   size_executable_offset_alignment_ = offset - old_offset;
   if (compiler_driver_->IsImage()) {
@@ -1373,7 +1381,6 @@ size_t OatWriter::WriteCode(OutputStream* out, const size_t file_offset, size_t 
         relative_offset += alignment_padding + field->size(); \
         DCHECK_OFFSET(); \
       } while (false)
-
     DO_TRAMPOLINE(jni_dlsym_lookup_);
     DO_TRAMPOLINE(quick_generic_jni_trampoline_);
     DO_TRAMPOLINE(quick_imt_conflict_trampoline_);

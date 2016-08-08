@@ -26,6 +26,10 @@
 #include "gc/heap.h"
 #include "os.h"
 
+#ifdef MOE
+#define FixupRootVisitor PatchOatFixupRootVisitor
+#endif
+
 namespace art {
 
 class ArtMethod;
@@ -49,6 +53,11 @@ class PatchOat {
   // Patch only the image (art file)
   static bool Patch(const std::string& art_location, off_t delta, File* art_out, InstructionSet isa,
                     TimingLogger* timings);
+    
+#ifdef MOE
+  static bool Patch(InstructionSet isa, MemMap* image, gc::accounting::ContinuousSpaceBitmap* bitmap,
+                    MemMap* heap, TimingLogger* timings);
+#endif
 
   // Patch both the image and the oat file
   static bool Patch(File* oat_in, const std::string& art_location,
@@ -142,7 +151,15 @@ class PatchOat {
     if (obj == nullptr) {
       return obj;
     }
+#ifdef MOE
+    bool low = MOE_MAP_BEGIN < reinterpret_cast<uintptr_t>(obj);
+#endif
     auto ret = reinterpret_cast<uintptr_t>(obj) + delta_;
+#ifdef MOE
+    if (low) {
+      ret -= MOE_MAP_BEGIN;
+    }
+#endif
     // Trim off high bits in case negative relocation with 64 bit patchoat.
     if (InstructionSetPointerSize(isa_) == sizeof(uint32_t)) {
       ret = static_cast<uintptr_t>(static_cast<uint32_t>(ret));
@@ -155,7 +172,15 @@ class PatchOat {
     if (obj == 0) {
       return obj;
     }
+#ifdef MOE
+    bool low = MOE_MAP_BEGIN < obj;
+#endif
     T ret = obj + delta_;
+#ifdef MOE
+    if (low) {
+      ret -= MOE_MAP_BEGIN;
+    }
+#endif
     // Trim off high bits in case negative relocation with 64 bit patchoat.
     if (InstructionSetPointerSize(isa_) == 4) {
       ret = static_cast<T>(static_cast<uint32_t>(ret));

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +39,11 @@ static constexpr size_t kStackAlignment = 16;
 
 // System page size. We check this against sysconf(_SC_PAGE_SIZE) at runtime, but use a simple
 // compile-time constant so the compiler can generate better code.
+#if !defined(MOE) || !defined(__arm64__)
 static constexpr int kPageSize = 4096;
+#else
+static constexpr int kPageSize = 4096 * 4;
+#endif
 
 // Required object alignment
 static constexpr size_t kObjectAlignment = 8;
@@ -117,7 +122,11 @@ static constexpr TraceClockSource kDefaultTraceClockSource = TraceClockSource::k
 static constexpr TraceClockSource kDefaultTraceClockSource = TraceClockSource::kWall;
 #endif
 
+#ifndef MOE
 static constexpr bool kDefaultMustRelocate = true;
+#else
+static constexpr bool kDefaultMustRelocate = false;
+#endif
 
 static constexpr bool kArm32QuickCodeUseSoftFloat = false;
 

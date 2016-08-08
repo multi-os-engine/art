@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,6 +131,12 @@ void Arm64Assembler::Store(FrameOffset offs, ManagedRegister m_src, size_t size)
   Arm64ManagedRegister src = m_src.AsArm64();
   if (src.IsNoRegister()) {
     CHECK_EQ(0u, size);
+#ifdef MOE
+  } else if (size == 1) {
+    StoreWToOffset(kStoreByte, src.AsWRegister(), SP, offs.Int32Value());
+  } else if (size == 2) {
+    StoreWToOffset(kStoreHalfword, src.AsWRegister(), SP, offs.Int32Value());
+#endif
   } else if (src.IsWRegister()) {
     CHECK_EQ(4u, size);
     StoreWToOffset(kStoreWord, src.AsWRegister(), SP, offs.Int32Value());
@@ -295,6 +302,13 @@ void Arm64Assembler::LoadRef(ManagedRegister m_dst, FrameOffset offs) {
   Arm64ManagedRegister dst = m_dst.AsArm64();
   CHECK(dst.IsXRegister()) << dst;
   LoadWFromOffset(kLoadWord, dst.AsOverlappingWRegister(), SP, offs.Int32Value());
+#ifdef MOE
+  WRegister wdst = dst.AsOverlappingWRegister();
+  ___ Cmp(reg_w(wdst), Operand(0));
+  ___ Csinc(reg_x(wdst), reg_x(wdst), reg_x(wdst), eq);
+  ___ bfm(reg_x(wdst), reg_x(wdst), 32, 1);
+  ___ And(reg_x(wdst), reg_x(wdst), Operand(0x1FFFFFFFE));
+#endif
 }
 
 void Arm64Assembler::LoadRef(ManagedRegister m_dst, ManagedRegister m_base, MemberOffset offs,
@@ -304,10 +318,18 @@ void Arm64Assembler::LoadRef(ManagedRegister m_dst, ManagedRegister m_base, Memb
   CHECK(dst.IsXRegister() && base.IsXRegister());
   LoadWFromOffset(kLoadWord, dst.AsOverlappingWRegister(), base.AsXRegister(),
                   offs.Int32Value());
+#ifdef MOE
+  WRegister wdst = dst.AsOverlappingWRegister();
+  ___ Cmp(reg_w(wdst), Operand(0));
+  ___ Csinc(reg_x(wdst), reg_x(wdst), reg_x(wdst), eq);
+  ___ bfm(reg_x(wdst), reg_x(wdst), 32, 1);
+  ___ And(reg_x(wdst), reg_x(wdst), Operand(0x1FFFFFFFE));
+#else
   if (unpoison_reference) {
     WRegister ref_reg = dst.AsOverlappingWRegister();
     MaybeUnpoisonHeapReference(reg_w(ref_reg));
   }
+#endif
 }
 
 void Arm64Assembler::LoadRawPtr(ManagedRegister m_dst, ManagedRegister m_base, Offset offs) {
@@ -388,13 +410,23 @@ void Arm64Assembler::Copy(FrameOffset dest, FrameOffset src,
                           ManagedRegister m_scratch, size_t size) {
   Arm64ManagedRegister scratch = m_scratch.AsArm64();
   CHECK(scratch.IsXRegister()) << scratch;
+#ifndef MOE
   CHECK(size == 4 || size == 8) << size;
+#endif
   if (size == 4) {
     LoadWFromOffset(kLoadWord, scratch.AsOverlappingWRegister(), SP, src.Int32Value());
     StoreWToOffset(kStoreWord, scratch.AsOverlappingWRegister(), SP, dest.Int32Value());
   } else if (size == 8) {
     LoadFromOffset(scratch.AsXRegister(), SP, src.Int32Value());
     StoreToOffset(scratch.AsXRegister(), SP, dest.Int32Value());
+#ifdef MOE
+  } else if (size == 2) {
+    LoadWFromOffset(kLoadUnsignedHalfword, scratch.AsOverlappingWRegister(), SP, src.Int32Value());
+    StoreWToOffset(kStoreHalfword, scratch.AsOverlappingWRegister(), SP, dest.Int32Value());
+  } else if (size == 1) {
+    LoadWFromOffset(kLoadUnsignedByte, scratch.AsOverlappingWRegister(), SP, src.Int32Value());
+    StoreWToOffset(kStoreByte, scratch.AsOverlappingWRegister(), SP, dest.Int32Value());
+#endif
   } else {
     UNIMPLEMENTED(FATAL) << "We only support Copy() of size 4 and 8";
   }
@@ -607,6 +639,13 @@ void Arm64Assembler::LoadReferenceFromHandleScope(ManagedRegister m_out_reg,
   }
   ___ Cbz(reg_x(in_reg.AsXRegister()), &exit);
   LoadFromOffset(out_reg.AsXRegister(), in_reg.AsXRegister(), 0);
+#ifdef MOE
+  WRegister wdst = out_reg.AsOverlappingWRegister();
+  ___ Cmp(reg_w(wdst), Operand(0));
+  ___ Csinc(reg_x(wdst), reg_x(wdst), reg_x(wdst), eq);
+  ___ bfm(reg_x(wdst), reg_x(wdst), 32, 1);
+  ___ And(reg_x(wdst), reg_x(wdst), Operand(0x1FFFFFFFE));
+#endif
   ___ Bind(&exit);
 }
 
@@ -797,9 +836,16 @@ void Arm64Assembler::UnpoisonHeapReference(vixl::Register reg) {
 }
 
 void Arm64Assembler::MaybeUnpoisonHeapReference(vixl::Register reg) {
+#ifndef MOE
   if (kPoisonHeapReferences) {
     UnpoisonHeapReference(reg);
   }
+#else
+  ___ Cmp(reg.W(), vixl::Operand(0));
+  ___ Csinc(reg.X(), reg.X(), reg.X(), eq);
+  ___ bfm(reg.X(), reg.X(), 32, 1);
+  ___ And(reg.X(), reg.X(), Operand(0x1FFFFFFFE));
+#endif
 }
 
 #undef ___

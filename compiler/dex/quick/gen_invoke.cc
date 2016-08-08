@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -742,10 +743,23 @@ int Mir2Lir::GenDalvikArgsBulkCopy(CallInfo* info, int first, int count) {
     int start_offset = SRegOffset(info->args[first].s_reg_low);
     int outs_offset = StackVisitor::GetOutVROffset(first, cu_->instruction_set);
 
+#ifdef MOE
+    RegStorage self_temp_reg;
+    if (cu_->instruction_set == kThumb2) {
+      self_temp_reg = AllocTemp();
+      OpRegReg(kOpMov, self_temp_reg, TargetPtrReg(kSelf));
+    }
+#endif
     OpRegRegImm(kOpAdd, TargetReg(kArg0, kRef), TargetPtrReg(kSp), outs_offset);
     OpRegRegImm(kOpAdd, TargetReg(kArg1, kRef), TargetPtrReg(kSp), start_offset);
     CallRuntimeHelperRegRegImm(kQuickMemcpy, TargetReg(kArg0, kRef), TargetReg(kArg1, kRef),
                                count * 4, false);
+#ifdef MOE
+    if (cu_->instruction_set == kThumb2) {
+      OpRegReg(kOpMov, TargetPtrReg(kSelf), self_temp_reg);
+      FreeTemp(self_temp_reg);
+    }
+#endif
     count = 0;
   }
   return count;

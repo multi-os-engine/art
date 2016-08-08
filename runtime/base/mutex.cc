@@ -20,7 +20,9 @@
 #include <sys/time.h>
 
 #define ATRACE_TAG ATRACE_TAG_DALVIK
+#ifndef MOE
 #include "cutils/trace.h"
+#endif
 
 #include "atomic.h"
 #include "base/logging.h"

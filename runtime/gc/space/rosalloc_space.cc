@@ -1,6 +1,7 @@
 
 /*
  * Copyright (C) 2013 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +19,9 @@
 #include "rosalloc_space-inl.h"
 
 #define ATRACE_TAG ATRACE_TAG_DALVIK
+#ifndef MOE
 #include "cutils/trace.h"
+#endif
 
 #include "base/time_utils.h"
 #include "gc/accounting/card_table.h"
@@ -78,6 +81,7 @@ RosAllocSpace* RosAllocSpace::CreateFromMemMap(MemMap* mem_map, const std::strin
 
   // Everything is set so record in immutable structure and leave
   uint8_t* begin = mem_map->Begin();
+#ifndef MOE
   // TODO: Fix RosAllocSpace to support Valgrind/ASan. There is currently some issues with
   // AllocationSize caused by redzones. b/12944686
   if (running_on_memory_tool) {
@@ -85,6 +89,9 @@ RosAllocSpace* RosAllocSpace::CreateFromMemMap(MemMap* mem_map, const std::strin
         mem_map, initial_size, name, rosalloc, begin, end, begin + capacity, growth_limit,
         can_move_objects, starting_size, low_memory_mode);
   } else {
+#else
+  {
+#endif
     return new RosAllocSpace(mem_map, initial_size, name, rosalloc, begin, end, begin + capacity,
                              growth_limit, can_move_objects, starting_size, low_memory_mode);
   }
@@ -180,11 +187,15 @@ MallocSpace* RosAllocSpace::CreateInstance(MemMap* mem_map, const std::string& n
                                            void* allocator, uint8_t* begin, uint8_t* end,
                                            uint8_t* limit, size_t growth_limit,
                                            bool can_move_objects) {
+#ifndef MOE
   if (Runtime::Current()->IsRunningOnMemoryTool()) {
     return new MemoryToolMallocSpace<RosAllocSpace, kDefaultMemoryToolRedZoneBytes, false, true>(
         mem_map, initial_size_, name, reinterpret_cast<allocator::RosAlloc*>(allocator), begin, end,
         limit, growth_limit, can_move_objects, starting_size_, low_memory_mode_);
   } else {
+#else
+  {
+#endif
     return new RosAllocSpace(mem_map, initial_size_, name,
                              reinterpret_cast<allocator::RosAlloc*>(allocator), begin, end, limit,
                              growth_limit, can_move_objects, starting_size_, low_memory_mode_);
@@ -357,7 +368,13 @@ void RosAllocSpace::AssertAllThreadLocalBuffersAreRevoked() {
 
 void RosAllocSpace::Clear() {
   size_t footprint_limit = GetFootprintLimit();
+#ifdef MOE
+  if (!kMadviseZeroes) {
+    SafeZeroAndReleaseSpace(GetMemMap()->Begin(), GetFootprint());
+  }
+#else
   madvise(GetMemMap()->Begin(), GetMemMap()->Size(), MADV_DONTNEED);
+#endif
   live_bitmap_->Clear();
   mark_bitmap_->Clear();
   SetEnd(begin_ + starting_size_);

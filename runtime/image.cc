@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,15 +27,30 @@ namespace art {
 const uint8_t ImageHeader::kImageMagic[] = { 'a', 'r', 't', '\n' };
 const uint8_t ImageHeader::kImageVersion[] = { '0', '2', '2', '\0' };
 
+#ifndef MOE
 ImageHeader::ImageHeader(uint32_t image_begin,
+#else
+ImageHeader::ImageHeader(uint64_t image_begin,
+#endif
                          uint32_t image_size,
                          ImageSection* sections,
+#ifndef MOE
                          uint32_t image_roots,
+#else
+                         uint64_t image_roots,
+#endif
                          uint32_t oat_checksum,
+#ifndef MOE
                          uint32_t oat_file_begin,
                          uint32_t oat_data_begin,
                          uint32_t oat_data_end,
                          uint32_t oat_file_end,
+#else
+                         uint64_t oat_file_begin,
+                         uint64_t oat_data_begin,
+                         uint64_t oat_data_end,
+                         uint64_t oat_file_end,
+#endif
                          uint32_t pointer_size,
                          bool compile_pic)
   : image_begin_(image_begin),
@@ -93,7 +109,11 @@ bool ImageHeader::IsValid() const {
   if (oat_data_begin_ > oat_data_end_) {
     return false;
   }
+#ifndef MOE
   if (oat_file_begin_ >= oat_data_begin_) {
+#else
+  if (oat_file_begin_ > oat_data_begin_) {
+#endif
     return false;
   }
   if (image_roots_ <= image_begin_ || oat_file_begin_ <= image_roots_) {

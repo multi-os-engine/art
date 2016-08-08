@@ -1,0 +1,12 @@
+diff --git a/test/702-LargeBranchOffset/build b/test/702-LargeBranchOffset/build
+old mode 100644
+new mode 100755
+index 20030fa..e01e26c
+--- a/test/702-LargeBranchOffset/build
++++ b/test/702-LargeBranchOffset/build
+@@ -20,4 +20,4 @@ set -e
+ # Write out the source file.
+ cpp -P src/Main.java.in src/Main.java
+ 
+-./default-build
++../etc/default-build-moe

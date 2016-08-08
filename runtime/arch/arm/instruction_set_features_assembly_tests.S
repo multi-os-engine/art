@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +17,12 @@
 
 #include "asm_support_arm.S"
 
+#ifndef MOE
 .section .text
+#else
+.section __TEXT, __text
+#endif
+
 // This function is used to check for the CPU's support for the sdiv
 // instruction at runtime.  It will either return the value 1 or
 // will cause an invalid instruction trap (SIGILL signal).  The

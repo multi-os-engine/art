@@ -1,0 +1,1 @@
+Test to check argument passing from Java to C (JNI)

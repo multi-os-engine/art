@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,7 +70,7 @@
 
 namespace art {
 
-#if defined(__APPLE__) && defined(__x86_64__)
+#if defined(__APPLE__) && defined(__x86_64__) && !defined(MOE)
 // mac symbols have a prefix of _ on x86_64
 extern "C" void _art_quick_throw_null_pointer_exception();
 extern "C" void _art_quick_throw_stack_overflow();

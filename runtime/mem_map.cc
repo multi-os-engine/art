@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,13 +35,21 @@
 #include "thread-inl.h"
 #include "utils.h"
 
+#ifndef MOE
 #define USE_ASHMEM 1
+#endif
 
 #ifdef USE_ASHMEM
 #include <cutils/ashmem.h>
 #ifndef ANDROID_OS
 #include <sys/resource.h>
 #endif
+#endif
+
+#ifdef MOE
+#include <mach/vm_map.h>
+#include <mach/mach_init.h>
+#include "moe_entry.h"
 #endif
 
 #ifndef MAP_ANONYMOUS
@@ -80,7 +89,11 @@ MemMap::Maps* MemMap::maps_ = nullptr;
 // Handling mem_map in 32b address range for 64b architectures that do not support MAP_32BIT.
 
 // The regular start of memory allocations. The first 64KB is protected by SELinux.
+#ifndef MOE
 static constexpr uintptr_t LOW_MEM_START = 64 * KB;
+#else
+static constexpr uintptr_t LOW_MEM_START = MOE_MAP_BEGIN + kPageSize;
+#endif
 
 // Generate random starting position.
 // To not interfere with image position, take the image's address and only place it below. Current
@@ -251,6 +264,30 @@ static bool CheckMapRequest(uint8_t* expected_ptr, void* actual_ptr, size_t byte
   return false;
 }
 
+#ifdef MOE
+MemMap* MemMap::MapAlias(const char* name, uint8_t* expected_ptr, uint8_t* addr, size_t byte_count, int prot, std::string* error_msg) {
+  if (expected_ptr == addr) {
+    return new MemMap(name, expected_ptr, byte_count, expected_ptr, byte_count, prot, true);
+  }
+
+  vm_prot_t cur_prot;
+  vm_prot_t max_prot;
+  vm_address_t vm_addr = (vm_address_t)expected_ptr;
+  vm_size_t vm_size = (vm_size_t)byte_count;
+  size_t aligned_byte_count = RoundUp(byte_count, kPageSize);
+
+  kern_return_t error = vm_remap(mach_task_self(), &vm_addr, vm_size, 0x0, FALSE, mach_task_self(), (vm_address_t)addr, FALSE, &cur_prot, &max_prot, VM_INHERIT_SHARE);
+  if (error != KERN_SUCCESS) {
+    assert(!"Could not map the requested address!");
+  }
+
+  MemMap* map = new MemMap(name, expected_ptr, byte_count, expected_ptr, aligned_byte_count, prot, true);
+  map->alias_ = true;
+
+  return map;
+}
+#endif
+
 #if USE_ART_LOW_4G_ALLOCATOR
 static inline void* TryMemMapLow4GB(void* ptr, size_t page_aligned_byte_count, int prot, int flags,
                                     int fd) {
@@ -258,7 +295,11 @@ static inline void* TryMemMapLow4GB(void* ptr, size_t page_aligned_byte_count, i
   if (actual != MAP_FAILED) {
     // Since we didn't use MAP_FIXED the kernel may have mapped it somewhere not in the low
     // 4GB. If this is the case, unmap and retry.
+#ifndef MOE
     if (reinterpret_cast<uintptr_t>(actual) + page_aligned_byte_count >= 4 * GB) {
+#else
+    if (reinterpret_cast<uintptr_t>(actual) + page_aligned_byte_count >= MOE_MAP_END) {
+#endif
       munmap(actual, page_aligned_byte_count);
       actual = MAP_FAILED;
     }
@@ -268,7 +309,7 @@ static inline void* TryMemMapLow4GB(void* ptr, size_t page_aligned_byte_count, i
 #endif
 
 MemMap* MemMap::MapAnonymous(const char* name, uint8_t* expected_ptr, size_t byte_count, int prot,
-                             bool low_4gb, bool reuse, std::string* error_msg) {
+                             bool low_4gb, bool reuse, std::string* error_msg, bool preferred) {
 #ifndef __LP64__
   UNUSED(low_4gb);
 #endif
@@ -314,6 +355,12 @@ MemMap* MemMap::MapAnonymous(const char* name, uint8_t* expected_ptr, size_t byt
   }
 #endif
 
+#ifdef MOE
+  if (expected_ptr && !preferred) {
+    flags |= MAP_FIXED;
+  }
+#endif
+
   // We need to store and potentially set an error number for pretty printing of errors
   int saved_errno = 0;
 
@@ -322,9 +369,17 @@ MemMap* MemMap::MapAnonymous(const char* name, uint8_t* expected_ptr, size_t byt
   // 4GB.
   if (low_4gb && (
       // Start out of bounds.
+#ifndef MOE
       (reinterpret_cast<uintptr_t>(expected_ptr) >> 32) != 0 ||
+#else
+      reinterpret_cast<uintptr_t>(expected_ptr) >= MOE_MAP_END ||
+#endif
       // End out of bounds. For simplicity, this will fail for the last page of memory.
+#ifndef MOE
       (reinterpret_cast<uintptr_t>(expected_ptr + page_aligned_byte_count) >> 32) != 0)) {
+#else
+      reinterpret_cast<uintptr_t>(expected_ptr + page_aligned_byte_count) >= MOE_MAP_END)) {
+#endif
     *error_msg = StringPrintf("The requested address space (%p, %p) cannot fit in low_4gb",
                               expected_ptr, expected_ptr + page_aligned_byte_count);
     return nullptr;
@@ -341,6 +396,7 @@ MemMap* MemMap::MapAnonymous(const char* name, uint8_t* expected_ptr, size_t byt
   if (low_4gb && expected_ptr == nullptr) {
     bool first_run = true;
 
+#ifndef MOE
     MutexLock mu(Thread::Current(), *Locks::mem_maps_lock_);
     for (uintptr_t ptr = next_mem_pos_; ptr < 4 * GB; ptr += kPageSize) {
       // Use maps_ as an optimization to skip over large maps.
@@ -375,6 +431,10 @@ MemMap* MemMap::MapAnonymous(const char* name, uint8_t* expected_ptr, size_t byt
       }
 
       if (4U * GB - ptr < page_aligned_byte_count) {
+#else
+    for (uintptr_t ptr = next_mem_pos_; ptr < MOE_MAP_END; ptr += kPageSize) {
+      if (MOE_MAP_END - ptr < page_aligned_byte_count) {
+#endif
         // Not enough memory until 4GB.
         if (first_run) {
           // Try another time from the bottom;
@@ -443,9 +503,19 @@ MemMap* MemMap::MapAnonymous(const char* name, uint8_t* expected_ptr, size_t byt
     return nullptr;
   }
   std::ostringstream check_map_request_error_msg;
+#ifdef MOE
+  if (preferred) {
+    expected_ptr = nullptr;
+  }
+#endif
   if (!CheckMapRequest(expected_ptr, actual, page_aligned_byte_count, error_msg)) {
     return nullptr;
   }
+#ifdef MOE
+  if (fd.get() == -1) {
+    SafeZeroAndReleaseSpace(actual, page_aligned_byte_count);
+  }
+#endif
   return new MemMap(name, reinterpret_cast<uint8_t*>(actual), byte_count, actual,
                     page_aligned_byte_count, prot, reuse);
 }
@@ -507,7 +577,9 @@ MemMap* MemMap::MapFileAtAddress(uint8_t* expected_ptr, size_t byte_count, int p
   if (actual == MAP_FAILED) {
     auto saved_errno = errno;
 
+#ifndef MOE
     PrintFileToLog("/proc/self/maps", LogSeverity::WARNING);
+#endif
 
     *error_msg = StringPrintf("mmap(%p, %zd, 0x%x, 0x%x, %d, %" PRId64
                               ") of file '%s' failed: %s. See process maps in the log.",
@@ -538,7 +610,19 @@ MemMap::~MemMap() {
   if (base_begin_ == nullptr && base_size_ == 0) {
     return;
   }
+#ifdef MOE
+  if (alias_) {
+    vm_address_t vm_addr = (vm_address_t)base_begin_;
+    vm_size_t vm_size = (vm_size_t)base_size_;
 
+    kern_return_t error;
+
+    error = vm_deallocate(mach_task_self(), vm_addr, vm_size);
+    if (error != KERN_SUCCESS) {
+      assert(!"Could not unmap the requested address!");
+    }
+  } else {
+#endif
   // Unlike Valgrind, AddressSanitizer requires that all manually poisoned memory is unpoisoned
   // before it is returned to the system.
   if (redzone_size_ != 0) {
@@ -554,6 +638,9 @@ MemMap::~MemMap() {
       PLOG(FATAL) << "munmap failed";
     }
   }
+#ifdef MOE
+  }
+#endif
 
   // Remove it from maps_.
   MutexLock mu(Thread::Current(), *Locks::mem_maps_lock_);
@@ -574,6 +661,9 @@ MemMap::MemMap(const std::string& name, uint8_t* begin, size_t size, void* base_
                size_t base_size, int prot, bool reuse, size_t redzone_size)
     : name_(name), begin_(begin), size_(size), base_begin_(base_begin), base_size_(base_size),
       prot_(prot), reuse_(reuse), redzone_size_(redzone_size) {
+#ifdef MOE
+  alias_ = false;
+#endif
   if (size_ == 0) {
     CHECK(begin_ == nullptr);
     CHECK(base_begin_ == nullptr);
@@ -655,18 +745,29 @@ MemMap* MemMap::RemapAtEnd(uint8_t* new_end, const char* tail_name, int tail_pro
                               fd.get());
     return nullptr;
   }
+#ifdef MOE
+  if (fd.get() == -1) {
+    SafeZeroAndReleaseSpace(actual, tail_base_size);
+  }
+#endif
   return new MemMap(tail_name, actual, tail_size, actual, tail_base_size, tail_prot, false);
 }
 
 void MemMap::MadviseDontNeedAndZero() {
   if (base_begin_ != nullptr || base_size_ != 0) {
     if (!kMadviseZeroes) {
+#ifndef MOE
       memset(base_begin_, 0, base_size_);
+#else
+      SafeZeroAndReleaseSpace(base_begin_, base_size_);
+#endif
     }
+#ifndef MOE
     int result = madvise(base_begin_, base_size_, MADV_DONTNEED);
     if (result == -1) {
       PLOG(WARNING) << "madvise failed";
     }
+#endif
   }
 }
 

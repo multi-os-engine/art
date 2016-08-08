@@ -1,0 +1,1 @@
+Test extends android version of FTZ problems, by checking ftz disablimg among new threads as well as ofr main thread

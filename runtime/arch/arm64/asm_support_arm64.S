@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,12 +36,21 @@
 
 
 .macro ENTRY name
+    #ifndef MOE
     .type \name, #function
     .hidden \name  // Hide this as a global symbol, so we do not incur plt calls.
     .global \name
+    #else
+    .private_extern _\name
+    .global _\name
+    #endif
     /* Cache alignment for function entry */
     .balign 16
+    #ifndef MOE
 \name:
+    #else
+_\name:
+    #endif
     .cfi_startproc
 .endm
 
@@ -54,6 +64,19 @@
     brk 0
     END \name
 .endm
+
+#ifdef MOE
+.macro LOAD_REF_SAFE reg
+    cmp \reg, #0
+    csinc \reg, \reg, \reg, eq
+    bfm \reg, \reg, #32, #1
+    and \reg, \reg, #0x1FFFFFFFE
+.endm
+
+.macro LOAD_REF_UNSAFE reg
+    orr \reg, \reg, #0x100000000
+.endm
+#endif
 
 // Macros to poison (negate) the reference for heap poisoning.
 .macro POISON_HEAP_REF rRef

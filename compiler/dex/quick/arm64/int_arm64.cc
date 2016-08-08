@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -806,7 +807,11 @@ bool Arm64Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
   RegStorage r_tmp32 = (r_tmp.Is32Bit()) ? r_tmp : As32BitReg(r_tmp);
   LIR* loop = NewLIR0(kPseudoTargetLabel);
   NewLIR2(kA64Ldaxr2rX | wide, r_tmp_stored.GetReg(), r_ptr.GetReg());
+#ifndef MOE
   OpRegReg(kOpCmp, r_tmp, rl_expected.reg);
+#else
+  OpRegReg(kOpCmp, r_tmp_stored, is_object ? As32BitReg(rl_expected.reg) : rl_expected.reg);
+#endif
   DCHECK(last_lir_insn_->u.m.def_mask->HasBit(ResourceMask::kCCode));
   LIR* early_exit = OpCondBranch(kCondNe, nullptr);
   NewLIR3(kA64Stlxr3wrX | wide, r_tmp32.GetReg(), rl_new_value_stored.GetReg(), r_ptr.GetReg());

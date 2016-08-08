@@ -1,5 +1,6 @@
 /*
  * copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +26,18 @@
 #include "JniInvocation.h"
 #include "ScopedLocalRef.h"
 #include "toStringArray.h"
+
+#ifdef MOE
+/*
+ * Defined in NatJ
+ */
+extern "C" void handleStartup(JNIEnv* env, const char* name);
+
+/*
+ * Defined in NatJ
+ */
+extern "C" void handleShutdown(JNIEnv* env);
+#endif
 
 namespace art {
 
@@ -105,7 +118,11 @@ static int InvokeMain(JNIEnv* env, char** argv) {
 
 // Parse arguments.  Most of it just gets passed through to the runtime.
 // The JNI spec defines a handful of standard arguments.
-static int dalvikvm(int argc, char** argv) {
+#ifndef MOE
+  static int dalvikvm(int argc, char** argv) {
+#else
+  extern "C" int dalvikvm(int argc, char** argv, int prec, char* const prev[]) {
+#endif
   setvbuf(stdout, nullptr, _IONBF, 0);
 
   // Skip over argv[0].
@@ -179,6 +196,14 @@ static int dalvikvm(int argc, char** argv) {
     return EXIT_FAILURE;
   }
 
+#ifdef MOE
+    // HACK: force symbol generation for these two functions
+    JNI_GetDefaultJavaVMInitArgs(nullptr);
+    JavaVM *force_vms;
+    jsize force_vms_size;
+    JNI_GetCreatedJavaVMs(&force_vms, 1, &force_vms_size);
+#endif
+
   // Make sure they provided a class name. We do this after
   // JNI_CreateJavaVM so that things like "-help" have the opportunity
   // to emit a usage statement.
@@ -187,7 +212,22 @@ static int dalvikvm(int argc, char** argv) {
     return EXIT_FAILURE;
   }
 
+#ifdef MOE
+  // Handle startup initialization
+  for (int j = 0; j < prec; j++) {
+      handleStartup(env, prev[j]);
+  }
+#endif
+
   int rc = InvokeMain(env, &argv[arg_idx]);
+
+#ifdef MOE
+  // HACK: the original runtime implementation should invoke the shutdown hooks at some point near the end,
+  // but for some reason this does not happen (it does not even seem to be implemented), thus handleShutdown
+  // is not going to be invoked trough one of those hooks, so this handler gets a direct invocation
+  // at this point as a temporal solution.
+  handleShutdown(env);
+#endif
 
 #if defined(NDEBUG)
   // The DestroyJavaVM call will detach this thread for us. In debug builds, we don't want to
@@ -208,6 +248,8 @@ static int dalvikvm(int argc, char** argv) {
 
 }  // namespace art
 
+#ifndef MOE
 int main(int argc, char** argv) {
   return art::dalvikvm(argc, argv);
 }
+#endif

@@ -31,6 +31,10 @@
 #include "utils/x86/assembler_x86.h"
 #include "utils/x86/constants_x86.h"
 
+#ifdef MOE
+#include "asm_support.h"
+#endif
+
 namespace art {
 
 namespace x86 {
@@ -1015,7 +1019,16 @@ void IntrinsicCodeGeneratorX86::VisitStringCompareTo(HInvoke* invoke) {
   codegen_->AddSlowPath(slow_path);
   __ j(kEqual, slow_path->GetEntryLabel());
 
+#ifndef MOE
   __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pStringCompareTo)));
+#else
+  __ pushl(EAX);
+  __ gs()->movl(EAX, Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  __ movl(EAX, Address(EAX, QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pStringCompareTo)));
+  __ gs()->movl(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_32), EAX);
+  __ popl(EAX);
+  __ gs()->call(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_32));
+#endif
   __ Bind(slow_path->GetExitLabel());
 }
 
@@ -1286,7 +1299,16 @@ void IntrinsicCodeGeneratorX86::VisitStringNewStringFromBytes(HInvoke* invoke) {
   codegen_->AddSlowPath(slow_path);
   __ j(kEqual, slow_path->GetEntryLabel());
 
+#ifndef MOE
   __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pAllocStringFromBytes)));
+#else
+  __ pushl(EAX);
+  __ gs()->movl(EAX, Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  __ movl(EAX, Address(EAX, QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pAllocStringFromBytes)));
+  __ gs()->movl(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_32), EAX);
+  __ popl(EAX);
+  __ gs()->call(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_32));
+#endif
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ Bind(slow_path->GetExitLabel());
 }
@@ -1305,7 +1327,16 @@ void IntrinsicLocationsBuilderX86::VisitStringNewStringFromChars(HInvoke* invoke
 void IntrinsicCodeGeneratorX86::VisitStringNewStringFromChars(HInvoke* invoke) {
   X86Assembler* assembler = GetAssembler();
 
+#ifndef MOE
   __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pAllocStringFromChars)));
+#else
+  __ pushl(EAX);
+  __ gs()->movl(EAX, Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  __ movl(EAX, Address(EAX, QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pAllocStringFromChars)));
+  __ gs()->movl(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_32), EAX);
+  __ popl(EAX);
+  __ gs()->call(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_32));
+#endif
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
 }
 
@@ -1328,7 +1359,16 @@ void IntrinsicCodeGeneratorX86::VisitStringNewStringFromString(HInvoke* invoke) 
   codegen_->AddSlowPath(slow_path);
   __ j(kEqual, slow_path->GetEntryLabel());
 
+#ifndef MOE
   __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pAllocStringFromString)));
+#else
+  __ pushl(EAX);
+  __ gs()->movl(EAX, Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  __ movl(EAX, Address(EAX, QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pAllocStringFromString)));
+  __ gs()->movl(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_32), EAX);
+  __ popl(EAX);
+  __ gs()->call(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_32));
+#endif
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ Bind(slow_path->GetExitLabel());
 }
@@ -1568,7 +1608,12 @@ void IntrinsicLocationsBuilderX86::VisitThreadCurrentThread(HInvoke* invoke) {
 
 void IntrinsicCodeGeneratorX86::VisitThreadCurrentThread(HInvoke* invoke) {
   Register out = invoke->GetLocations()->Out().AsRegister<Register>();
+#ifndef MOE
   GetAssembler()->fs()->movl(out, Address::Absolute(Thread::PeerOffset<kX86WordSize>()));
+#else
+  GetAssembler()->gs()->movl(out, Address::Absolute(MOE_TLS_THREAD_OFFSET_32));
+  GetAssembler()->movl(out, Address(out, Thread::PeerOffset<kX86WordSize>()));
+#endif
 }
 
 static void GenUnsafeGet(LocationSummary* locations, Primitive::Type type,

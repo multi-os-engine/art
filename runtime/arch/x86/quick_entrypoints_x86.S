@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +21,35 @@
 
 // For x86, the CFA is esp+4, the address above the pushed return address on the stack.
 
+#ifdef MOE
+.section __IMPORT, __pointers, non_lazy_symbol_pointers
+
+L__ZN3art7Runtime9instance_E$non_lazy_ptr:
+	.indirect_symbol __ZN3art7Runtime9instance_E
+    .long 0
+
+.section __TEXT, __text
+
+MACRO1(LOAD_RUNTIME_INSTANCE, dest_reg)
+    .ifndef __loadRuntimeInstanceTo\dest_reg
+        calll .Lgeteip_inl_\dest_reg
+        .Lgeteip_inl_\dest_reg:
+            popl %\dest_reg
+            movl L__ZN3art7Runtime9instance_E$non_lazy_ptr-.Lgeteip_inl_\dest_reg(%\dest_reg), %\dest_reg
+            jmp __skipNotInlinedLoadRuntimeInstanceTo\dest_reg
+        __loadRuntimeInstanceTo\dest_reg:
+            calll .Lgeteip_\dest_reg
+            .Lgeteip_\dest_reg:
+                popl %\dest_reg
+                movl L__ZN3art7Runtime9instance_E$non_lazy_ptr-.Lgeteip_\dest_reg(%\dest_reg), %\dest_reg
+                ret
+        __skipNotInlinedLoadRuntimeInstanceTo\dest_reg:
+    .else
+        calll __loadRuntimeInstanceTo\dest_reg
+    .endif
+END_MACRO
+#endif
+
     /*
      * Macro that sets up the callee save frame to conform with
      * Runtime::CreateCalleeSaveMethod(kSaveAll)
@@ -31,14 +61,23 @@ MACRO2(SETUP_SAVE_ALL_CALLEE_SAVE_FRAME, got_reg, temp_reg)
     subl MACRO_LITERAL(12), %esp  // Grow stack by 3 words.
     CFI_ADJUST_CFA_OFFSET(12)
     SETUP_GOT_NOSAVE RAW_VAR(got_reg)
+    #ifndef MOE
     // Load Runtime::instance_ from GOT.
     movl SYMBOL(_ZN3art7Runtime9instance_E)@GOT(REG_VAR(got_reg)), REG_VAR(temp_reg)
+    #else
+    LOAD_RUNTIME_INSTANCE RAW_VAR(temp_reg)
+    #endif
     movl (REG_VAR(temp_reg)), REG_VAR(temp_reg)
     // Push save all callee-save method.
     pushl RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET(REG_VAR(temp_reg))
     CFI_ADJUST_CFA_OFFSET(4)
     // Store esp as the top quick frame.
+    #ifndef MOE
     movl %esp, %fs:THREAD_TOP_QUICK_FRAME_OFFSET
+    #else
+    movl %gs:MOE_TLS_THREAD_OFFSET_32, REG_VAR(temp_reg)
+    movl %esp, THREAD_TOP_QUICK_FRAME_OFFSET(REG_VAR(temp_reg))
+    #endif
     // Ugly compile-time check, but we only have the preprocessor.
     // Last +4: implicit return address pushed on stack when caller made call.
 #if (FRAME_SIZE_SAVE_ALL_CALLEE_SAVE != 3*4 + 16 + 4)
@@ -57,15 +96,23 @@ MACRO2(SETUP_REFS_ONLY_CALLEE_SAVE_FRAME, got_reg, temp_reg)
     subl MACRO_LITERAL(12), %esp  // Grow stack by 3 words.
     CFI_ADJUST_CFA_OFFSET(12)
     SETUP_GOT_NOSAVE RAW_VAR(got_reg)
+    #ifndef MOE
     // Load Runtime::instance_ from GOT.
     movl SYMBOL(_ZN3art7Runtime9instance_E)@GOT(REG_VAR(got_reg)), REG_VAR(temp_reg)
+    #else
+    LOAD_RUNTIME_INSTANCE RAW_VAR(temp_reg)
+    #endif
     movl (REG_VAR(temp_reg)), REG_VAR(temp_reg)
     // Push save all callee-save method.
     pushl RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET(REG_VAR(temp_reg))
     CFI_ADJUST_CFA_OFFSET(4)
     // Store esp as the top quick frame.
+    #ifndef MOE
     movl %esp, %fs:THREAD_TOP_QUICK_FRAME_OFFSET
-
+    #else
+    movl %gs:MOE_TLS_THREAD_OFFSET_32, REG_VAR(temp_reg)
+    movl %esp, THREAD_TOP_QUICK_FRAME_OFFSET(REG_VAR(temp_reg))
+    #endif
     // Ugly compile-time check, but we only have the preprocessor.
     // Last +4: implicit return address pushed on stack when caller made call.
 #if (FRAME_SIZE_REFS_ONLY_CALLEE_SAVE != 3*4 + 16 + 4)
@@ -102,15 +149,23 @@ MACRO2(SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME, got_reg, temp_reg)
     movsd %xmm3, 24(%esp)
 
     SETUP_GOT_NOSAVE RAW_VAR(got_reg)
+    #ifndef MOE
     // Load Runtime::instance_ from GOT.
     movl SYMBOL(_ZN3art7Runtime9instance_E)@GOT(REG_VAR(got_reg)), REG_VAR(temp_reg)
+    #else
+    LOAD_RUNTIME_INSTANCE RAW_VAR(temp_reg)
+    #endif
     movl (REG_VAR(temp_reg)), REG_VAR(temp_reg)
     // Push save all callee-save method.
     pushl RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET(REG_VAR(temp_reg))
     CFI_ADJUST_CFA_OFFSET(4)
     // Store esp as the stop quick frame.
+    #ifndef MOE
     movl %esp, %fs:THREAD_TOP_QUICK_FRAME_OFFSET
-
+    #else
+    movl %gs:MOE_TLS_THREAD_OFFSET_32, REG_VAR(temp_reg)
+    movl %esp, THREAD_TOP_QUICK_FRAME_OFFSET(REG_VAR(temp_reg))
+    #endif
     // Ugly compile-time check, but we only have the preprocessor.
     // Last +4: implicit return address pushed on stack when caller made call.
 #if (FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE != 7*4 + 4*8 + 4)
@@ -143,7 +198,13 @@ MACRO0(SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_EAX)
 
     PUSH eax  // Store the ArtMethod reference at the bottom of the stack.
     // Store esp as the stop quick frame.
+    #ifndef MOE
     movl %esp, %fs:THREAD_TOP_QUICK_FRAME_OFFSET
+    #else
+    movl %gs:MOE_TLS_THREAD_OFFSET_32, %eax
+    movl %esp, THREAD_TOP_QUICK_FRAME_OFFSET(%eax)
+    movl (%esp), %eax
+    #endif
 END_MACRO
 
 MACRO0(RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME)
@@ -197,7 +258,11 @@ MACRO0(DELIVER_PENDING_EXCEPTION)
     // Outgoing argument set up
     subl MACRO_LITERAL(12), %esp              // Alignment padding
     CFI_ADJUST_CFA_OFFSET(12)
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET               // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     call SYMBOL(artDeliverPendingExceptionFromCode)  // artDeliverPendingExceptionFromCode(Thread*)
     UNREACHABLE
@@ -209,7 +274,11 @@ MACRO2(NO_ARG_RUNTIME_EXCEPTION, c_name, cxx_name)
     // Outgoing argument set up
     subl MACRO_LITERAL(12), %esp                // alignment padding
     CFI_ADJUST_CFA_OFFSET(12)
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET                // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     call CALLVAR(cxx_name)                      // cxx_name(Thread*)
     UNREACHABLE
@@ -223,7 +292,11 @@ MACRO2(ONE_ARG_RUNTIME_EXCEPTION, c_name, cxx_name)
     // Outgoing argument set up
     subl MACRO_LITERAL(8), %esp               // alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET               // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH eax                                   // pass arg1
     call CALLVAR(cxx_name)                     // cxx_name(arg1, Thread*)
@@ -236,7 +309,11 @@ MACRO2(TWO_ARG_RUNTIME_EXCEPTION, c_name, cxx_name)
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME ebx, ebx  // save all registers as basis for long jump context
     // Outgoing argument set up
     PUSH eax                                   // alignment padding
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET               // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                                   // pass arg2
     PUSH eax                                   // pass arg1
@@ -298,7 +375,11 @@ MACRO1(INVOKE_TRAMPOLINE_BODY, cxx_name)
 
     // Outgoing argument set up
     PUSH edx                      // pass SP
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // pass arg2
     PUSH eax                      // pass arg1
@@ -623,7 +704,11 @@ MACRO3(NO_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     // Outgoing argument set up
     subl MACRO_LITERAL(12), %esp                // push padding
     CFI_ADJUST_CFA_OFFSET(12)
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET                // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     call CALLVAR(cxx_name)                      // cxx_name(Thread*)
     addl MACRO_LITERAL(16), %esp                // pop arguments
@@ -639,7 +724,11 @@ MACRO3(ONE_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     // Outgoing argument set up
     subl MACRO_LITERAL(8), %esp                  // push padding
     CFI_ADJUST_CFA_OFFSET(8)
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET                 // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH eax                                     // pass arg1
     call CALLVAR(cxx_name)                       // cxx_name(arg1, Thread*)
@@ -655,7 +744,11 @@ MACRO3(TWO_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  ebx, ebx  // save ref containing registers for GC
     // Outgoing argument set up
     PUSH eax                                     // push padding
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET                 // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                                     // pass arg2
     PUSH eax                                     // pass arg1
@@ -671,7 +764,11 @@ MACRO3(THREE_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     DEFINE_FUNCTION VAR(c_name)
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  ebx, ebx  // save ref containing registers for GC
     // Outgoing argument set up
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET                 // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH edx                                     // pass arg3
     PUSH ecx                                     // pass arg2
@@ -690,7 +787,11 @@ MACRO3(FOUR_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     // Outgoing argument set up
     subl MACRO_LITERAL(12), %esp                 // alignment padding
     CFI_ADJUST_CFA_OFFSET(12)
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET                 // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32       // pass Thread::Current()
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH ebx                                     // pass arg4
     PUSH edx                                     // pass arg3
@@ -710,7 +811,11 @@ MACRO3(ONE_ARG_REF_DOWNCALL, c_name, cxx_name, return_macro)
     // Outgoing argument set up
     mov FRAME_SIZE_REFS_ONLY_CALLEE_SAVE(%esp), %ecx  // get referrer
     PUSH eax                                          // push padding
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET                      // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                                          // pass referrer
     PUSH eax                                          // pass arg1
@@ -727,7 +832,11 @@ MACRO3(TWO_ARG_REF_DOWNCALL, c_name, cxx_name, return_macro)
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME ebx, ebx        // save ref containing registers for GC
     // Outgoing argument set up
     mov FRAME_SIZE_REFS_ONLY_CALLEE_SAVE(%esp), %edx  // get referrer
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET                      // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH edx                                          // pass referrer
     PUSH ecx                                          // pass arg2
@@ -747,7 +856,11 @@ MACRO3(THREE_ARG_REF_DOWNCALL, c_name, cxx_name, return_macro)
     mov FRAME_SIZE_REFS_ONLY_CALLEE_SAVE(%esp), %ebx  // get referrer
     subl MACRO_LITERAL(12), %esp                      // alignment padding
     CFI_ADJUST_CFA_OFFSET(12)
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET                      // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH ebx                                          // pass referrer
     PUSH edx                                          // pass arg3
@@ -779,7 +892,12 @@ MACRO0(RETURN_IF_EAX_ZERO)
 END_MACRO
 
 MACRO0(RETURN_OR_DELIVER_PENDING_EXCEPTION)
+    #ifndef MOE
     cmpl MACRO_LITERAL(0),%fs:THREAD_EXCEPTION_OFFSET // exception field == 0 ?
+    #else
+    movl %gs:MOE_TLS_THREAD_OFFSET_32, %ecx
+    cmpl MACRO_LITERAL(0), THREAD_EXCEPTION_OFFSET(%ecx) // exception field == 0 ?
+    #endif
     jne 1f                                            // if exception field != 0 goto 1
     ret                                               // return
 1:                                                    // deliver exception on current thread
@@ -812,13 +930,23 @@ DEFINE_FUNCTION art_quick_lock_object
     // unlocked case - edx: original lock word, eax: obj.
     movl %eax, %ecx                       // remember object in case of retry
     movl %edx, %eax                       // eax: lock word zero except for read barrier bits.
+    #ifndef MOE
     movl %fs:THREAD_ID_OFFSET, %edx       // load thread id.
+    #else
+    movl %gs:MOE_TLS_THREAD_OFFSET_32, %edx       // load thread id.
+    movl THREAD_ID_OFFSET(%edx), %edx
+    #endif
     or   %eax, %edx                       // edx: thread id with count of 0 + read barrier bits.
     lock cmpxchg  %edx, MIRROR_OBJECT_LOCK_WORD_OFFSET(%ecx)  // eax: old val, edx: new val.
     jnz  .Llock_cmpxchg_fail              // cmpxchg failed retry
     ret
 .Lalready_thin:  // edx: lock word (with high 2 bits zero and original rb bits), eax: obj.
+    #ifndef MOE
     movl %fs:THREAD_ID_OFFSET, %ecx       // ecx := thread id
+    #else
+    movl %gs:MOE_TLS_THREAD_OFFSET_32, %ecx       // ecx := thread id
+    movl THREAD_ID_OFFSET(%ecx), %ecx
+    #endif
     cmpw %cx, %dx                         // do we hold the lock already?
     jne  .Lslow_lock
     movl %edx, %ecx                       // copy the lock word to check count overflow.
@@ -841,7 +969,11 @@ DEFINE_FUNCTION art_quick_lock_object
     // Outgoing argument set up
     subl LITERAL(8), %esp                 // alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET          // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH eax                              // pass object
     call SYMBOL(artLockObjectFromCode)    // artLockObjectFromCode(object, Thread*)
@@ -856,7 +988,12 @@ DEFINE_FUNCTION art_quick_unlock_object
     jz   .Lslow_unlock
 .Lretry_unlock:
     movl MIRROR_OBJECT_LOCK_WORD_OFFSET(%eax), %ecx  // ecx := lock word
+    #ifndef MOE
     movl %fs:THREAD_ID_OFFSET, %edx       // edx := thread id
+    #else
+    movl %gs:MOE_TLS_THREAD_OFFSET_32, %edx
+    movl THREAD_ID_OFFSET(%edx), %edx
+    #endif
     test LITERAL(LOCK_WORD_STATE_MASK), %ecx
     jnz  .Lslow_unlock                    // lock word contains a monitor
     cmpw %cx, %dx                         // does the thread id match?
@@ -896,7 +1033,11 @@ DEFINE_FUNCTION art_quick_unlock_object
     // Outgoing argument set up
     subl LITERAL(8), %esp                 // alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET          // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH eax                              // pass object
     call SYMBOL(artUnlockObjectFromCode)  // artUnlockObjectFromCode(object, Thread*)
@@ -936,7 +1077,11 @@ DEFINE_FUNCTION art_quick_check_cast
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  ebx, ebx  // save all registers as basis for long jump context
     // Outgoing argument set up
     PUSH eax                              // alignment padding
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET          // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                              // pass arg2
     PUSH eax                              // pass arg1
@@ -1035,7 +1180,12 @@ DEFINE_FUNCTION art_quick_aput_obj
 .Ldo_aput:
     POISON_HEAP_REF edx
     movl %edx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%eax, %ecx, 4)
+    #ifndef MOE
     movl %fs:THREAD_CARD_TABLE_OFFSET, %edx
+    #else
+    movl %gs:MOE_TLS_THREAD_OFFSET_32, %edx
+    movl THREAD_CARD_TABLE_OFFSET(%edx), %edx
+    #endif
     shrl LITERAL(7), %eax
     movb %dl, (%edx, %eax)
     ret
@@ -1076,7 +1226,12 @@ DEFINE_FUNCTION art_quick_aput_obj
     POP  eax
     POISON_HEAP_REF edx
     movl %edx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%eax, %ecx, 4)  // do the aput
+    #ifndef MOE
     movl %fs:THREAD_CARD_TABLE_OFFSET, %edx
+    #else
+    movl %gs:MOE_TLS_THREAD_OFFSET_32, %edx
+    movl THREAD_CARD_TABLE_OFFSET(%edx), %edx
+    #endif
     shrl LITERAL(7), %eax
     movb %dl, (%edx, %eax)
     ret
@@ -1088,7 +1243,11 @@ DEFINE_FUNCTION art_quick_aput_obj
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME ebx, ebx // save all registers as basis for long jump context
     // Outgoing argument set up
     PUSH eax                      // alignment padding
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH edx                      // pass arg2 - value
     PUSH eax                      // pass arg1 - array
@@ -1237,7 +1396,11 @@ DEFINE_FUNCTION art_quick_set64_instance
     // Outgoing argument set up
     subl LITERAL(8), %esp         // alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     pushl (FRAME_SIZE_REFS_ONLY_CALLEE_SAVE+12)(%esp)  // pass referrer
     CFI_ADJUST_CFA_OFFSET(4)
@@ -1262,7 +1425,11 @@ DEFINE_FUNCTION art_quick_set64_static
     mov FRAME_SIZE_REFS_ONLY_CALLEE_SAVE(%esp), %ecx  // get referrer
     subl LITERAL(12), %esp        // alignment padding
     CFI_ADJUST_CFA_OFFSET(12)
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH ebx                      // pass high half of new_val
     PUSH edx                      // pass low half of new_val
@@ -1278,7 +1445,11 @@ END_FUNCTION art_quick_set64_static
 DEFINE_FUNCTION art_quick_proxy_invoke_handler
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_EAX
     PUSH esp                      // pass SP
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // pass receiver
     PUSH eax                      // pass proxy method
@@ -1305,7 +1476,11 @@ DEFINE_FUNCTION art_quick_resolution_trampoline
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME ebx, ebx
     movl %esp, %edi
     PUSH EDI                      // pass SP. do not just PUSH ESP; that messes up unwinding
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // pass receiver
     PUSH eax                      // pass method
@@ -1333,7 +1508,11 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
 
     subl LITERAL(8), %esp         // Padding for 16B alignment.
     pushl %ebp                    // Pass SP (to ArtMethod).
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET  // Pass Thread::Current().
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32  // Pass Thread::Current().
+    #endif
     call SYMBOL(artQuickGenericJniTrampoline)  // (Thread*, sp)
 
     // The C call will have registered the complete save-frame on success.
@@ -1362,11 +1541,20 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
     fstpl (%esp)
     pushl %edx                    // Pass int result.
     pushl %eax
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET  // Pass Thread::Current().
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32  // Pass Thread::Current().
+    #endif
     call SYMBOL(artQuickGenericJniEndTrampoline)
 
     // Pending exceptions possible.
+    #ifndef MOE
     mov %fs:THREAD_EXCEPTION_OFFSET, %ebx
+    #else
+    mov %gs:MOE_TLS_THREAD_OFFSET_32, %ebx
+    mov THREAD_EXCEPTION_OFFSET(%ebx), %ebx
+    #endif
     testl %ebx, %ebx
     jnz .Lexception_in_native
 
@@ -1393,7 +1581,12 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
     punpckldq %xmm1, %xmm0
     ret
 .Lexception_in_native:
+    #ifndef MOE
     movl %fs:THREAD_TOP_QUICK_FRAME_OFFSET, %esp
+    #else
+    movl %gs:MOE_TLS_THREAD_OFFSET_32, %esp
+    movl THREAD_TOP_QUICK_FRAME_OFFSET(%esp), %esp
+    #endif
     // Do a call to push a new save-all frame required by the runtime.
     call .Lexception_call
 .Lexception_call:
@@ -1405,7 +1598,11 @@ DEFINE_FUNCTION art_quick_to_interpreter_bridge
     mov %esp, %edx                // remember SP
     PUSH eax                      // alignment padding
     PUSH edx                      // pass SP
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH eax                      // pass  method
     call SYMBOL(artQuickToInterpreterBridge)  // (method, Thread*, SP)
@@ -1437,7 +1634,11 @@ DEFINE_FUNCTION art_quick_instrumentation_entry
     CFI_ADJUST_CFA_OFFSET(12)
     pushl FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE-4+16(%esp)  // Pass LR.
     CFI_ADJUST_CFA_OFFSET(4)
-    pushl %fs:THREAD_SELF_OFFSET  // Pass Thread::Current().
+    #ifndef MOE
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current().
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     PUSH ecx                      // Pass receiver.
     PUSH eax                      // Pass Method*.
@@ -1446,7 +1647,14 @@ DEFINE_FUNCTION art_quick_instrumentation_entry
     CFI_ADJUST_CFA_OFFSET(-28)
     movl 60(%esp), %edi           // Restore edi.
     movl %eax, 60(%esp)           // Place code* over edi, just under return pc.
+    #ifndef MOE
     movl SYMBOL(art_quick_instrumentation_exit)@GOT(%ebx), %ebx
+    #else
+    calll	.Lgeteip2
+.Lgeteip2:
+	popl	%eax
+	leal	SYMBOL(art_quick_instrumentation_exit)-.Lgeteip2(%eax), %ebx
+    #endif
     // Place instrumentation exit as return pc. ebx holds the GOT computed on entry.
     movl %ebx, 64(%esp)
     movl 0(%esp), %eax           // Restore eax.
@@ -1483,7 +1691,11 @@ DEFINE_FUNCTION art_quick_instrumentation_exit
     PUSH edx                      // Pass gpr return value.
     PUSH eax
     PUSH ecx                      // Pass SP.
-    pushl %fs:THREAD_SELF_OFFSET  // Pass Thread::Current.
+    #ifndef MOE
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current().
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     call SYMBOL(artInstrumentationMethodExitFromCode)  // (Thread*, SP, gpr_result, fpr_result)
     mov   %eax, %ecx              // Move returned link register.
@@ -1511,7 +1723,11 @@ DEFINE_FUNCTION art_quick_deoptimize
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME ebx, ebx
     subl LITERAL(12), %esp        // Align stack.
     CFI_ADJUST_CFA_OFFSET(12)
-    pushl %fs:THREAD_SELF_OFFSET  // Pass Thread::Current().
+    #ifndef MOE
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current().
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     call SYMBOL(artDeoptimize)    // artDeoptimize(Thread*)
     UNREACHABLE
@@ -1525,7 +1741,11 @@ DEFINE_FUNCTION art_quick_deoptimize_from_compiled_code
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME ebx, ebx
     subl LITERAL(12), %esp                      // Align stack.
     CFI_ADJUST_CFA_OFFSET(12)
+    #ifndef MOE
     pushl %fs:THREAD_SELF_OFFSET                // Pass Thread::Current().
+    #else
+    pushl %gs:MOE_TLS_THREAD_OFFSET_32      // Pass Thread::Current().
+    #endif
     CFI_ADJUST_CFA_OFFSET(4)
     call SYMBOL(artDeoptimizeFromCompiledCode)  // artDeoptimizeFromCompiledCode(Thread*)
     UNREACHABLE

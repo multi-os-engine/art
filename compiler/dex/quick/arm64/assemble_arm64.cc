@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -155,6 +156,12 @@ const A64EncodingMap Arm64Mir2Lir::EncodingMap[kA64Last] = {
                  kFmtBitBlt, 3, 0, kFmtBitBlt, 23, 5, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1, IS_BINARY_OP | IS_BRANCH | USES_CCODES |
                  NEEDS_FIXUP, "b.!0c", "!1t", kFixupCondBranch),
+#ifdef MOE
+    ENCODING_MAP(WIDE(kA64Bfm4rrdd), SF_N_VARIANTS(0x33000000),
+                 kFmtRegR, 4, 0, kFmtRegR, 9, 5, kFmtBitBlt, 21, 16,
+                 kFmtBitBlt, 15, 10, IS_QUAD_OP | REG_DEF0_USE1,
+                 "bfm", "!0r, !1r, !2d, !3d", kFixupNone),
+#endif
     ENCODING_MAP(kA64Blr1x, NO_VARIANTS(0xd63f0000),
                  kFmtRegX, 9, 5, kFmtUnused, -1, -1, kFmtUnused, -1, -1,
                  kFmtUnused, -1, -1,

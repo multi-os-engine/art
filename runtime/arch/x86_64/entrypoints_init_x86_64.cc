@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +33,7 @@ extern "C" uint32_t art_quick_assignable_from_code(const mirror::Class* klass,
 extern "C" mirror::Object* art_quick_read_barrier_slow(mirror::Object*, mirror::Object*, uint32_t);
 
 void InitEntryPoints(JniEntryPoints* jpoints, QuickEntryPoints* qpoints) {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(MOE)
   UNUSED(jpoints, qpoints);
   UNIMPLEMENTED(FATAL);
 #else

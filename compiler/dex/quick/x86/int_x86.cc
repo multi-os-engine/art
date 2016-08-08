@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1098,12 +1099,46 @@ void X86Mir2Lir::OpLea(RegStorage r_base, RegStorage reg1, RegStorage reg2, int 
 
 void X86Mir2Lir::OpTlsCmp(ThreadOffset<4> offset, int val) {
   DCHECK_EQ(kX86, cu_->instruction_set);
+#ifndef MOE
   NewLIR2(kX86Cmp16TI8, offset.Int32Value(), val);
+#else
+  RegStorage scratch = AllocTempBody(reg_pool_->core_regs_, &reg_pool_->next_core_reg_, false);
+  bool use_stack = !scratch.Valid();
+  if (use_stack) {
+    scratch = RegStorage::Solo32(rAX);
+    NewLIR1(kX86Push32R, scratch.GetReg());
+  }
+  NewLIR2(kX86Mov32RT, scratch.GetReg(), MOE_TLS_THREAD_OFFSET_32);
+  LoadWordDisp(scratch, offset.Int32Value(), scratch);
+  NewLIR2(kX86Cmp16RI8, scratch.GetReg(), val);
+  if (use_stack) {
+    NewLIR1(kX86Pop32R, scratch.GetReg());
+  } else {
+    FreeTemp(scratch);
+  }
+#endif
 }
 
 void X86Mir2Lir::OpTlsCmp(ThreadOffset<8> offset, int val) {
   DCHECK_EQ(kX86_64, cu_->instruction_set);
+#ifndef MOE
   NewLIR2(kX86Cmp16TI8, offset.Int32Value(), val);
+#else
+  RegStorage scratch = AllocTempBody(reg_pool_->core_regs_, &reg_pool_->next_core_reg_, false);
+  bool use_stack = !scratch.Valid();
+  if (use_stack) {
+    scratch = RegStorage::Solo64(rAX);
+    NewLIR1(kX86Push32R, scratch.GetReg());
+  }
+  NewLIR2(kX86Mov64RT, scratch.GetReg(), MOE_TLS_THREAD_OFFSET_64);
+  LoadWordDisp(scratch, offset.Int32Value(), scratch);
+  NewLIR2(kX86Cmp16RI8, scratch.GetReg(), val);
+  if (use_stack) {
+    NewLIR1(kX86Pop32R, scratch.GetReg());
+  } else {
+    FreeTemp(scratch);
+  }
+#endif
 }
 
 static bool IsInReg(X86Mir2Lir *pMir2Lir, const RegLocation &rl, RegStorage reg) {
@@ -2411,6 +2446,7 @@ void X86Mir2Lir::GenNegLong(RegLocation rl_dest, RegLocation rl_src) {
 
 void X86Mir2Lir::OpRegThreadMem(OpKind op, RegStorage r_dest, ThreadOffset<4> thread_offset) {
   DCHECK_EQ(kX86, cu_->instruction_set);
+#ifndef MOE
   X86OpCode opcode = kX86Bkpt;
   switch (op) {
   case kOpCmp: opcode = kX86Cmp32RT;  break;
@@ -2420,10 +2456,39 @@ void X86Mir2Lir::OpRegThreadMem(OpKind op, RegStorage r_dest, ThreadOffset<4> th
     break;
   }
   NewLIR2(opcode, r_dest.GetReg(), thread_offset.Int32Value());
+#else
+  switch (op) {
+    case kOpCmp:
+    {
+      RegStorage scratch = AllocTempBody(reg_pool_->core_regs_, &reg_pool_->next_core_reg_, false);
+      bool use_stack = !scratch.Valid();
+      if (use_stack) {
+        scratch = r_dest.GetReg() == rAX ? RegStorage::Solo32(rCX) : RegStorage::Solo32(rAX);
+        NewLIR1(kX86Push32R, scratch.GetReg());
+      }
+      NewLIR2(kX86Mov32RT, scratch.GetReg(), MOE_TLS_THREAD_OFFSET_32);
+      NewLIR3(kX86Cmp32RM, r_dest.GetReg(), scratch.GetReg(), thread_offset.Int32Value());
+      if (use_stack) {
+        NewLIR1(kX86Pop32R, scratch.GetReg());
+      } else {
+        FreeTemp(scratch);
+      }
+    }
+      break;
+    case kOpMov:
+      NewLIR2(kX86Mov32RT, r_dest.GetReg(), MOE_TLS_THREAD_OFFSET_32);
+      LoadWordDisp(RegStorage::Solo32(r_dest.GetReg()), thread_offset.Int32Value(), RegStorage::Solo32(r_dest.GetReg()));
+      break;
+    default:
+      LOG(FATAL) << "Bad opcode: " << op;
+      break;
+  }
+#endif
 }
 
 void X86Mir2Lir::OpRegThreadMem(OpKind op, RegStorage r_dest, ThreadOffset<8> thread_offset) {
   DCHECK_EQ(kX86_64, cu_->instruction_set);
+  #ifndef MOE
   X86OpCode opcode = kX86Bkpt;
   if (cu_->target64 && r_dest.Is64BitSolo()) {
     switch (op) {
@@ -2443,6 +2508,28 @@ void X86Mir2Lir::OpRegThreadMem(OpKind op, RegStorage r_dest, ThreadOffset<8> th
     }
   }
   NewLIR2(opcode, r_dest.GetReg(), thread_offset.Int32Value());
+  #else
+  if (!cu_->target64 || !r_dest.Is64BitSolo()) {
+    X86Mir2Lir::OpRegThreadMem(op, r_dest, ThreadOffset<4>(thread_offset.Int32Value()));
+    return;
+  }
+  switch (op) {
+    case kOpCmp: {
+      RegStorage temp = AllocTempWide();
+      NewLIR2(kX86Mov64RT, temp.GetReg(), MOE_TLS_THREAD_OFFSET_64);
+      NewLIR3(kX86Cmp64RM, r_dest.GetReg(), temp.GetReg(), thread_offset.Int32Value());
+      FreeTemp(temp);
+      break;
+    }
+    case kOpMov:
+      NewLIR2(kX86Mov64RT, r_dest.GetReg(), MOE_TLS_THREAD_OFFSET_64);
+      NewLIR3(kX86Mov64RM, r_dest.GetReg(), r_dest.GetReg(), thread_offset.Int32Value());
+      break;
+    default:
+      LOG(FATAL) << "Bad opcode: " << op;
+      break;
+  }
+  #endif
 }
 
 /*

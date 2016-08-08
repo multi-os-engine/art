@@ -350,7 +350,7 @@ class SHARED_LOCKABLE ReaderWriterMutex : public BaseMutex {
     }
   }
   void AssertNotWriterHeld(const Thread* self) ASSERT_CAPABILITY(!this) {
-    AssertNotExclusiveHeld(self);
+      AssertNotExclusiveHeld(self);
   }
 
   // Is the current thread a shared holder of the ReaderWriterMutex.
@@ -364,7 +364,7 @@ class SHARED_LOCKABLE ReaderWriterMutex : public BaseMutex {
     }
   }
   void AssertReaderHeld(const Thread* self) ASSERT_SHARED_CAPABILITY(this) {
-    AssertSharedHeld(self);
+      AssertSharedHeld(self);
   }
 
   // Assert the current thread doesn't hold this ReaderWriterMutex either in shared or exclusive

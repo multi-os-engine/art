@@ -1400,6 +1400,10 @@ bool IsOatMagic(uint32_t magic) {
 }
 
 bool Exec(std::vector<std::string>& arg_vector, std::string* error_msg) {
+#if defined(MOE) && TARGET_OS_IPHONE
+  PLOG(FATAL) << MOE_UNSUPPORTED_MESSAGE(exec);
+  return false;
+#else
   const std::string command_line(Join(arg_vector, ' '));
 
   CHECK_GE(arg_vector.size(), 1U) << command_line;
@@ -1450,6 +1454,7 @@ bool Exec(std::vector<std::string>& arg_vector, std::string* error_msg) {
     }
   }
   return true;
+#endif
 }
 
 std::string PrettyDescriptor(Primitive::Type type) {

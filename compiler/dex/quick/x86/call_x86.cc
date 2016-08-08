@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,8 +127,24 @@ void X86Mir2Lir::GenMoveException(RegLocation rl_dest) {
       Thread::ExceptionOffset<8>().Int32Value() :
       Thread::ExceptionOffset<4>().Int32Value();
   RegLocation rl_result = EvalLoc(rl_dest, kRefReg, true);
+#ifndef MOE
   NewLIR2(cu_->target64 ? kX86Mov64RT : kX86Mov32RT, rl_result.reg.GetReg(), ex_offset);
   NewLIR2(cu_->target64 ? kX86Mov64TI : kX86Mov32TI, ex_offset, 0);
+#else
+if(Is64BitInstructionSet(cu_->instruction_set)) {
+  RegStorage temp = AllocTempWide();
+  NewLIR2(kX86Mov64RT, temp.GetReg(), MOE_TLS_THREAD_OFFSET_64);
+  NewLIR3(kX86Mov64RM, rl_result.reg.GetReg(), temp.GetReg(), ex_offset);
+  NewLIR3(kX86Mov64MI, temp.GetReg(), ex_offset, 0);
+  FreeTemp(temp);
+} else {
+  RegStorage temp = AllocTemp();
+  NewLIR2(kX86Mov32RT, temp.GetReg(), MOE_TLS_THREAD_OFFSET_32);
+  NewLIR3(kX86Mov32RM, rl_result.reg.GetReg(), temp.GetReg(), ex_offset);
+  NewLIR3(kX86Mov32MI, temp.GetReg(), ex_offset, 0);
+  FreeTemp(temp);
+}
+#endif
   StoreValue(rl_dest, rl_result);
 }
 
@@ -138,7 +155,13 @@ void X86Mir2Lir::UnconditionallyMarkGCCard(RegStorage tgt_addr_reg) {
   int ct_offset = cu_->target64 ?
       Thread::CardTableOffset<8>().Int32Value() :
       Thread::CardTableOffset<4>().Int32Value();
+#ifndef MOE
   NewLIR2(cu_->target64 ? kX86Mov64RT : kX86Mov32RT, reg_card_base.GetReg(), ct_offset);
+#else
+  NewLIR2(cu_->target64 ? kX86Mov64RT : kX86Mov32RT, reg_card_base.GetReg(),
+          cu_->target64 ? MOE_TLS_THREAD_OFFSET_64 : MOE_TLS_THREAD_OFFSET_32);
+  NewLIR3(cu_->target64 ? kX86Mov64RM : kX86Mov32RM, reg_card_base.GetReg(), reg_card_base.GetReg(), ct_offset);
+#endif
   OpRegRegImm(kOpLsr, reg_card_no, tgt_addr_reg, gc::accounting::CardTable::kCardShift);
   StoreBaseIndexed(reg_card_base, reg_card_no, reg_card_base, 0, kUnsignedByte);
   FreeTemp(reg_card_base);
@@ -159,9 +182,16 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
   const RegStorage arg0 = TargetReg32(kArg0);
   const RegStorage arg1 = TargetReg32(kArg1);
   const RegStorage arg2 = TargetReg32(kArg2);
+#ifdef MOE
+  const RegStorage arg3 = TargetReg32(kArg3);
+#endif
   LockTemp(arg0);
   LockTemp(arg1);
   LockTemp(arg2);
+
+#ifdef MOE
+  LockTemp(arg3);
+#endif
 
   /*
    * We can safely skip the stack overflow check if we're
@@ -249,6 +279,10 @@ void X86Mir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
   FreeTemp(arg0);
   FreeTemp(arg1);
   FreeTemp(arg2);
+
+#ifdef MOE
+  FreeTemp(arg3);
+#endif
 }
 
 void X86Mir2Lir::GenExitSequence() {
@@ -351,7 +385,16 @@ int X86Mir2Lir::X86NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
     RegStorage arg0_ref = cg->TargetReg(kArg0, kRef);
     switch (state) {
     case 0: {  // Grab target method* from thread pointer
+#ifndef MOE
       cg->NewLIR2(kX86Mov32RT, arg0_ref.GetReg(), info->string_init_offset);
+#else
+      if (cu->target64) {
+        cg->NewLIR2(kX86Mov64RT, arg0_ref.GetReg(), MOE_TLS_THREAD_OFFSET_64);
+      } else {
+        cg->NewLIR2(kX86Mov32RT, arg0_ref.GetReg(), MOE_TLS_THREAD_OFFSET_32);
+      }
+      cg->NewLIR3(kX86Mov32RM, arg0_ref.GetReg(), arg0_ref.GetReg(), info->string_init_offset);
+#endif
       break;
     }
     default:

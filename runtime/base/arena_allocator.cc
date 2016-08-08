@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -265,11 +266,13 @@ size_t ArenaPool::GetBytesAllocated() const {
 }
 
 void ArenaPool::FreeArenaChain(Arena* first) {
+#ifndef MOE
   if (UNLIKELY(RUNNING_ON_MEMORY_TOOL > 0)) {
     for (Arena* arena = first; arena != nullptr; arena = arena->next_) {
       MEMORY_TOOL_MAKE_UNDEFINED(arena->memory_, arena->bytes_allocated_);
     }
   }
+#endif
   if (first != nullptr) {
     Arena* last = first;
     while (last->next_ != nullptr) {
@@ -313,6 +316,7 @@ void ArenaAllocator::UpdateBytesAllocated() {
   }
 }
 
+#ifndef MOE
 void* ArenaAllocator::AllocWithMemoryTool(size_t bytes, ArenaAllocKind kind) {
   size_t rounded_bytes = RoundUp(bytes + kMemoryToolRedZoneBytes, 8);
   if (UNLIKELY(ptr_ + rounded_bytes > end_)) {
@@ -332,6 +336,7 @@ void* ArenaAllocator::AllocWithMemoryTool(size_t bytes, ArenaAllocKind kind) {
   MEMORY_TOOL_MAKE_NOACCESS(ret + bytes, rounded_bytes - bytes);
   return ret;
 }
+#endif
 
 ArenaAllocator::~ArenaAllocator() {
   // Reclaim all the arenas by giving them back to the thread pool.

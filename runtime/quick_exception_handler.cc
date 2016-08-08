@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -245,10 +246,17 @@ void QuickExceptionHandler::SetCatchEnvironmentForOptimizedHandler(StackVisitor*
 
     // Get vreg value from its current location.
     uint32_t vreg_value;
-    VRegKind vreg_kind = ToVRegKind(throw_vreg_map.GetLocationKind(vreg,
-                                                                   number_of_vregs,
-                                                                   code_info,
-                                                                   encoding));
+    DexRegisterLocation::Kind throw_location = throw_vreg_map.GetLocationKind(vreg,
+                                                                                number_of_vregs,
+                                                                                code_info,
+                                                                                encoding);
+#ifdef MOE
+    // [XRT] workaround to avoid runtime abort on exception
+    if (throw_location == DexRegisterLocation::Kind::kNone) {
+        continue;
+    }
+#endif
+    VRegKind vreg_kind = ToVRegKind(throw_location);
     bool get_vreg_success = stack_visitor->GetVReg(stack_visitor->GetMethod(),
                                                    vreg,
                                                    vreg_kind,
@@ -385,7 +393,13 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
             // We don't want to copy a stale reference into the shadow frame as a reference.
             // b/20736048
             if (GetVReg(m, reg, kind, &value) && IsReferenceVReg(m, reg)) {
+#ifndef MOE
               new_frame->SetVRegReference(reg, reinterpret_cast<mirror::Object*>(value));
+#else
+              mirror::ObjectReference<false, mirror::Object>* value_ref =
+                  reinterpret_cast<mirror::ObjectReference<false, mirror::Object>*>(&value);
+              new_frame->SetVRegReference(reg, value_ref->AsMirrorPtr());
+#endif
             } else {
               new_frame->SetVReg(reg, kDeadValue);
             }

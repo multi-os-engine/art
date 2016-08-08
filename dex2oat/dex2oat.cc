@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,13 +28,19 @@
 #include <unordered_set>
 #include <vector>
 
+#ifdef MOE
+#include "moe_entry.h"
+#endif
+
 #if defined(__linux__) && defined(__arm__)
 #include <sys/personality.h>
 #include <sys/utsname.h>
 #endif
 
 #define ATRACE_TAG ATRACE_TAG_DALVIK
+#ifndef MOE
 #include <cutils/trace.h>
+#endif
 
 #include "art_method-inl.h"
 #include "arch/instruction_set_features.h"
@@ -55,8 +62,10 @@
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
+#ifndef MOE
 #include "elf_file.h"
 #include "elf_writer.h"
+#endif
 #include "gc/space/image_space.h"
 #include "gc/space/space-inl.h"
 #include "image_writer.h"
@@ -509,7 +518,11 @@ class Dex2Oat FINAL {
       start_ns_(NanoTime()),
       oat_fd_(-1),
       zip_fd_(-1),
+#ifndef MOE
       image_base_(0U),
+#else
+      image_base_(0x10000000U),
+#endif
       image_classes_zip_filename_(nullptr),
       image_classes_filename_(nullptr),
       compiled_classes_zip_filename_(nullptr),
@@ -549,7 +562,11 @@ class Dex2Oat FINAL {
     std::string boot_image_filename;
     const char* compiler_filter_string = nullptr;
     CompilerOptions::CompilerFilter compiler_filter = CompilerOptions::kDefaultCompilerFilter;
+#ifndef MOE
     bool compile_pic = false;
+#else
+    bool compile_pic = true;
+#endif
     int huge_method_threshold = CompilerOptions::kDefaultHugeMethodThreshold;
     int large_method_threshold = CompilerOptions::kDefaultLargeMethodThreshold;
     int small_method_threshold = CompilerOptions::kDefaultSmallMethodThreshold;
@@ -773,6 +790,7 @@ class Dex2Oat FINAL {
       Usage("--oat-fd should not be used with --image");
     }
 
+#ifndef MOE
     if (android_root_.empty()) {
       const char* android_root_env_var = getenv("ANDROID_ROOT");
       if (android_root_env_var == nullptr) {
@@ -785,6 +803,7 @@ class Dex2Oat FINAL {
       parser_options->boot_image_filename += android_root_;
       parser_options->boot_image_filename += "/framework/boot.art";
     }
+#endif
     if (!parser_options->boot_image_filename.empty()) {
       boot_image_option_ += "-Ximage:";
       boot_image_option_ += parser_options->boot_image_filename;
@@ -827,7 +846,11 @@ class Dex2Oat FINAL {
     }
 
     if (dex_locations_.empty()) {
+#ifndef MOE
       for (const char* dex_file_name : dex_filenames_) {
+#else
+      for (const std::string& dex_file_name : dex_filenames_) {
+#endif
         dex_locations_.push_back(dex_file_name);
       }
     } else if (dex_locations_.size() != dex_filenames_.size()) {
@@ -927,8 +950,10 @@ class Dex2Oat FINAL {
       case kX86_64:
       case kMips:
       case kMips64:
+#if !defined(MOE) || (TARGET_OS_IPHONE && TARGET_OS_IOS)
         parser_options->implicit_null_checks = true;
         parser_options->implicit_so_checks = true;
+#endif
         break;
 
       default:
@@ -1015,7 +1040,25 @@ class Dex2Oat FINAL {
         LOG(INFO) << "dex2oat: option[" << i << "]=" << argv[i];
       }
       if (option.starts_with("--dex-file=")) {
+#ifndef MOE
         dex_filenames_.push_back(option.substr(strlen("--dex-file=")).data());
+#else
+        std::vector<char> buff(option.size() - sizeof("--dex-file=") + 1);
+        const char* start = option.data() + sizeof("--dex-file=") - 1;
+        const char* end = start;
+        while (true) {
+          if ((!*end || *end == ':') && (end - start) > 0) {
+            memcpy(buff.data(), start, end - start);
+            buff[end-start] = 0;
+            start = end + 1;
+            dex_filenames_.push_back(buff.data());
+          }
+          if (!*end) {
+            break;
+          }
+          end++;
+        }
+#endif
       } else if (option.starts_with("--dex-location=")) {
         dex_locations_.push_back(option.substr(strlen("--dex-location=")).data());
       } else if (option.starts_with("--zip-fd=")) {
@@ -1569,7 +1612,11 @@ class Dex2Oat FINAL {
       uintptr_t image_file_location_oat_data_begin = 0;
       int32_t image_patch_delta = 0;
       if (image_) {
+#ifndef MOE
         PrepareImageWriter(image_base_);
+#else
+        PrepareImageWriter(image_base_, instruction_set_);
+#endif
       } else {
         TimingLogger::ScopedTiming t3("Loading image checksum", timings_);
         gc::space::ImageSpace* image_space = Runtime::Current()->GetHeap()->GetImageSpace();
@@ -1577,7 +1624,9 @@ class Dex2Oat FINAL {
         image_file_location_oat_data_begin =
             reinterpret_cast<uintptr_t>(image_space->GetImageHeader().GetOatDataBegin());
         image_file_location = image_space->GetImageFilename();
+#ifndef MOE
         image_patch_delta = image_space->GetImageHeader().GetPatchDelta();
+#endif
       }
 
       if (!image_file_location.empty()) {
@@ -1709,21 +1758,43 @@ class Dex2Oat FINAL {
   }
 
  private:
+#ifndef MOE
   static size_t OpenDexFiles(const std::vector<const char*>& dex_filenames,
                              const std::vector<const char*>& dex_locations,
+#else
+  static size_t OpenDexFiles(const std::vector<std::string>& dex_filenames,
+                             const std::vector<std::string>& dex_locations,
+#endif
                              std::vector<std::unique_ptr<const DexFile>>* dex_files) {
     DCHECK(dex_files != nullptr) << "OpenDexFiles out-param is nullptr";
     size_t failure_count = 0;
     for (size_t i = 0; i < dex_filenames.size(); i++) {
+#ifndef MOE
       const char* dex_filename = dex_filenames[i];
       const char* dex_location = dex_locations[i];
+#else
+      const std::string& dex_filename = dex_filenames[i];
+      const std::string& dex_location = dex_locations[i];
+#endif
+#ifndef MOE
       ATRACE_BEGIN(StringPrintf("Opening dex file '%s'", dex_filenames[i]).c_str());
+#else
+      ATRACE_BEGIN(StringPrintf("Opening dex file '%s'", dex_filenames[i].c_str()).c_str());
+#endif
       std::string error_msg;
+#ifndef MOE
       if (!OS::FileExists(dex_filename)) {
+#else
+      if (!OS::FileExists(dex_filename.c_str())) {
+#endif
         LOG(WARNING) << "Skipping non-existent dex file '" << dex_filename << "'";
         continue;
       }
+#ifndef MOE
       if (!DexFile::Open(dex_filename, dex_location, &error_msg, dex_files)) {
+#else
+      if (!DexFile::Open(dex_filename.c_str(), dex_location.c_str(), &error_msg, dex_files)) {
+#endif
         LOG(WARNING) << "Failed to open .dex from file '" << dex_filename << "': " << error_msg;
         ++failure_count;
       }
@@ -1796,9 +1867,15 @@ class Dex2Oat FINAL {
     return true;
   }
 
+#ifndef MOE
   void PrepareImageWriter(uintptr_t image_base) {
     image_writer_.reset(new ImageWriter(*driver_, image_base, compiler_options_->GetCompilePic()));
   }
+#else
+  void PrepareImageWriter(uintptr_t image_base, InstructionSet instruction_set) {
+    image_writer_.reset(new ImageWriter(*driver_, image_base, instruction_set, compiler_options_->GetCompilePic()));
+  }
+#endif
 
   // Let the ImageWriter write the image file. If we do not compile PIC, also fix up the oat file.
   bool CreateImageFile()
@@ -1808,13 +1885,16 @@ class Dex2Oat FINAL {
       LOG(ERROR) << "Failed to create image file " << image_filename_;
       return false;
     }
+#ifndef MOE
     uintptr_t oat_data_begin = image_writer_->GetOatDataBegin();
+#endif
 
     // Destroy ImageWriter before doing FixupElf.
     image_writer_.reset();
 
     // Do not fix up the ELF file if we are --compile-pic
     if (!compiler_options_->GetCompilePic()) {
+#ifndef MOE
       std::unique_ptr<File> oat_file(OS::OpenFileReadWrite(oat_unstripped_.c_str()));
       if (oat_file.get() == nullptr) {
         PLOG(ERROR) << "Failed to open ELF file: " << oat_unstripped_;
@@ -1831,6 +1911,7 @@ class Dex2Oat FINAL {
         PLOG(ERROR) << "Failed to flush and close fixed ELF file " << oat_file->GetPath();
         return false;
       }
+#endif
     }
 
     return true;
@@ -1963,8 +2044,13 @@ class Dex2Oat FINAL {
   std::string oat_location_;
   std::string oat_filename_;
   int oat_fd_;
+#ifndef MOE
   std::vector<const char*> dex_filenames_;
   std::vector<const char*> dex_locations_;
+#else
+  std::vector<std::string> dex_filenames_;
+  std::vector<std::string> dex_locations_;
+#endif
   int zip_fd_;
   std::string zip_location_;
   std::string boot_image_option_;
@@ -2154,6 +2240,9 @@ static int dex2oat(int argc, char** argv) {
 }  // namespace art
 
 int main(int argc, char** argv) {
+#ifdef MOE
+  reserve_tls_key();
+#endif
   int result = art::dex2oat(argc, argv);
   // Everything was done, do an explicit exit here to avoid running Runtime destructors that take
   // time (bug 10645725) unless we're a debug build or running on valgrind. Note: The Dex2Oat class

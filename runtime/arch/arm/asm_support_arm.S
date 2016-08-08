@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,9 +28,36 @@
 #define rSELF r9
 
 .syntax unified
+#ifndef MOE
 .arch armv7-a
 .thumb
+#endif
 
+#ifdef MOE
+.macro DO_RUNTIME_LOAD dest_reg
+    push {lr}
+    bl _geteip_\dest_reg
+    pop {lr}
+.endm
+
+.macro LOAD_RUNTIME_INSTANCE dest_reg
+    DO_RUNTIME_LOAD \dest_reg
+.endm
+
+.macro RUNTIME_CURRENT1 dest_reg, unused
+    LOAD_RUNTIME_INSTANCE \dest_reg
+.endm
+
+.macro RUNTIME_CURRENT2 dest_reg, unused
+    LOAD_RUNTIME_INSTANCE \dest_reg
+.endm
+
+.macro RUNTIME_CURRENT3 dest_reg, unused
+    LOAD_RUNTIME_INSTANCE \dest_reg
+.endm
+#endif
+
+#ifndef MOE
 // Macro to generate the value of Runtime::Current into rDest clobbering rTemp. As it uses labels
 // then the labels need to be unique. We bind these to the function name in the ENTRY macros.
 .macro RUNTIME_CURRENT name, num, rDest, rTemp
@@ -44,6 +72,7 @@
     ldr \rDest, [\rDest, \rTemp]                  @ Load address of Runtime::instance_.
     ldr \rDest, [\rDest]                          @ Load Runtime::instance_.
 .endm
+#endif
 
 // Common ENTRY declaration code for ARM and thumb, an ENTRY should always be paired with an END.
 // Declares the RUNTIME_CURRENT[123] macros that can be used within an ENTRY and will have literals
@@ -55,13 +84,23 @@
     .ifc \thumb_or_arm, .thumb_func
         .thumb
     .endif
+    #ifndef MOE
     .type \name, #function
     .hidden \name  // Hide this as a global symbol, so we do not incur plt calls.
     .global \name
+    #else
+    .private_extern _\name
+    .global _\name
+    #endif
     // Cache alignment for function entry.
     .balign 16
+    #ifndef MOE
 \name:
+    #else
+_\name:
+    #endif
     .cfi_startproc
+    #ifndef MOE
     .fnstart
     // Track whether RUNTIME_CURRENT was used.
     .set .Lruntime_current1_used, 0
@@ -78,11 +117,17 @@
     .macro RUNTIME_CURRENT3 rDest, rTemp
         RUNTIME_CURRENT \name, 3, \rDest, \rTemp
     .endm
+    #endif
 .endm
 
 // A thumb2 style ENTRY.
 .macro ENTRY name
+    #ifndef MOE
     DEF_ENTRY .thumb_func, \name
+    #else
+    .thumb_func _\name
+    DEF_ENTRY .thumb, \name
+    #endif
 .endm
 
 // A ARM style ENTRY.
@@ -92,6 +137,7 @@
 
 // Terminate an ENTRY and generate GOT references.
 .macro END name
+    #ifndef MOE
      // Generate offsets of GOT and Runtime::instance_ used in RUNTIME_CURRENT.
      .if .Lruntime_current1_used
          .Lgot_\name\()_1:
@@ -116,8 +162,11 @@
     .purgem RUNTIME_CURRENT2
     .purgem RUNTIME_CURRENT3
     .fnend
+    #endif
     .cfi_endproc
+    #ifndef MOE
     .size \name, .-\name
+    #endif
 .endm
 
 // Declare an unimplemented ENTRY that will halt a debugger.

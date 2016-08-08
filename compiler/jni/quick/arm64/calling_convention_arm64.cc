@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -215,7 +216,30 @@ size_t Arm64JniCallingConvention::FrameSize() {
 }
 
 size_t Arm64JniCallingConvention::OutArgSize() {
+#ifndef MOE
   return RoundUp(NumberOfOutgoingStackArgs() * kFramePointerSize, kStackAlignment);
+#else
+  size_t stack_args_size = 0;
+  unsigned int regGPRs = NumberOfExtraArgumentsForJni();
+  unsigned int regFPRs = 0;
+  for (size_t i = 0; i < NumArgs(); i++) {
+    if (IsParamAFloatOrDouble(i)) {
+      if (regFPRs < 8) {
+        ++regFPRs;
+        continue;
+      }
+    } else {
+      if (regGPRs < 8) {
+        ++regGPRs;
+        continue;
+      }
+    }
+    size_t size = ParamSize(i);
+    stack_args_size = RoundUp(stack_args_size, size);
+    stack_args_size += size;
+  }
+  return RoundUp(stack_args_size, kStackAlignment);
+#endif
 }
 
 bool Arm64JniCallingConvention::IsCurrentParamInRegister() {
@@ -252,13 +276,61 @@ ManagedRegister Arm64JniCallingConvention::CurrentParamRegister() {
 
 FrameOffset Arm64JniCallingConvention::CurrentParamStackOffset() {
   CHECK(IsCurrentParamOnStack());
+#ifndef MOE
   size_t args_on_stack = itr_args_
                   - std::min(8u, itr_float_and_doubles_)
                   - std::min(8u, (itr_args_ - itr_float_and_doubles_));
   size_t offset = displacement_.Int32Value() - OutArgSize() + (args_on_stack * kFramePointerSize);
+#else
+  size_t offset = displacement_.Int32Value() - OutArgSize();
+  unsigned int regGPRs = 0;
+  unsigned int regFPRs = 0;
+  for (size_t i = 0; i < itr_args_; i++) {
+    if (i < NumberOfExtraArgumentsForJni()) {
+      ++regGPRs;
+      continue;
+    }
+    if (IsParamAFloatOrDouble(i - NumberOfExtraArgumentsForJni())) {
+      if (regFPRs < 8) {
+        ++regFPRs;
+        continue;
+      }
+    } else {
+      if (regGPRs < 8) {
+        ++regGPRs;
+        continue;
+      }
+    }
+    size_t size = ParamSize(i - NumberOfExtraArgumentsForJni());
+    offset = RoundUp(offset, size);
+    offset += size;
+  }
+  size_t size = CurrentParamSize();
+  offset = RoundUp(offset, size);
+#endif
   CHECK_LT(offset, OutArgSize());
   return FrameOffset(offset);
 }
+
+#ifdef MOE
+size_t Arm64JniCallingConvention::ParamSize(unsigned int param) const {
+  DCHECK_LT(param, NumArgs());
+  if (IsStatic()) {
+    param++;  // 0th argument must skip return value at start of the shorty
+  } else if (param == 0) {
+    return frame_pointer_size_;  // this argument
+  }
+
+  Primitive::Type type = Primitive::GetType(GetShorty()[param]);
+  size_t result;
+  if (type == Primitive::kPrimNot) {
+    result = frame_pointer_size_;
+  } else {
+    result = Primitive::ComponentSize(type);
+  }
+  return result;
+}
+#endif
 
 size_t Arm64JniCallingConvention::NumberOfOutgoingStackArgs() {
   // all arguments including JNI args

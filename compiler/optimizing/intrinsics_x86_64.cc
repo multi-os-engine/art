@@ -31,6 +31,10 @@
 #include "utils/x86_64/assembler_x86_64.h"
 #include "utils/x86_64/constants_x86_64.h"
 
+#ifdef MOE
+#include "asm_support.h"
+#endif
+
 namespace art {
 
 namespace x86_64 {
@@ -1160,8 +1164,18 @@ void IntrinsicCodeGeneratorX86_64::VisitStringCompareTo(HInvoke* invoke) {
   codegen_->AddSlowPath(slow_path);
   __ j(kEqual, slow_path->GetEntryLabel());
 
+#ifndef MOE
   __ gs()->call(Address::Absolute(
         QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize, pStringCompareTo), true));
+#else
+  __ pushq(CpuRegister(RAX));
+  __ gs()->movq(CpuRegister(RAX), Address::Absolute(MOE_TLS_THREAD_OFFSET_64, true));
+  __ movq(CpuRegister(RAX), Address(CpuRegister(RAX),
+                                    QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize, pStringCompareTo)));
+  __ gs()->movq(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true), CpuRegister(RAX));
+  __ popq(CpuRegister(RAX));
+  __ gs()->call(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true));
+#endif
   __ Bind(slow_path->GetExitLabel());
 }
 
@@ -1426,8 +1440,19 @@ void IntrinsicCodeGeneratorX86_64::VisitStringNewStringFromBytes(HInvoke* invoke
   codegen_->AddSlowPath(slow_path);
   __ j(kEqual, slow_path->GetEntryLabel());
 
+#ifndef MOE
   __ gs()->call(Address::Absolute(
         QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize, pAllocStringFromBytes), true));
+#else
+  __ pushq(CpuRegister(RAX));
+  __ gs()->movq(CpuRegister(RAX), Address::Absolute(MOE_TLS_THREAD_OFFSET_64, true));
+  __ movq(CpuRegister(RAX), Address(CpuRegister(RAX),
+                                    QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize,
+                                                            pAllocStringFromBytes)));
+  __ gs()->movq(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true), CpuRegister(RAX));
+  __ popq(CpuRegister(RAX));
+  __ gs()->call(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true));
+#endif
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ Bind(slow_path->GetExitLabel());
 }
@@ -1446,8 +1471,19 @@ void IntrinsicLocationsBuilderX86_64::VisitStringNewStringFromChars(HInvoke* inv
 void IntrinsicCodeGeneratorX86_64::VisitStringNewStringFromChars(HInvoke* invoke) {
   X86_64Assembler* assembler = GetAssembler();
 
+#ifndef MOE
   __ gs()->call(Address::Absolute(
         QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize, pAllocStringFromChars), true));
+#else
+  __ pushq(CpuRegister(RAX));
+  __ gs()->movq(CpuRegister(RAX), Address::Absolute(MOE_TLS_THREAD_OFFSET_64, true));
+  __ movq(CpuRegister(RAX), Address(CpuRegister(RAX),
+                                    QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize,
+                                                            pAllocStringFromChars)));
+  __ gs()->movq(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true), CpuRegister(RAX));
+  __ popq(CpuRegister(RAX));
+  __ gs()->call(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true));
+#endif
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
 }
 
@@ -1470,8 +1506,19 @@ void IntrinsicCodeGeneratorX86_64::VisitStringNewStringFromString(HInvoke* invok
   codegen_->AddSlowPath(slow_path);
   __ j(kEqual, slow_path->GetEntryLabel());
 
+#ifndef MOE
   __ gs()->call(Address::Absolute(
         QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize, pAllocStringFromString), true));
+#else
+  __ pushq(CpuRegister(RAX));
+  __ gs()->movq(CpuRegister(RAX), Address::Absolute(MOE_TLS_THREAD_OFFSET_64, true));
+  __ movq(CpuRegister(RAX), Address(CpuRegister(RAX),
+                                    QUICK_ENTRYPOINT_OFFSET(kX86_64WordSize,
+                                                            pAllocStringFromString)));
+  __ gs()->movq(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true), CpuRegister(RAX));
+  __ popq(CpuRegister(RAX));
+  __ gs()->call(Address::Absolute(MOE_TLS_SCRATCH_OFFSET_64, true));
+#endif
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ Bind(slow_path->GetExitLabel());
 }
@@ -1695,7 +1742,12 @@ void IntrinsicLocationsBuilderX86_64::VisitThreadCurrentThread(HInvoke* invoke) 
 
 void IntrinsicCodeGeneratorX86_64::VisitThreadCurrentThread(HInvoke* invoke) {
   CpuRegister out = invoke->GetLocations()->Out().AsRegister<CpuRegister>();
+#ifndef MOE
   GetAssembler()->gs()->movl(out, Address::Absolute(Thread::PeerOffset<kX86_64WordSize>(), true));
+#else
+  GetAssembler()->gs()->movq(out, Address::Absolute(MOE_TLS_THREAD_OFFSET_64, true));
+  GetAssembler()->movq(out, Address(out, Thread::PeerOffset<kX86_64WordSize>()));
+#endif
 }
 
 static void GenUnsafeGet(LocationSummary* locations, Primitive::Type type,

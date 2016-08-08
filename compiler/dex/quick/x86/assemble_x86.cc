@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1239,6 +1240,26 @@ void X86Mir2Lir::EmitRegReg(const X86EncodingMap* entry, int32_t raw_reg1, int32
   DCHECK_EQ(0, entry->skeleton.immediate_bytes);
 }
 
+#ifdef MOE
+void X86Mir2Lir::EmitThreadReg(const X86EncodingMap* entry, int32_t disp, int32_t raw_reg) {
+  DCHECK_NE(entry->skeleton.prefix1, 0);
+  EmitPrefixAndOpcode(entry, raw_reg, NO_REG, NO_REG);
+  if (RegStorage::RegNum(raw_reg) >= 4) {
+      DCHECK(strchr(entry->name, '8') == NULL) << entry->name << " "
+      << static_cast<int>(RegStorage::RegNum(raw_reg))
+      << " in " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
+  }
+  EmitModrmThread(RegStorage::RegNum(raw_reg) & 7); // MOE: the highest bit will be in REX.R.
+  code_buffer_.push_back(disp & 0xFF);
+  code_buffer_.push_back((disp >> 8) & 0xFF);
+  code_buffer_.push_back((disp >> 16) & 0xFF);
+  code_buffer_.push_back((disp >> 24) & 0xFF);
+  DCHECK_EQ(0, entry->skeleton.modrm_opcode);
+  DCHECK_EQ(0, entry->skeleton.ax_opcode);
+  DCHECK_EQ(0, entry->skeleton.immediate_bytes);
+}
+#endif
+
 void X86Mir2Lir::EmitRegRegImm(const X86EncodingMap* entry, int32_t raw_reg1, int32_t raw_reg2,
                                int32_t imm) {
   DCHECK_EQ(false, entry->skeleton.r8_form);
@@ -1932,6 +1953,10 @@ AssemblerStatus X86Mir2Lir::AssembleInstructions(LIR* first_lir_insn,
         break;
       case kNop:  // TODO: these instruction kinds are missing implementations.
       case kThreadReg:
+#ifdef MOE
+        EmitThreadReg(entry, lir->operands[0], lir->operands[1]);
+        break;
+#endif
       case kRegArrayImm:
       case kShiftArrayImm:
       case kShiftArrayCl:

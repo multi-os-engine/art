@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1254,6 +1255,10 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
                      kCoreReg);
   } else {
     if (cu_->instruction_set == kThumb2) {
+#ifdef MOE
+      OpRegImm(kOpSub, TargetReg(kSp), GetInstructionSetPointerSize(cu_->instruction_set));
+      StoreBaseDisp(TargetReg(kSp), 0, TargetReg(kSelf), kWord, kNotVolatile);
+#endif
       RegStorage r_tgt = LoadHelper(kQuickInstanceofNonTrivial);
       LIR* it = nullptr;
       if (!type_known_abstract) {
@@ -1264,6 +1269,10 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
       }
       OpRegCopy(ref_reg, class_reg);    // .ne case - arg0 <= class
       OpReg(kOpBlx, r_tgt);    // .ne case: helper(class, ref->class)
+#ifdef MOE
+      LoadBaseDisp(TargetReg(kSp), 0, TargetReg(kSelf), kWord, kNotVolatile);
+      OpRegImm(kOpAdd, TargetReg(kSp), GetInstructionSetPointerSize(cu_->instruction_set));
+#endif
       if (it != nullptr) {
         OpEndIT(it);
       }

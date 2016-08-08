@@ -663,7 +663,12 @@ void ParallelMoveResolverARM64::FreeScratchLocation(Location loc) {
 
 void ParallelMoveResolverARM64::EmitMove(size_t index) {
   MoveOperands* move = moves_[index];
+#ifndef MOE
   codegen_->MoveLocation(move->GetDestination(), move->GetSource(), Primitive::kPrimVoid);
+#else
+  codegen_->MoveLocation(move->GetDestination(), move->GetSource(),
+      move->GetType() == Primitive::kPrimNot ? Primitive::kPrimNot : Primitive::kPrimVoid);
+#endif
 }
 
 void CodeGeneratorARM64::GenerateFrameEntry() {
@@ -828,13 +833,21 @@ Location CodeGeneratorARM64::GetStackLocation(HLoadLocal* load) const {
 void CodeGeneratorARM64::MarkGCCard(Register object, Register value, bool value_can_be_null) {
   UseScratchRegisterScope temps(GetVIXLAssembler());
   Register card = temps.AcquireX();
+#ifndef MOE
   Register temp = temps.AcquireW();   // Index within the CardTable - 32bit.
+#else
+  Register temp = temps.AcquireX();
+#endif
   vixl::Label done;
   if (value_can_be_null) {
     __ Cbz(value, &done);
   }
   __ Ldr(card, MemOperand(tr, Thread::CardTableOffset<kArm64WordSize>().Int32Value()));
+#ifndef MOE
   __ Lsr(temp, object, gc::accounting::CardTable::kCardShift);
+#else
+  __ Lsr(temp, object.X(), gc::accounting::CardTable::kCardShift);
+#endif
   __ Strb(card, MemOperand(card, temp.X()));
   if (value_can_be_null) {
     __ Bind(&done);
@@ -991,12 +1004,25 @@ void CodeGeneratorARM64::MoveLocation(Location destination,
     if (source.IsStackSlot() || source.IsDoubleStackSlot()) {
       DCHECK(dst.Is64Bits() == source.IsDoubleStackSlot());
       __ Ldr(dst, StackOperandFrom(source));
+#ifdef MOE
+      if (dst_type == Primitive::kPrimNot && destination.IsRegister()) {
+        GetAssembler()->MaybeUnpoisonHeapReference(XRegisterFrom(destination));
+      }
+#endif
     } else if (source.IsConstant()) {
       DCHECK(CoherentConstantAndType(source, dst_type));
       MoveConstant(dst, source.GetConstant());
     } else if (source.IsRegister()) {
       if (destination.IsRegister()) {
+#ifndef MOE
         __ Mov(Register(dst), RegisterFrom(source, dst_type));
+#else
+        if (dst_type == Primitive::kPrimNot) {
+          __ Mov(Register(dst).X(), XRegisterFrom(source));
+        } else {
+          __ Mov(Register(dst), RegisterFrom(source, dst_type));
+        }
+#endif
       } else {
         DCHECK(destination.IsFpuRegister());
         Primitive::Type source_type = Primitive::Is64BitType(dst_type)
@@ -1237,7 +1263,11 @@ void CodeGeneratorARM64::InvokeRuntime(int32_t entry_point_offset,
 void InstructionCodeGeneratorARM64::GenerateClassInitializationCheck(SlowPathCodeARM64* slow_path,
                                                                      vixl::Register class_reg) {
   UseScratchRegisterScope temps(GetVIXLAssembler());
+#ifndef MOE
   Register temp = temps.AcquireW();
+#else
+  Register temp = temps.AcquireX();
+#endif
   size_t status_offset = mirror::Class::StatusOffset().SizeValue();
   bool use_acquire_release = codegen_->GetInstructionSetFeatures().PreferAcquireRelease();
 
@@ -1245,12 +1275,22 @@ void InstructionCodeGeneratorARM64::GenerateClassInitializationCheck(SlowPathCod
   if (use_acquire_release) {
     // TODO(vixl): Let the MacroAssembler handle MemOperand.
     __ Add(temp, class_reg, status_offset);
+#ifndef MOE
     __ Ldar(temp, HeapOperand(temp));
     __ Cmp(temp, mirror::Class::kStatusInitialized);
+#else
+    __ Ldar(temp.W(), HeapOperand(temp));
+    __ Cmp(temp.W(), mirror::Class::kStatusInitialized);
+#endif
     __ B(lt, slow_path->GetEntryLabel());
   } else {
+#ifndef MOE
     __ Ldr(temp, HeapOperand(class_reg, status_offset));
     __ Cmp(temp, mirror::Class::kStatusInitialized);
+#else
+    __ Ldr(temp.W(), HeapOperand(class_reg, status_offset));
+    __ Cmp(temp.W(), mirror::Class::kStatusInitialized);
+#endif
     __ B(lt, slow_path->GetEntryLabel());
     __ Dmb(InnerShareable, BarrierReads);
   }
@@ -1596,6 +1636,9 @@ void InstructionCodeGeneratorARM64::VisitArrayGet(HArrayGet* instruction) {
   LocationSummary* locations = instruction->GetLocations();
   Primitive::Type type = instruction->GetType();
   Register obj = InputRegisterAt(instruction, 0);
+#ifdef MOE
+  obj = obj.X();
+#endif
   Location index = locations->InAt(1);
   size_t offset = mirror::Array::DataOffset(Primitive::ComponentSize(type)).Uint32Value();
   MemOperand source = HeapOperand(obj);
@@ -1654,6 +1697,9 @@ void InstructionCodeGeneratorARM64::VisitArraySet(HArraySet* instruction) {
       CodeGenerator::StoreNeedsWriteBarrier(value_type, instruction->GetValue());
 
   Register array = InputRegisterAt(instruction, 0);
+#ifdef MOE
+  array = array.X();
+#endif
   CPURegister value = InputCPURegisterAt(instruction, 2);
   CPURegister source = value;
   Location index = locations->InAt(1);
@@ -2739,7 +2785,12 @@ void InstructionCodeGeneratorARM64::VisitInvokeInterface(HInvokeInterface* invok
   // temp = object->GetClass();
   if (receiver.IsStackSlot()) {
     __ Ldr(temp.W(), StackOperandFrom(receiver));
+#ifndef MOE
     __ Ldr(temp.W(), HeapOperand(temp.W(), class_offset));
+#else
+    codegen_->MaybeRecordImplicitNullCheck(invoke);
+    __ Ldr(temp.W(), HeapOperand(temp, class_offset));
+#endif
   } else {
     __ Ldr(temp.W(), HeapOperandFrom(receiver, class_offset));
   }
@@ -3042,11 +3093,17 @@ void InstructionCodeGeneratorARM64::VisitLoadClass(HLoadClass* cls) {
     DCHECK(!cls->CanCallRuntime());
     DCHECK(!cls->MustGenerateClinitCheck());
     __ Ldr(out, MemOperand(current_method, ArtMethod::DeclaringClassOffset().Int32Value()));
+#ifdef MOE
+    GetAssembler()->MaybeUnpoisonHeapReference(out);
+#endif
   } else {
     DCHECK(cls->CanCallRuntime());
     MemberOffset resolved_types_offset = ArtMethod::DexCacheResolvedTypesOffset(kArm64PointerSize);
     __ Ldr(out.X(), MemOperand(current_method, resolved_types_offset.Int32Value()));
     __ Ldr(out, MemOperand(out.X(), CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
+#ifdef MOE
+    GetAssembler()->MaybeUnpoisonHeapReference(out);
+#endif
     // TODO: We will need a read barrier here.
 
     SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathARM64(
@@ -3072,7 +3129,11 @@ void LocationsBuilderARM64::VisitLoadException(HLoadException* load) {
 }
 
 void InstructionCodeGeneratorARM64::VisitLoadException(HLoadException* instruction) {
+#ifndef MOE
   __ Ldr(OutputRegister(instruction), GetExceptionTlsAddress());
+#else
+  __ Ldr(OutputRegister(instruction).X(), GetExceptionTlsAddress());
+#endif
 }
 
 void LocationsBuilderARM64::VisitClearException(HClearException* clear) {
@@ -3080,7 +3141,11 @@ void LocationsBuilderARM64::VisitClearException(HClearException* clear) {
 }
 
 void InstructionCodeGeneratorARM64::VisitClearException(HClearException* clear ATTRIBUTE_UNUSED) {
+#ifndef MOE
   __ Str(wzr, GetExceptionTlsAddress());
+#else
+  __ Str(xzr, GetExceptionTlsAddress());
+#endif
 }
 
 void LocationsBuilderARM64::VisitLoadLocal(HLoadLocal* load) {
@@ -3105,8 +3170,14 @@ void InstructionCodeGeneratorARM64::VisitLoadString(HLoadString* load) {
   Register out = OutputRegister(load);
   Register current_method = InputRegisterAt(load, 0);
   __ Ldr(out, MemOperand(current_method, ArtMethod::DeclaringClassOffset().Int32Value()));
+#ifdef MOE
+  GetAssembler()->MaybeUnpoisonHeapReference(out);
+#endif
   __ Ldr(out.X(), HeapOperand(out, mirror::Class::DexCacheStringsOffset()));
   __ Ldr(out, MemOperand(out.X(), CodeGenerator::GetCacheOffset(load->GetStringIndex())));
+#ifdef MOE
+  GetAssembler()->MaybeUnpoisonHeapReference(out);
+#endif
   // TODO: We will need a read barrier here.
   __ Cbz(out, slow_path->GetEntryLabel());
   __ Bind(slow_path->GetExitLabel());

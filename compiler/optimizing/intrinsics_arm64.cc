@@ -805,7 +805,11 @@ void IntrinsicLocationsBuilderARM64::VisitThreadCurrentThread(HInvoke* invoke) {
 }
 
 void IntrinsicCodeGeneratorARM64::VisitThreadCurrentThread(HInvoke* invoke) {
+#ifndef MOE
   codegen_->Load(Primitive::kPrimNot, WRegisterFrom(invoke->GetLocations()->Out()),
+#else
+  codegen_->Load(Primitive::kPrimNot, XRegisterFrom(invoke->GetLocations()->Out()),
+#endif
                  MemOperand(tr, Thread::PeerOffset<8>().Int32Value()));
 }
 
@@ -1122,12 +1126,20 @@ void IntrinsicCodeGeneratorARM64::VisitStringCharAt(HInvoke* invoke) {
   const MemberOffset count_offset = mirror::String::CountOffset();
 
   Register obj = WRegisterFrom(locations->InAt(0));  // String object pointer.
+#ifdef MOE
+  obj = obj.X();
+#endif
   Register idx = WRegisterFrom(locations->InAt(1));  // Index of character.
   Register out = WRegisterFrom(locations->Out());    // Result character.
 
   UseScratchRegisterScope temps(masm);
+#ifndef MOE
   Register temp = temps.AcquireW();
   Register array_temp = temps.AcquireW();            // We can trade this for worse scheduling.
+#else
+  Register temp = temps.AcquireX();
+  Register array_temp = temps.AcquireX();            // We can trade this for worse scheduling.
+#endif
 
   // TODO: Maybe we can support range check elimination. Overall, though, I think it's not worth
   //       the cost.

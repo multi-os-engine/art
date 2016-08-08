@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +24,28 @@
 #include "entrypoints/runtime_asm_entrypoints.h"
 #include "interpreter/interpreter.h"
 
+#ifdef MOE
+#include <math.h>
+#include "arm_eaabi_forward.cc"
+#include "thread.h"
+#endif
+
 namespace art {
 
 // Cast entrypoints.
 extern "C" uint32_t artIsAssignableFromCode(const mirror::Class* klass,
                                             const mirror::Class* ref_class);
+
+#ifdef MOE
+static uint32_t art_is_assignable_from_code(const mirror::Class* klass,
+                                            const mirror::Class* ref_class) {
+    Thread* self;
+    __asm__ __volatile__("mov %0, r9" : "=r"(self));
+    uint32_t ret = artIsAssignableFromCode(klass, ref_class);
+    __asm__ __volatile__("mov r9, %0" : : "r"(self));
+    return ret;
+}
+#endif
 
 
 // Used by soft float.
@@ -46,6 +64,58 @@ extern "C" int __aeabi_idivmod(int32_t, int32_t);  // [DIV|REM]_INT[_2ADDR|_LIT8
 // Long long arithmetics - REM_LONG[_2ADDR] and DIV_LONG[_2ADDR]
 extern "C" int64_t __aeabi_ldivmod(int64_t, int64_t);
 
+#ifdef MOE
+  static uint32_t art_jni_method_start(Thread* self) {
+    uint32_t ret = JniMethodStart(self);
+    __asm__ __volatile__("mov r9, %0" : : "r"(self));
+    return ret;
+  }
+  static uint32_t art_jni_method_start_synchronized(jobject to_lock, Thread* self) {
+    uint32_t ret = JniMethodStartSynchronized(to_lock, self);
+    __asm__ __volatile__("mov r9, %0" : : "r"(self));
+    return ret;
+  }
+
+  static void art_jni_method_end(uint32_t saved_local_ref_cookie, Thread* self) {
+    JniMethodEnd(saved_local_ref_cookie, self);
+    __asm__ __volatile__("mov r9, %0" : : "r"(self));
+  }
+
+  static void art_jni_method_end_synchronized(uint32_t saved_local_ref_cookie, jobject locked, Thread* self) {
+    JniMethodEndSynchronized(saved_local_ref_cookie, locked, self);
+    __asm__ __volatile__("mov r9, %0" : : "r"(self));
+  }
+
+  static mirror::Object* art_jni_method_end_with_reference(jobject result, uint32_t saved_local_ref_cookie, Thread* self) {
+    mirror::Object* ret = JniMethodEndWithReference(result, saved_local_ref_cookie, self);
+    __asm__ __volatile__("mov r9, %0" : : "r"(self));
+    return ret;
+  }
+
+  static mirror::Object* art_jni_method_end_with_reference_synchronized(jobject result, uint32_t saved_local_ref_cookie, jobject locked, Thread* self) {
+     mirror::Object* ret = JniMethodEndWithReferenceSynchronized(result, saved_local_ref_cookie, locked, self);
+    __asm__ __volatile__("mov r9, %0" : : "r"(self));
+    return ret;
+  }
+    
+  static void art_read_barrier_jni(mirror::CompressedReference<mirror::Object>* handle_on_stack, Thread* self) {
+    ReadBarrierJni(handle_on_stack, self);
+    __asm__ __volatile__("mov r9, %0" : : "r"(self));
+  }
+  
+  static mirror::Object* art_read_barrier_slow(mirror::Object* ref, mirror::Object* obj, uint32_t offset) {
+    mirror::Object* ret = artReadBarrierSlow(ref, obj, offset);
+    __asm__ __volatile__("mov r9, %0" : : "r"(Thread::Current()));
+    return ret;
+  }
+  
+  static void* art_memcpy(void* dst, const void* src, size_t size) {
+    void* ret = memcpy(dst, src, size);
+    __asm__ __volatile__("mov r9, %0" : : "r"(Thread::Current()));
+    return ret;
+  }
+#endif
+
 void InitEntryPoints(JniEntryPoints* jpoints, QuickEntryPoints* qpoints) {
   // JNI
   jpoints->pDlsymLookup = art_jni_dlsym_lookup_stub;
@@ -54,7 +124,11 @@ void InitEntryPoints(JniEntryPoints* jpoints, QuickEntryPoints* qpoints) {
   ResetQuickAllocEntryPoints(qpoints);
 
   // Cast
+#ifndef MOE
   qpoints->pInstanceofNonTrivial = artIsAssignableFromCode;
+#else
+  qpoints->pInstanceofNonTrivial = art_is_assignable_from_code;
+#endif
   qpoints->pCheckCast = art_quick_check_cast;
 
   // DexCache
@@ -96,12 +170,21 @@ void InitEntryPoints(JniEntryPoints* jpoints, QuickEntryPoints* qpoints) {
   qpoints->pHandleFillArrayData = art_quick_handle_fill_data;
 
   // JNI
+#ifndef MOE
   qpoints->pJniMethodStart = JniMethodStart;
   qpoints->pJniMethodStartSynchronized = JniMethodStartSynchronized;
   qpoints->pJniMethodEnd = JniMethodEnd;
   qpoints->pJniMethodEndSynchronized = JniMethodEndSynchronized;
   qpoints->pJniMethodEndWithReference = JniMethodEndWithReference;
   qpoints->pJniMethodEndWithReferenceSynchronized = JniMethodEndWithReferenceSynchronized;
+#else
+  qpoints->pJniMethodStart = art_jni_method_start;
+  qpoints->pJniMethodStartSynchronized = art_jni_method_start_synchronized;
+  qpoints->pJniMethodEnd = art_jni_method_end;
+  qpoints->pJniMethodEndSynchronized = art_jni_method_end_synchronized;
+  qpoints->pJniMethodEndWithReference = art_jni_method_end_with_reference;
+  qpoints->pJniMethodEndWithReferenceSynchronized = art_jni_method_end_with_reference_synchronized;
+#endif
   qpoints->pQuickGenericJniTrampoline = art_quick_generic_jni_trampoline;
 
   // Locks
@@ -133,7 +216,11 @@ void InitEntryPoints(JniEntryPoints* jpoints, QuickEntryPoints* qpoints) {
   // Intrinsics
   qpoints->pIndexOf = art_quick_indexof;
   qpoints->pStringCompareTo = art_quick_string_compareto;
+#ifndef MOE
   qpoints->pMemcpy = memcpy;
+#else
+  qpoints->pMemcpy = art_memcpy;
+#endif
 
   // Invocation
   qpoints->pQuickImtConflictTrampoline = art_quick_imt_conflict_trampoline;
@@ -165,8 +252,13 @@ void InitEntryPoints(JniEntryPoints* jpoints, QuickEntryPoints* qpoints) {
   qpoints->pDeoptimize = art_quick_deoptimize_from_compiled_code;
 
   // Read barrier
+#ifndef MOE
   qpoints->pReadBarrierJni = ReadBarrierJni;
   qpoints->pReadBarrierSlow = artReadBarrierSlow;
+#else
+  qpoints->pReadBarrierJni = art_read_barrier_jni;
+  qpoints->pReadBarrierSlow = art_read_barrier_slow;
+#endif
 }
 
 }  // namespace art

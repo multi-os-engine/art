@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Stop if something fails.
+set -e
+
+if [ -e classes.dex ]; then
+  # Don't know how to handle this
+  exit 1
+  #zip $TEST_NAME.jar classes.dex
+  #exit 0
+fi
+
+mkdir classes
+${JAVAC} -d classes `find src -name '*.java'`
+
+if [ -d src2 ]; then
+  ${JAVAC} -d classes `find src2 -name '*.java'`
+fi
+
+if [ -d smali ]; then
+  # Don't know how to handle this
+  echo "Smali tests are unsupported by MOE!"
+  exit 1
+fi
+
+if [ -d src-ex ]; then
+  # Don't know how to handle this
+  echo "Tests with 'src-ex' are unsupported by MOE!"
+  exit 1
+fi

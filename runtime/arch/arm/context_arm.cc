@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +24,11 @@
 namespace art {
 namespace arm {
 
+#ifndef MOE
 static constexpr uint32_t gZero = 0;
+#else
+static constexpr uintptr_t gZero = 0;
+#endif
 
 void ArmContext::Reset() {
   std::fill_n(gprs_, arraysize(gprs_), nullptr);
@@ -73,8 +78,13 @@ void ArmContext::SetFPR(uint32_t reg, uintptr_t value) {
 
 void ArmContext::SmashCallerSaves() {
   // This needs to be 0 because we want a null/zero return value.
+#ifndef MOE
   gprs_[R0] = const_cast<uint32_t*>(&gZero);
   gprs_[R1] = const_cast<uint32_t*>(&gZero);
+#else
+  gprs_[R0] = const_cast<uintptr_t*>(&gZero);
+  gprs_[R1] = const_cast<uintptr_t*>(&gZero);
+#endif
   gprs_[R2] = nullptr;
   gprs_[R3] = nullptr;
 
@@ -99,7 +109,11 @@ void ArmContext::SmashCallerSaves() {
 extern "C" NO_RETURN void art_quick_do_long_jump(uint32_t*, uint32_t*);
 
 void ArmContext::DoLongJump() {
+#ifndef MOE
   uintptr_t gprs[kNumberOfCoreRegisters];
+#else
+  uint32_t gprs[kNumberOfCoreRegisters];
+#endif
   uint32_t fprs[kNumberOfSRegisters];
   for (size_t i = 0; i < kNumberOfCoreRegisters; ++i) {
     gprs[i] = gprs_[i] != nullptr ? *gprs_[i] : ArmContext::kBadGprBase + i;

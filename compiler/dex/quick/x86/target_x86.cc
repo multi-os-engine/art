@@ -870,11 +870,21 @@ LIR* X86Mir2Lir::CheckSuspendUsingLoad() {
   // First load the pointer in fs:[suspend-trigger] into eax
   // Then use a test instruction to indirect via that address.
   if (cu_->target64) {
+#ifndef MOE
     NewLIR2(kX86Mov64RT, rs_rAX.GetReg(),
         Thread::ThreadSuspendTriggerOffset<8>().Int32Value());
+#else
+    NewLIR2(kX86Mov64RT, rs_rAX.GetReg(), MOE_TLS_THREAD_OFFSET_64);
+    NewLIR3(kX86Mov64RM, rs_rAX.GetReg(), rs_rAX.GetReg(), Thread::ThreadSuspendTriggerOffset<8>().Int32Value());
+#endif
   } else {
+#ifndef MOE
     NewLIR2(kX86Mov32RT, rs_rAX.GetReg(),
         Thread::ThreadSuspendTriggerOffset<4>().Int32Value());
+#else
+    NewLIR2(kX86Mov32RT, rs_rAX.GetReg(), MOE_TLS_THREAD_OFFSET_32);
+    NewLIR3(kX86Mov32RM, rs_rAX.GetReg(), rs_rAX.GetReg(), Thread::ThreadSuspendTriggerOffset<4>().Int32Value());
+#endif
   }
   return NewLIR3(kX86Test32RM, rs_rAX.GetReg(), rs_rAX.GetReg(), 0);
 }

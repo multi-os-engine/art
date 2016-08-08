@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,13 +41,14 @@ void Thread::InitCpu() {
 
 #if defined(__linux__)
   arch_prctl(ARCH_SET_GS, this);
-#else
+#elif !defined(MOE)
   UNIMPLEMENTED(FATAL) << "Need to set GS";
 #endif
 
   // Allow easy indirection back to Thread*.
   tlsPtr_.self = this;
 
+#ifndef MOE
   // Sanity check that reads from %gs point to this Thread*.
   Thread* self_check;
   __asm__ __volatile__("movq %%gs:(%1), %0"
@@ -54,16 +56,19 @@ void Thread::InitCpu() {
       : "r"(THREAD_SELF_OFFSET)  // input
       :);  // clobber
   CHECK_EQ(self_check, this);
+#endif
 }
 
 void Thread::CleanupCpu() {
   // Sanity check that reads from %gs point to this Thread*.
+#ifndef MOE
   Thread* self_check;
   __asm__ __volatile__("movq %%gs:(%1), %0"
       : "=r"(self_check)  // output
       : "r"(THREAD_SELF_OFFSET)  // input
       :);  // clobber
   CHECK_EQ(self_check, this);
+#endif
 
   // Do nothing.
 }

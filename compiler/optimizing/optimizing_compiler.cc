@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,9 +49,15 @@
 #include "driver/compiler_driver-inl.h"
 #include "driver/compiler_options.h"
 #include "driver/dex_compilation_unit.h"
+#ifndef MOE
 #include "elf_writer_quick.h"
+#else
+#include "macho_writer_quick.h"
+#endif
 #include "graph_checker.h"
+#ifndef MOE
 #include "graph_visualizer.h"
+#endif
 #include "gvn.h"
 #include "induction_var_analysis.h"
 #include "inliner.h"
@@ -117,15 +124,19 @@ class PassObserver : public ValueObject {
         timing_logger_(method_name, true, true),
         disasm_info_(graph->GetArena()),
         visualizer_enabled_(!compiler_driver->GetDumpCfgFileName().empty()),
+#ifndef MOE
         visualizer_(visualizer_output, graph, *codegen),
+#endif
         graph_in_bad_state_(false) {
     if (timing_logger_enabled_ || visualizer_enabled_) {
       if (!IsVerboseMethod(compiler_driver, method_name)) {
         timing_logger_enabled_ = visualizer_enabled_ = false;
       }
       if (visualizer_enabled_) {
+#ifndef MOE
         visualizer_.PrintHeader(method_name_);
         codegen->SetDisassemblyInformation(&disasm_info_);
+#endif
       }
     }
   }
@@ -139,7 +150,9 @@ class PassObserver : public ValueObject {
 
   void DumpDisassembly() const {
     if (visualizer_enabled_) {
+#ifndef MOE
       visualizer_.DumpGraphWithDisassembly();
+#endif
     }
   }
 
@@ -149,7 +162,9 @@ class PassObserver : public ValueObject {
   void StartPass(const char* pass_name) {
     // Dump graph first, then start timer.
     if (visualizer_enabled_) {
+#ifndef MOE
       visualizer_.DumpGraph(pass_name, /* is_after_pass */ false, graph_in_bad_state_);
+#endif
     }
     if (timing_logger_enabled_) {
       timing_logger_.StartTiming(pass_name);
@@ -162,7 +177,9 @@ class PassObserver : public ValueObject {
       timing_logger_.EndTiming();
     }
     if (visualizer_enabled_) {
+#ifndef MOE
       visualizer_.DumpGraph(pass_name, /* is_after_pass */ true, graph_in_bad_state_);
+#endif
     }
 
     // Validate the HGraph if running in debug mode.
@@ -211,7 +228,9 @@ class PassObserver : public ValueObject {
   DisassemblyInformation disasm_info_;
 
   bool visualizer_enabled_;
+#ifndef MOE
   HGraphVisualizer visualizer_;
+#endif
 
   // Flag to be set by the compiler if the pass failed and the graph is not
   // expected to validate.

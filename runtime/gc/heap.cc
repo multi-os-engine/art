@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +18,15 @@
 #include "heap.h"
 
 #define ATRACE_TAG ATRACE_TAG_DALVIK
+#ifndef MOE
 #include <cutils/trace.h>
+#endif
 
 #include <limits>
 #include <memory>
+#ifndef MOE
 #include <unwind.h>  // For GC verification.
+#endif
 #include <vector>
 
 #include "art_field-inl.h"
@@ -252,43 +257,9 @@ Heap::Heap(size_t initial_size,
   mark_bitmap_.reset(new accounting::HeapBitmap(this));
   // Requested begin for the alloc space, to follow the mapped image and oat files
   uint8_t* requested_alloc_space_begin = nullptr;
-  if (foreground_collector_type_ == kCollectorTypeCC) {
-    // Need to use a low address so that we can allocate a contiguous
-    // 2 * Xmx space when there's no image (dex2oat for target).
-    CHECK_GE(300 * MB, non_moving_space_capacity);
-    requested_alloc_space_begin = reinterpret_cast<uint8_t*>(300 * MB) - non_moving_space_capacity;
-  }
-  if (!image_file_name.empty()) {
-    ATRACE_BEGIN("ImageSpace::Create");
-    std::string error_msg;
-    auto* image_space = space::ImageSpace::Create(image_file_name.c_str(), image_instruction_set,
-                                                  &error_msg);
-    ATRACE_END();
-    if (image_space != nullptr) {
-      AddSpace(image_space);
-      // Oat files referenced by image files immediately follow them in memory, ensure alloc space
-      // isn't going to get in the middle
-      uint8_t* oat_file_end_addr = image_space->GetImageHeader().GetOatFileEnd();
-      CHECK_GT(oat_file_end_addr, image_space->End());
-      requested_alloc_space_begin = AlignUp(oat_file_end_addr, kPageSize);
-    } else {
-      LOG(ERROR) << "Could not create image space with image file '" << image_file_name << "'. "
-                   << "Attempting to fall back to imageless running. Error was: " << error_msg;
-    }
-  }
-  /*
-  requested_alloc_space_begin ->     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
-                                     +-  nonmoving space (non_moving_space_capacity)+-
-                                     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
-                                     +-????????????????????????????????????????????+-
-                                     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
-                                     +-main alloc space / bump space 1 (capacity_) +-
-                                     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
-                                     +-????????????????????????????????????????????+-
-                                     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
-                                     +-main alloc space2 / bump space 2 (capacity_)+-
-                                     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
-  */
+#ifdef MOE
+  // NOTE: This section was originally at an another position, so any modification there
+  // should be applied here, too.
   // We don't have hspace compaction enabled with GSS or CC.
   if (foreground_collector_type_ == kCollectorTypeGSS ||
       foreground_collector_type_ == kCollectorTypeCC) {
@@ -307,6 +278,104 @@ Heap::Heap(size_t initial_size,
   if (foreground_collector_type == kCollectorTypeGSS) {
     separate_non_moving_space = false;
   }
+#endif
+  if (foreground_collector_type_ == kCollectorTypeCC) {
+    // Need to use a low address so that we can allocate a contiguous
+    // 2 * Xmx space when there's no image (dex2oat for target).
+    CHECK_GE(300 * MB, non_moving_space_capacity);
+    requested_alloc_space_begin = reinterpret_cast<uint8_t*>(300 * MB) - non_moving_space_capacity;
+  }
+  if (!image_file_name.empty()) {
+#ifdef MOE
+    {
+      size_t size;
+      uint8_t* base_address = get_art_data(&size);
+      CHECK(base_address != nullptr) << "Invalid image header in '__ARTDATA'";
+      ImageHeader* image_header = reinterpret_cast<ImageHeader*>(base_address);
+
+      size_t base_size = image_header->GetOatFileEnd() - image_header->GetImageBegin();
+      off_t requested_alloc_space_offset =
+          reinterpret_cast<off_t>(AlignUp(reinterpret_cast<uint8_t*>(base_size), kPageSize));
+      if (separate_non_moving_space) {
+        base_size = requested_alloc_space_offset + non_moving_space_capacity;
+      } else if (foreground_collector_type_ == kCollectorTypeCC) {
+        base_size = requested_alloc_space_offset + capacity_ * 2;
+      } else {
+        if (support_homogeneous_space_compaction ||
+            background_collector_type_ == kCollectorTypeSS ||
+            foreground_collector_type_ == kCollectorTypeSS) {
+          base_size = requested_alloc_space_offset +
+              reinterpret_cast<off_t>(AlignUp(reinterpret_cast<uint8_t*>(capacity_), kPageSize)) + capacity_;
+        } else {
+          base_size = requested_alloc_space_offset + capacity_;
+        }
+      }
+
+      std::string error_msg;
+      MemMap* base_map = MemMap::MapAnonymous("base map", nullptr, base_size,
+          PROT_READ | PROT_WRITE, true, false, &error_msg);
+      CHECK(base_map != nullptr) << "Could not create base map. Error was: " << error_msg;
+
+      image_header->RelocateImage(base_map->Begin() - image_header->GetImageBegin());
+
+      requested_alloc_space_begin = base_map->Begin() + requested_alloc_space_offset;
+
+      delete base_map;
+    }
+#endif
+
+    ATRACE_BEGIN("ImageSpace::Create");
+    std::string error_msg;
+    auto* image_space = space::ImageSpace::Create(image_file_name.c_str(), image_instruction_set,
+                                                  &error_msg);
+    ATRACE_END();
+    if (image_space != nullptr) {
+      AddSpace(image_space);
+      // Oat files referenced by image files immediately follow them in memory, ensure alloc space
+      // isn't going to get in the middle
+      uint8_t* oat_file_end_addr = image_space->GetImageHeader().GetOatFileEnd();
+      CHECK_GT(oat_file_end_addr, image_space->End());
+#ifndef MOE
+      requested_alloc_space_begin = AlignUp(oat_file_end_addr, kPageSize);
+#endif
+    } else {
+      LOG(ERROR) << "Could not create image space with image file '" << image_file_name << "'. "
+                   << "Attempting to fall back to imageless running. Error was: " << error_msg;
+    }
+  }
+  /*
+  requested_alloc_space_begin ->     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+                                     +-  nonmoving space (non_moving_space_capacity)+-
+                                     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+                                     +-????????????????????????????????????????????+-
+                                     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+                                     +-main alloc space / bump space 1 (capacity_) +-
+                                     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+                                     +-????????????????????????????????????????????+-
+                                     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+                                     +-main alloc space2 / bump space 2 (capacity_)+-
+                                     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+  */
+#ifndef MOE
+  // We don't have hspace compaction enabled with GSS or CC.
+  if (foreground_collector_type_ == kCollectorTypeGSS ||
+      foreground_collector_type_ == kCollectorTypeCC) {
+    use_homogeneous_space_compaction_for_oom_ = false;
+  }
+  bool support_homogeneous_space_compaction =
+      background_collector_type_ == gc::kCollectorTypeHomogeneousSpaceCompact ||
+      use_homogeneous_space_compaction_for_oom_;
+  // We may use the same space the main space for the non moving space if we don't need to compact
+  // from the main space.
+  // This is not the case if we support homogeneous compaction or have a moving background
+  // collector type.
+  bool separate_non_moving_space = is_zygote ||
+      support_homogeneous_space_compaction || IsMovingGc(foreground_collector_type_) ||
+      IsMovingGc(background_collector_type_);
+  if (foreground_collector_type == kCollectorTypeGSS) {
+    separate_non_moving_space = false;
+  }
+#endif
   std::unique_ptr<MemMap> main_mem_map_1;
   std::unique_ptr<MemMap> main_mem_map_2;
   uint8_t* request_begin = requested_alloc_space_begin;
@@ -329,7 +398,11 @@ Heap::Heap(size_t initial_size,
                              &error_str));
     CHECK(non_moving_space_mem_map != nullptr) << error_str;
     // Try to reserve virtual memory at a lower address if we have a separate non moving space.
+#ifndef MOE
     request_begin = reinterpret_cast<uint8_t*>(300 * MB);
+#else
+    request_begin = nullptr;
+#endif
   }
   // Attempt to create 2 mem maps at or after the requested begin.
   if (foreground_collector_type_ != kCollectorTypeCC) {
@@ -551,6 +624,7 @@ MemMap* Heap::MapAnonymousPreferredAddress(const char* name,
                                            uint8_t* request_begin,
                                            size_t capacity,
                                            std::string* out_error_str) {
+#ifndef MOE
   while (true) {
     MemMap* map = MemMap::MapAnonymous(name, request_begin, capacity,
                                        PROT_READ | PROT_WRITE, true, false, out_error_str);
@@ -560,6 +634,10 @@ MemMap* Heap::MapAnonymousPreferredAddress(const char* name,
     // Retry a  second time with no specified request begin.
     request_begin = nullptr;
   }
+#else
+  return MemMap::MapAnonymous(name, request_begin, capacity,
+                              PROT_READ | PROT_WRITE, true, false, out_error_str, true);
+#endif
 }
 
 bool Heap::MayUseCollector(CollectorType type) const {
@@ -3890,6 +3968,7 @@ void Heap::BroadcastForNewAllocationRecords() const {
   }
 }
 
+#ifndef MOE
 // Based on debug malloc logic from libc/bionic/debug_stacktrace.cpp.
 class StackCrawlState {
  public:
@@ -3957,6 +4036,9 @@ void Heap::CheckGcStressMode(Thread* self, mirror::Object** obj) {
     }
   }
 }
+#else
+void Heap::CheckGcStressMode(Thread* self, mirror::Object** obj) {}
+#endif
 
 void Heap::DisableGCForShutdown() {
   Thread* const self = Thread::Current();

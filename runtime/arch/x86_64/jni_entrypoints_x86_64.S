@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +45,11 @@ DEFINE_FUNCTION art_jni_dlsym_lookup_stub
     movq %xmm14, 80(%rsp)
     movq %xmm15, 88(%rsp)
     // prepare call
+    #ifndef MOE
     movq %gs:THREAD_SELF_OFFSET, %rdi      // RDI := Thread::Current()
+    #else
+    movq %gs:MOE_TLS_THREAD_OFFSET_64, %rdi
+    #endif
     // call
     call PLT_SYMBOL(artFindNativeMethod)  // (Thread*)
     // restore arguments

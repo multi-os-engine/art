@@ -45,7 +45,11 @@
 #include "dex/quick/dex_file_method_inliner.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "driver/compiler_options.h"
+#ifndef MOE
 #include "elf_writer_quick.h"
+#else
+#include "macho_writer_quick.h"
+#endif
 #include "jni_internal.h"
 #include "object_lock.h"
 #include "profiler.h"

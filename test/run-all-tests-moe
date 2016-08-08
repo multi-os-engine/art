@@ -1,0 +1,710 @@
+#!/usr/bin/python
+
+#
+# Copyright 2014-2016 Intel Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+import os
+import time
+import subprocess
+import sys
+import re
+from threading import Thread
+from threading import Lock
+import shutil
+import fnmatch
+
+TESTS_ROOT=os.path.dirname(os.path.realpath(__file__))
+TEST_PROJECT_DIR=os.path.join(TESTS_ROOT, "moeArtTest")
+TEST_RESULTS_DIR=os.path.join(TEST_PROJECT_DIR, "results/"+time.strftime("%Y%m%d%H%M%S"))
+TEST_CLASSES_DIR=os.path.join(TEST_PROJECT_DIR, "target/classes")
+
+DEFAULT_BUILD_MOE=os.path.join(TESTS_ROOT, "etc/default-build-moe")
+DEFAULT_CHECK=os.path.join(TESTS_ROOT, "etc/default-check")
+
+TEST_SIM_APP=os.path.join(TEST_PROJECT_DIR, "build/moe/xcodebuild/sym/Release-iphonesimulator/moeArtTest.app")
+TEST_DEV_APP=os.path.join(TEST_PROJECT_DIR, "build/moe/xcodebuild/sym/Release-iphoneos/moeArtTest.app")
+TEST_TVOS_SIM_APP=os.path.join(TEST_PROJECT_DIR, "build-tvos/moe/xcodebuild/sym/Release-appletvsimulator/moeArtTest-tvOS.app")
+TEST_TVOS_DEV_APP=os.path.join(TEST_PROJECT_DIR, "build-tvos/moe/xcodebuild/sym/Release-appletvos/moeArtTest-tvOS.app")
+
+###############################################
+# COLLECT TARGETS
+###############################################
+
+TARGET_COUNT=0
+TARGET_SIM_COUNT=0
+TARGET_DEV_COUNT=0
+TARGET_TVOS_SIM_COUNT=0
+TARGET_TVOS_DEV_COUNT=0
+
+# iOS TARGETS
+#############
+
+MOE_TARGET_SIM_32=os.getenv("MOE_TARGET_SIM_32")
+RESULTS_TARGET_SIM_32=None
+if MOE_TARGET_SIM_32 is None:
+    print "Warning: MOE_TARGET_SIM_32 is not set"
+else:
+    RESULTS_TARGET_SIM_32=os.path.join(TEST_RESULTS_DIR, "ios-sim-32-"+MOE_TARGET_SIM_32+".csv")
+    TARGET_COUNT+=1
+    TARGET_SIM_COUNT+=1
+
+MOE_TARGET_SIM_64=os.getenv("MOE_TARGET_SIM_64")
+RESULTS_TARGET_SIM_64=None
+if MOE_TARGET_SIM_64 is None:
+    print "Warning: MOE_TARGET_SIM_64 is not set"
+else:
+    RESULTS_TARGET_SIM_64=os.path.join(TEST_RESULTS_DIR, "ios-sim-64-"+MOE_TARGET_SIM_64+".csv")
+    TARGET_COUNT+=1
+    TARGET_SIM_COUNT+=1
+
+MOE_TARGET_DEV_32=os.getenv("MOE_TARGET_DEV_32")
+RESULTS_TARGET_DEV_32=None
+if MOE_TARGET_DEV_32 is None:
+    print "Warning: MOE_TARGET_DEV_32 is not set"
+else:
+    RESULTS_TARGET_DEV_32=os.path.join(TEST_RESULTS_DIR, "ios-dev-32-"+MOE_TARGET_DEV_32+".csv")
+    TARGET_COUNT+=1
+    TARGET_DEV_COUNT+=1
+
+MOE_TARGET_DEV_64=os.getenv("MOE_TARGET_DEV_64")
+RESULTS_TARGET_DEV_64=None
+if MOE_TARGET_DEV_64 is None:
+    print "Warning: MOE_TARGET_DEV_64 is not set"
+else:
+    RESULTS_TARGET_DEV_64=os.path.join(TEST_RESULTS_DIR, "ios-dev-64-"+MOE_TARGET_DEV_64+".csv")
+    TARGET_COUNT+=1
+    TARGET_DEV_COUNT+=1
+
+# tvOS TARGETS
+##############
+
+MOE_TARGET_TVOS_SIM=os.getenv("MOE_TARGET_TVOS_SIM")
+RESULTS_TARGET_TVOS_SIM=None
+if MOE_TARGET_TVOS_SIM is None:
+    print "Warning: MOE_TARGET_TVOS_SIM is not set"
+else:
+    RESULTS_TARGET_TVOS_SIM=os.path.join(TEST_RESULTS_DIR, "tvos-sim-64-"+MOE_TARGET_TVOS_SIM+".csv")
+    TARGET_COUNT+=1
+    TARGET_TVOS_SIM_COUNT+=1
+
+MOE_TARGET_TVOS_DEV=os.getenv("MOE_TARGET_TVOS_DEV")
+RESULTS_TARGET_TVOS_DEV=None
+if MOE_TARGET_TVOS_DEV is None:
+    print "Warning: MOE_TARGET_TVOS_DEV is not set"
+else:
+    RESULTS_TARGET_TVOS_DEV=os.path.join(TEST_RESULTS_DIR, "tvos-dev-64-"+MOE_TARGET_TVOS_DEV+".csv")
+    TARGET_COUNT+=1
+    TARGET_TVOS_DEV_COUNT+=1
+
+if TARGET_COUNT == 0:
+    print "No targets were set"
+    sys.exit(1)
+
+###############################################
+# SETUP TEST ENV
+###############################################
+
+if not os.path.isdir(TEST_PROJECT_DIR):
+    print "Failed to locate MOE test project at " + TEST_PROJECT_DIR
+    sys.exit(1)
+
+subprocess.call(["mkdir", "-p", TEST_RESULTS_DIR])
+if not os.path.isdir(TEST_RESULTS_DIR):
+    print "Failed to create test results directory at " + TEST_RESULTS_DIR
+    sys.exit(1)
+
+if not os.path.isfile(DEFAULT_BUILD_MOE):
+    print "Default build file doesn't exist at " + DEFAULT_BUILD_MOE
+    sys.exit(1)
+
+###############################################
+# START TESTING
+###############################################
+
+if RESULTS_TARGET_SIM_32 is not None:
+    with open(RESULTS_TARGET_SIM_32, "a") as f:
+        f.write("32-bit Simulator\t"+MOE_TARGET_SIM_32+"\n")
+if RESULTS_TARGET_SIM_64 is not None:
+    with open(RESULTS_TARGET_SIM_64, "a") as f:
+        f.write("64-bit Simulator\t"+MOE_TARGET_SIM_64+"\n")
+if RESULTS_TARGET_DEV_32 is not None:
+    with open(RESULTS_TARGET_DEV_32, "a") as f:
+        f.write("32-bit Device\t"+MOE_TARGET_DEV_32+"\n")
+if RESULTS_TARGET_DEV_64 is not None:
+    with open(RESULTS_TARGET_DEV_64, "a") as f:
+        f.write("64-bit Device\t"+MOE_TARGET_DEV_64+"\n")
+
+if RESULTS_TARGET_TVOS_SIM is not None:
+    with open(RESULTS_TARGET_TVOS_SIM, "a") as f:
+        f.write("64-bit tvOS Simulator\t"+MOE_TARGET_TVOS_SIM+"\n")
+if RESULTS_TARGET_TVOS_DEV is not None:
+    with open(RESULTS_TARGET_TVOS_DEV, "a") as f:
+        f.write("64-bit tvOS Device\t"+MOE_TARGET_TVOS_DEV+"\n")
+
+os.putenv("PATH", os.path.join(TESTS_ROOT, "etc")+":"+os.getenv("PATH"))
+os.putenv("JAVA", "java")
+os.putenv("JAVAC", "javac -g -source 7 -target 7")
+os.putenv("JASMIN", "jasmin")
+os.putenv("DX", os.path.join(TEST_PROJECT_DIR,"platform-tools/dx"))
+
+def runconcretetest(test):
+    print "Testing " + test
+
+    TEST_RESULT_DIR=os.path.join(TEST_RESULTS_DIR, test)
+
+    def failSimulatorsWithMessage(msg):
+        if RESULTS_TARGET_SIM_32 is not None:
+            with open(RESULTS_TARGET_SIM_32, "a") as f:
+                f.write(test + "\t" + msg + "\n")
+        if RESULTS_TARGET_SIM_64 is not None:
+            with open(RESULTS_TARGET_SIM_64, "a") as f:
+                f.write(test + "\t" + msg + "\n")
+
+    def failDevicesWithMessage(msg):
+        if RESULTS_TARGET_DEV_32 is not None:
+            with open(RESULTS_TARGET_DEV_32, "a") as f:
+                f.write(test + "\t" + msg + "\n")
+        if RESULTS_TARGET_DEV_64 is not None:
+            with open(RESULTS_TARGET_DEV_64, "a") as f:
+                f.write(test + "\t" + msg + "\n")
+
+    def failTVOSSimulatorsWithMessage(msg):
+        if RESULTS_TARGET_TVOS_SIM is not None:
+            with open(RESULTS_TARGET_TVOS_SIM, "a") as f:
+                f.write(test + "\t" + msg + "\n")
+
+    def failTVOSDevicesWithMessage(msg):
+        if RESULTS_TARGET_TVOS_DEV is not None:
+            with open(RESULTS_TARGET_TVOS_DEV, "a") as f:
+                f.write(test + "\t" + msg + "\n")
+
+    def failWithMessage(msg):
+        failSimulatorsWithMessage(msg)
+        failDevicesWithMessage(msg)
+        sys.exit(1)
+
+    def failTVOSWithMessage(msg):
+        failTVOSSimulatorsWithMessage(msg)
+        failTVOSDevicesWithMessage(msg)
+        sys.exit(1)
+
+    subprocess.call(["mkdir", TEST_RESULT_DIR])
+    if not os.path.isdir(TEST_RESULT_DIR):
+        print "    Failed to create test result directory at " + TEST_RESULT_DIR + " for " + test
+        failWithMessage("couldn't create results dir")
+
+    os.chdir(test)
+
+    # Reset test directory
+    subprocess.call(["git", "checkout", "--", "."])
+    subprocess.call(["git", "clean", "-x", "-d", "-f"], stdout=open(os.devnull, 'wb'))
+
+    # Patch sources
+    if os.path.isfile("moe-patch.diff"):
+        print "    Patching test"
+        subprocess.call(["git", "apply", "moe-patch.diff"])
+
+    # Select builder
+    BUILD_EXEC=DEFAULT_BUILD_MOE
+    if os.path.isfile("build-moe"):
+        BUILD_EXEC=os.path.join(TESTS_ROOT, test+"/build-moe")
+    elif os.path.isfile("build"):
+        BUILD_EXEC=os.path.join(TESTS_ROOT, test+"/build")
+
+    # Select checker
+    CHECK_EXEC=DEFAULT_CHECK
+    if os.path.isfile("check-moe"):
+        CHECK_EXEC=os.path.join(TESTS_ROOT, test+"/check-moe")
+    elif os.path.isfile("check"):
+        CHECK_EXEC=os.path.join(TESTS_ROOT, test+"/check")
+
+    if os.path.isfile("moe-expected.txt"):
+        shutil.copyfile("moe-expected.txt", os.path.join(TEST_RESULT_DIR, "expected.txt"))
+    elif os.path.isfile("expected.txt"):
+        shutil.copyfile("expected.txt", os.path.join(TEST_RESULT_DIR, "expected.txt"))
+
+    # Build
+    print "    Building with " + BUILD_EXEC
+    proc_ret = None
+    if os.path.isfile(BUILD_EXEC):
+        subprocess.call(["chmod", "a+x", BUILD_EXEC])
+    with open(os.path.join(TEST_RESULT_DIR, os.path.basename(BUILD_EXEC) + ".log"), "w") as outfile:
+        proc_ret = subprocess.call(BUILD_EXEC, stdout=outfile, stderr=outfile)
+    if proc_ret != 0:
+        last = subprocess.check_output(["tail", "-n", "1", os.path.join(TEST_RESULT_DIR, os.path.basename(BUILD_EXEC)+".log")])
+        print "        FAILED ("+BUILD_EXEC+") " + last
+        failWithMessage("failed to build classes")
+
+    # Copy classes
+    print "    Copying classes"
+    subprocess.call(["rm", "-rf", TEST_CLASSES_DIR])
+    subprocess.call(["mkdir", "-p", TEST_CLASSES_DIR])
+    if not os.path.isdir(TEST_CLASSES_DIR):
+        print "        FAILED couldn't find classes directory " + TEST_CLASSES_DIR
+        failWithMessage("failed to find classes")
+    with open(os.path.join(TEST_RESULT_DIR, "error.log"), "w") as outfile:
+        proc_ret = subprocess.call(["cp", "-r", "classes/", TEST_CLASSES_DIR], stdout=outfile, stderr=outfile)
+    if proc_ret != 0:
+        print "        FAILED (cp classes)"
+        failWithMessage("failed to copy classes")
+
+    # Prepare ProGuard
+    os.chdir(TEST_PROJECT_DIR)
+    subprocess.call(["rm", "-rf", "proguard.append.cfg"])
+    os.chdir("target")
+    with open(os.path.join(TEST_PROJECT_DIR, "proguard.append.cfg"), "a") as f:
+        f.write("-dontshrink\n")
+
+        for root, dirnames, filenames in os.walk('classes'):
+            for filename in fnmatch.filter(filenames, '*.class'):
+                f.write("-keep class " + filename + " { *; }\n")
+
+    # Prepare native code
+    os.chdir(TEST_PROJECT_DIR)
+    subprocess.call(["rm", "-rf", "native_cpp.cpp"])
+    with open("native_cpp.cpp", "a") as f:
+        f.write("\n")
+        for root, dirnames, filenames in os.walk(os.path.join(TESTS_ROOT, test)):
+            for filename in fnmatch.filter(filenames, '*.cc'):
+                f.write("#include \""+os.path.join(root,filename)+"\"\n")
+
+#############
+# iOS TARGETS
+#############
+
+    os.chdir(TEST_PROJECT_DIR)
+
+    plock = Lock()
+
+    def run_sim(simulator, output):
+        with plock:
+            print "    Building project (Simulator)"
+            print "    Running on simulator (" + simulator + ")"
+
+        env = os.environ.copy()
+        env['SIMCTL_CHILD_ANDROID_LOG_TAGS'] = '*:s'
+        with open(os.path.join(TEST_RESULT_DIR, "gradle-build-sim.log"), "w") as outfile:
+            proc_ret = subprocess.call(["./gradlew", "moeLaunchSimulator", \
+                "-Pmoe.launch.simulator.target=" + simulator, \
+                "-Pmoe.sources.custom=target/classes", \
+                "-Pmoe.sdk.skip_ios", \
+                "-Pmoe.simulator.log.file=" + os.path.join(TEST_RESULT_DIR, "actual-simulator-" + simulator + ".txt")], env=env, stdout=outfile, stderr=outfile)
+        if proc_ret != 0:
+            print "        FAILED (gradlew/Simulator)"
+            failSimulatorsWithMessage("failed to compile project")
+        else:
+            print "    Building project completed (Simulator)"
+            with plock:
+                print "    Checking with " + CHECK_EXEC
+            proc_ret = subprocess.call([CHECK_EXEC, os.path.join(TEST_RESULT_DIR, "expected.txt"), os.path.join(TEST_RESULT_DIR, "actual-simulator-" + simulator + ".txt")])
+            with open(output, "a") as f:
+                if proc_ret != 0:
+                    with plock:
+                        print "        FAILED (test-sim " + simulator + ")"
+                    f.write(test+"\tFAILED\n")
+                else:
+                    with plock:
+                        print "        OK (test-sim " + simulator + ")"
+                    f.write(test+"\tOK\n")
+
+    def run_sims():
+        if RESULTS_TARGET_SIM_32 is not None:
+            run_sim(MOE_TARGET_SIM_32, RESULTS_TARGET_SIM_32)
+        if RESULTS_TARGET_SIM_64 is not None:
+            run_sim(MOE_TARGET_SIM_64, RESULTS_TARGET_SIM_64)
+
+    subprocess.call(["rm", "-rf", "build/moe/main"])
+    subprocess.call(["rm", "-rf", "build/moe/test"])
+    subprocess.call(["rm", "-rf", "build/moe/xcodebuild"])
+    subprocess.call(["rm", "-rf", "build/tmp"])
+
+    print TEST_RESULT_DIR
+    TARGET_THREADS = []
+    if TARGET_SIM_COUNT != 0:
+        thread = Thread(target = run_sims)
+        TARGET_THREADS.append(thread)
+        thread.start()
+
+    def run_dev(device, output):
+        with plock:
+            print "    Building project (Device)"
+            print "    Running on device (" + device + ")"
+
+        with open(os.path.join(TEST_RESULT_DIR, "device-" + device + ".log"), "w") as outfile:
+            proc_ret = subprocess.call(["./gradlew", "--daemon", "moeLaunchDevice", \
+                "-Pmoe.launch.device.target=" + device, \
+                "-Pmoe.sources.custom=target/classes", \
+                "-Pmoe.sdk.skip_ios", \
+                "-Pmoe.android.logs=false", \
+                "-Pmoe.device.log.file=" + os.path.join(TEST_RESULT_DIR, "actual-device-" + device + ".txt")], stdout=outfile, stderr=outfile)
+
+        if proc_ret != 0:
+            with plock:
+                print "        FAILED (gradlew/Device)"
+            failDevicesWithMessage("failed to compile project")
+        else:
+            with plock:
+                print "    Building project completed (Device)"
+
+            with plock:
+                print "    Checking with " + CHECK_EXEC
+            proc_ret = subprocess.call([CHECK_EXEC, os.path.join(TEST_RESULT_DIR, "expected.txt"), os.path.join(TEST_RESULT_DIR, "actual-device-"+device+".txt")])
+            with open(output, "a") as f:
+                if proc_ret != 0:
+                    with plock:
+                        print "        FAILED (test-dev "+device+")"
+                    f.write(test+"\tFAILED\n")
+                else:
+                    with plock:
+                        print "        OK (test-dev "+device+")"
+                    f.write(test+"\tOK\n")
+
+    if TARGET_DEV_COUNT != 0:
+        if RESULTS_TARGET_DEV_32 is not None:
+            thread = Thread(target = run_dev, args = (MOE_TARGET_DEV_32, RESULTS_TARGET_DEV_32, ))
+            TARGET_THREADS.append(thread)
+            thread.start()
+        if RESULTS_TARGET_DEV_64 is not None:
+            thread = Thread(target = run_dev, args = (MOE_TARGET_DEV_64, RESULTS_TARGET_DEV_64, ))
+            TARGET_THREADS.append(thread)
+            thread.start()
+
+    # Wait for all parallel jobs to finish
+    for thread in TARGET_THREADS:
+        thread.join()
+
+    os.chdir(TESTS_ROOT)
+
+##############
+# tvOS TARGETS
+##############
+
+    os.chdir(TEST_PROJECT_DIR)
+
+    plock = Lock()
+
+    def run_sim(device, output):
+        with plock:
+            print "    Running on tvOS simulator ("+device+")"
+
+        with open(os.path.join(TEST_RESULT_DIR, "simulator-tvos-"+device+".log"), "w") as outfile:
+            subprocess.call(["java", "-XstartOnFirstThread", "-jar", "launchers/moeIosSimulatorLauncher-1.3.0.final-1.jar", \
+                "-ttv", \
+                "--udid="+device, \
+                "--app-path="+TEST_TVOS_SIM_APP, \
+                "--env=NSUnbufferedIO=YES", \
+                "--env=ANDROID_LOG_TAGS=*:s", \
+                "--dont-activate", \
+                "--output-file=" + os.path.join(TEST_RESULT_DIR, "actual-tvos-simulator-"+device+".txt"), \
+                "-x=-args", \
+                "-x=External.framework/External"], stdout=outfile, stderr=outfile)
+        with plock:
+            print "    Checking with " + CHECK_EXEC
+        proc_ret = subprocess.call([CHECK_EXEC, os.path.join(TEST_RESULT_DIR, "expected.txt"), os.path.join(TEST_RESULT_DIR, "actual-tvos-simulator-"+device+".txt")])
+        with open(output, "a") as f:
+            if proc_ret != 0:
+                with plock:
+                    print "        FAILED (test-tvos-sim "+device+")"
+                f.write(test+"\tFAILED\n")
+            else:
+                with plock:
+                    print "        OK (test-tvos-sim "+device+")"
+                f.write(test+"\tOK\n")
+
+    def run_sims():
+        if RESULTS_TARGET_TVOS_SIM is not None:
+            run_sim(MOE_TARGET_TVOS_SIM, RESULTS_TARGET_TVOS_SIM)
+
+    subprocess.call(["rm", "-rf", "build-tvos/moe/main"])
+    subprocess.call(["rm", "-rf", "build-tvos/moe/test"])
+    subprocess.call(["rm", "-rf", "build-tvos/moe/xcodebuild"])
+    subprocess.call(["rm", "-rf", "build-tvos/tmp"])
+
+    TARGET_THREADS = []
+    if TARGET_TVOS_SIM_COUNT != 0:
+        print "    Building project (tvOS Simulator)"
+        with open(os.path.join(TEST_RESULT_DIR, "gradle-build-tvos-sim.log"), "w") as outfile:
+            proc_ret = subprocess.call(["./gradlew", "--daemon", "-b", "build-tvos.gradle", "moeMainReleaseAppletvsimulatorXcodeBuild", \
+                "-Pmoe.sources.custom=target/classes", "-Pmoe.sdk.skip_ios"], stdout=outfile, stderr=outfile)
+        if proc_ret != 0:
+            print "        FAILED (gradlew/tvOS Simulator)"
+            failSimulatorsWithMessage("failed to compile project")
+        else:
+            print "    Building project completed (tvOS Simulator)"
+            thread = Thread(target = run_sims)
+            TARGET_THREADS.append(thread)
+            thread.start()
+
+    def run_dev(device, output):
+        with plock:
+            print "    Running on tvOS device ("+device+")"
+
+        with open(os.path.join(TEST_RESULT_DIR, "device-tvos-"+device+".log"), "w") as outfile:
+            subprocess.call(["java", "-jar", "launchers/moeIosDeviceLauncher-1.1.0.final-1.jar", \
+                "--udid="+device, \
+                "--app-path="+TEST_TVOS_DEV_APP, \
+                "--env=NSUnbufferedIO=YES", \
+                "--env=ANDROID_LOG_TAGS=*:s", \
+                "--output-file="+os.path.join(TEST_RESULT_DIR, "actual-tvos-device-"+device+".txt"), \
+                "-x=-args", \
+                "-x=External.framework/External"], stdout=outfile, stderr=outfile)
+
+        with plock:
+            print "    Checking with " + CHECK_EXEC
+        proc_ret = subprocess.call([CHECK_EXEC, os.path.join(TEST_RESULT_DIR, "expected.txt"), os.path.join(TEST_RESULT_DIR, "actual-tvos-device-"+device+".txt")])
+        with open(output, "a") as f:
+            if proc_ret != 0:
+                with plock:
+                    print "        FAILED (test-tvos-dev "+device+")"
+                f.write(test+"\tFAILED\n")
+            else:
+                with plock:
+                    print "        OK (test-tvos-dev "+device+")"
+                f.write(test+"\tOK\n")
+
+    if TARGET_TVOS_DEV_COUNT != 0:
+        with plock:
+            print "    Building project (tvOS Device)"
+        with open(os.path.join(TEST_RESULT_DIR, "gradle-build-tvos-dev.log"), "w") as outfile:
+            proc_ret = subprocess.call(["./gradlew", "--daemon", "-b", "build-tvos.gradle", "moeMainReleaseAppletvosXcodeBuild", \
+                "-Pmoe.sources.custom=target/classes", \
+                "-Pmoe.sdk.skip_ios"], stdout = outfile, stderr=outfile)
+        if proc_ret != 0:
+            with plock:
+                print "        FAILED (gradlew/tvOS Device)"
+            failDevicesWithMessage("failed to compile project")
+        else:
+            with plock:
+                print "    Building project completed (tvOS Device)"
+            if RESULTS_TARGET_TVOS_DEV is not None:
+                thread = Thread(target = run_dev, args = (MOE_TARGET_TVOS_DEV, RESULTS_TARGET_TVOS_DEV, ))
+                TARGET_THREADS.append(thread)
+                thread.start()
+
+    # Wait for all parallel jobs to finish
+    for thread in TARGET_THREADS:
+        thread.join()
+
+    os.chdir(TESTS_ROOT)
+
+DISABLED_TESTS=[
+    # infrastructure
+    "000-nop",
+    # hang on device64
+    "003-omnibus-opcodes",
+    # hang on device64
+    "004-ThreadStress",
+    # infrastructure
+    "063-process-manager",
+    "068-classloader",
+    "071-dexfile",
+    "088-monitor-verification",
+    "089-many-methods",
+    # hang on device64
+    "113-multidex",
+    "115-native-bridge",
+    "116-nodex2oat",
+    "117-nopatchoat",
+    "118-noimage-dex2oat",
+    "119-noimage-patchoat",
+    # hang on device64
+    "126-miranda-multidex",
+    # hang on device64
+    "127-secondarydex",
+    # exec
+    "130-hprof",
+    "131-structural-change",
+    "134-nodex2oat-nofallback",
+    "134-reg-promotion",
+    "135-MirandaDispatch",
+    "137-cfi",
+    "138-duplicate-classes-check",
+    "138-duplicate-classes-check2",
+    "141-class-unload",
+    "142-classloader2",
+    "412-new-array",
+    "416-optimizing-arith-not",
+    "425-invoke-super",
+    "431-type-propagation",
+    "432-optimizing-cmp",
+    "434-invoke-direct",
+    "435-new-instance",
+    "448-multiple-returns",
+    "452-multiple-returns2",
+    "453-not-byte",
+    "455-set-vreg",
+    "457-regs",
+    "459-dead-phi",
+    "460-multiple-returns3",
+    "462-checker-inlining-across-dex-files",
+    "467-regalloc-pair",
+    "468-checker-bool-simplifier-regression",
+    "471-uninitialized-locals",
+    "472-unreachable-if-regression",
+    "475-regression-inliner-ids",
+    "485-checker-dce-loop-update",
+    "496-checker-inlining-and-class-loader",
+    "497-inlining-and-class-loader",
+    "498-type-propagation",
+    "501-null-constant-dce",
+    "501-regression-packed-switch",
+    "503-dead-instructions",
+    "504-regression-baseline-entry",
+    "506-verify-aput",
+    "509-pre-header",
+    "510-checker-try-catch",
+    "511-clinit-interface",
+    "515-dce-dominator",
+    "516-dead-move-result",
+    "517-checker-builder-fallthrough",
+    "518-null-array-get",
+    "520-equivalent-phi",
+    "522-checker-regression-monitor-exit",
+    "523-checker-can-throw-regression",
+    "530-checker-regression-reftype-final",
+    "531-regression-debugphi",
+    "533-regression-debugphi",
+    "535-regression-const-val",
+    "537-checker-debuggable",
+    "800-smali",
+    "801-VoidCheckCast",
+    "802-deoptimization",
+    "955-lambda-smali",
+    "960-default-smali",
+    "961-default-iface-resolution-generated",
+    "962-iface-static",
+    "963-default-range-smali",
+    "964-default-iface-init-generated"
+]
+
+test_re = re.compile("^([0-9]{3,4}|xrt)-.+$")
+
+tests = []
+
+if len(sys.argv) == 1:
+    for DIR in os.listdir(TESTS_ROOT):
+        tests.append(DIR)
+else:
+    fr = None
+    to = None
+    for arg in sys.argv[1:]:
+        if fr == "":
+            fr = arg
+        elif to == "":
+            to = arg
+        elif arg == "--from":
+            fr = ""
+        elif arg == "--to":
+            to = ""
+        else:
+            tests.append(arg)
+
+    if fr == "" or to == "":
+        print "unspecified interval bounds, exiting..."
+        sys.exit(1)
+
+    if fr is not None or to is not None:
+        if len(tests) > 0:
+            print "can not combine interval with specific tests, exiting..."
+            sys.exit(1)
+
+        for DIR in os.listdir(TESTS_ROOT):
+            if fr is not None and DIR < fr:
+                continue
+            if to is not None and DIR > to:
+                continue
+            tests.append(DIR)
+
+for test in tests:
+    if test_re.match(test) is None:
+        continue
+    if test in DISABLED_TESTS:
+        continue
+    if not os.path.isdir(test):
+        print "directory " + test + " does not exist, exiting..."
+        sys.exit(1)
+    runconcretetest(test)
+
+###############################################
+# COMBINE TESTS
+###############################################
+
+RESULTS=[]
+if RESULTS_TARGET_SIM_32 is not None:
+    RESULTS.append(RESULTS_TARGET_SIM_32)
+if RESULTS_TARGET_SIM_64 is not None:
+    RESULTS.append(RESULTS_TARGET_SIM_64)
+if RESULTS_TARGET_DEV_32 is not None:
+    RESULTS.append(RESULTS_TARGET_DEV_32)
+if RESULTS_TARGET_DEV_64 is not None:
+    RESULTS.append(RESULTS_TARGET_DEV_64)
+if RESULTS_TARGET_TVOS_SIM is not None:
+    RESULTS.append(RESULTS_TARGET_TVOS_SIM)
+if RESULTS_TARGET_TVOS_DEV is not None:
+    RESULTS.append(RESULTS_TARGET_TVOS_DEV)
+
+with open(os.path.join(TEST_RESULTS_DIR, "results.csv"), "a") as f:
+    targets = []
+    results = {}
+
+    def appendtest(target, name, result):
+        try:
+            value = results[name]
+            value.append((target, result))
+        except KeyError:
+            results[name] = [(target, result)]
+        return
+
+    def readtests(platform, udid, csv):
+        target = platform
+        targets.append(target)
+        test_line = csv.readline()
+        while (test_line):
+            test_infos = test_line[:-1].split('\t')
+            test_name = test_infos[0]
+            test_result = test_infos[1]
+            appendtest(target, test_name, test_result)
+            test_line = csv.readline()
+        return
+
+    for file in RESULTS:
+        csv = open(file)
+        target_infos = csv.readline()[:-1].split('\t')
+        target_platform = target_infos[0]
+        target_udid = target_infos[1]
+        readtests(target_platform, target_udid, csv)
+        csv.close()
+
+    final = results.items()
+    final = sorted(final, key=lambda test: test[0])
+    targets = sorted(targets, key=lambda target: target)
+
+    f.write('Test')
+    for target in targets:
+        f.write('\t' + target)
+    f.write('\n')
+
+    for test_name,test_results in final:
+        f.write(test_name)
+        for target in targets:
+            printed = False
+            for result_target in test_results:
+                if (target == result_target[0]):
+                    f.write('\t' + result_target[1])
+                    printed = True
+            if (printed == False):
+                f.write('\tNA')
+        f.write('\n')

@@ -66,9 +66,15 @@ BumpPointerSpace::BumpPointerSpace(const std::string& name, MemMap* mem_map)
 void BumpPointerSpace::Clear() {
   // Release the pages back to the operating system.
   if (!kMadviseZeroes) {
+#ifndef MOE
     memset(Begin(), 0, Limit() - Begin());
+#else
+    SafeZeroAndReleaseSpace(Begin(), Limit() - Begin());
+#endif
   }
+#ifndef MOE
   CHECK_NE(madvise(Begin(), Limit() - Begin(), MADV_DONTNEED), -1) << "madvise failed";
+#endif
   // Reset the end of the space back to the beginning, we move the end forward as we allocate
   // objects.
   SetEnd(Begin());

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,8 +46,14 @@ namespace art {
 class ImageWriter FINAL {
  public:
   ImageWriter(const CompilerDriver& compiler_driver, uintptr_t image_begin,
+#ifdef MOE
+              InstructionSet instruction_set,
+#endif
               bool compile_pic)
       : compiler_driver_(compiler_driver), image_begin_(reinterpret_cast<uint8_t*>(image_begin)),
+#ifdef MOE
+        instruction_set_(instruction_set),
+#endif
         image_end_(0), image_objects_offset_begin_(0), image_roots_address_(0), oat_file_(nullptr),
         oat_data_begin_(nullptr), interpreter_to_interpreter_bridge_offset_(0),
         interpreter_to_compiled_code_bridge_offset_(0), jni_dlsym_lookup_offset_(0),
@@ -304,6 +311,12 @@ class ImageWriter FINAL {
 
   // Beginning target image address for the output image.
   uint8_t* image_begin_;
+
+#ifdef MOE
+  // MOE: we need to use the actual page aligment of every target architecture,
+  // instead of assuming the page aligment of the dex2oat host is the same.
+  InstructionSet instruction_set_;
+#endif
 
   // Offset to the free space in image_.
   size_t image_end_;

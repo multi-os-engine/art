@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright 2014-2016 Intel Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,11 +28,19 @@ namespace x86_64 {
 // Calling convention
 
 ManagedRegister X86_64ManagedRuntimeCallingConvention::InterproceduralScratchRegister() {
+#ifndef MOE
   return X86_64ManagedRegister::FromCpuRegister(RAX);
+#else
+  return X86_64ManagedRegister::FromCpuRegister(R11);
+#endif
 }
 
 ManagedRegister X86_64JniCallingConvention::InterproceduralScratchRegister() {
+#ifndef MOE
   return X86_64ManagedRegister::FromCpuRegister(RAX);
+#else
+  return X86_64ManagedRegister::FromCpuRegister(R11);
+#endif
 }
 
 ManagedRegister X86_64JniCallingConvention::ReturnScratchRegister() const {

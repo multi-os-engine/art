@@ -145,6 +145,18 @@ class Thread {
  public:
   static const size_t kStackOverflowImplicitCheckSize;
 
+  // [XRT] Begin
+  static Thread* FindThread(pthread_t thread);
+  
+  pthread_t GetPthread()
+  {
+    return tlsPtr_.pthread_self;
+  }
+  static inline pthread_key_t GetPthreadKey(void){
+        return pthread_key_self_;
+  }
+  // [XRT] End
+  
   // Creates a new native thread corresponding to the given managed peer.
   // Used to implement Thread.start.
   static void CreateNativeThread(JNIEnv* env, jobject peer, size_t stack_size, bool daemon);
