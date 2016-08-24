@@ -25,12 +25,6 @@
 
 #include "base/mutex.h"   // For annotalysis.
 
-// [XRT] Begin
-#ifdef MOE
-#include <TargetConditionals.h>
-#endif
-// [XRT] End
-
 namespace art {
 
 class ArtMethod;
@@ -75,13 +69,6 @@ class FaultManager {
   std::vector<FaultHandler*> generated_code_handlers_;
   std::vector<FaultHandler*> other_handlers_;
   struct sigaction oldaction_;
-  // [XRT] Begin
-#ifdef MOE
-#if TARGET_OS_IPHONE && TARGET_OS_IOS
-  struct sigaction oldaction_bus_;
-#endif
-#endif
-  // [XRT] Begin
   bool initialized_;
   DISALLOW_COPY_AND_ASSIGN(FaultManager);
 };

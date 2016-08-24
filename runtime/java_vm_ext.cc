@@ -830,9 +830,11 @@ bool JavaVMExt::LoadNativeLibrary(JNIEnv* env, const std::string& path, jobject 
     JNI_OnLoadFn jni_on_load = reinterpret_cast<JNI_OnLoadFn>(sym);
     int version = (*jni_on_load)(this, nullptr);
 
+#ifndef MOE
     if (runtime_->GetTargetSdkVersion() != 0 && runtime_->GetTargetSdkVersion() <= 21) {
       fault_manager.EnsureArtActionInFrontOfSignalChain();
     }
+#endif
 
     self->SetClassLoaderOverride(old_class_loader.get());
 

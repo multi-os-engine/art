@@ -950,7 +950,7 @@ class Dex2Oat FINAL {
       case kX86_64:
       case kMips:
       case kMips64:
-#if !defined(MOE) || (TARGET_OS_IPHONE && TARGET_OS_IOS)
+#if !defined(MOE)
         parser_options->implicit_null_checks = true;
         parser_options->implicit_so_checks = true;
 #endif

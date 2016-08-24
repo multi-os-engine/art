@@ -68,7 +68,7 @@
 #include "elf_file.h"
 #include "entrypoints/runtime_asm_entrypoints.h"
 #include "experimental_flags.h"
-#include "fault_handler.h"
+//#include "fault_handler.h"
 #include "gc/accounting/card_table-inl.h"
 #include "gc/heap.h"
 #include "gc/space/image_space.h"
@@ -347,7 +347,9 @@ Runtime::~Runtime() {
   }
 
   // Shutdown the fault manager if it was initialized.
+#ifndef MOE
   fault_manager.Shutdown();
+#endif
 
   delete monitor_list_;
   delete monitor_pool_;
@@ -1043,7 +1045,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     case kX86_64:
     case kMips:
     case kMips64:
-#if !defined(MOE) || (TARGET_OS_IPHONE && TARGET_OS_IOS)
+#if !defined(MOE)
       implicit_null_checks_ = true;
       // Installing stack protection does not play well with valgrind.
       implicit_so_checks_ = !(RUNNING_ON_MEMORY_TOOL && kMemoryToolIsValgrind);
@@ -1062,6 +1064,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     // have claimed the signal or not.
     InitializeSignalChain();
 
+#ifndef MOE
     if (implicit_null_checks_ || implicit_so_checks_ || implicit_suspend_checks_) {
       fault_manager.Init();
 
@@ -1086,6 +1089,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
         new JavaStackTraceHandler(&fault_manager);
       }
     }
+#endif
   }
 
   java_vm_ = new JavaVMExt(this, runtime_options);
