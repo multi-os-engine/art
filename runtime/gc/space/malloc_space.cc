@@ -150,11 +150,10 @@ void* MallocSpace::MoreCore(intptr_t increment) {
       size_t size = -increment;
 #ifdef MOE
       if (!kMadviseZeroes) {
-        SafeZeroAndReleaseSpace(new_end, size);
+        moeRemapSpace(new_end, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS);
       }
-#else
-      CHECK_MEMORY_CALL(madvise, (new_end, size, MADV_DONTNEED), GetName());
 #endif
+      CHECK_MEMORY_CALL(madvise, (new_end, size, MADV_DONTNEED), GetName());
       CHECK_MEMORY_CALL(mprotect, (new_end, size, PROT_NONE), GetName());
     }
     // Update end_.

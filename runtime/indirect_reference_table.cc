@@ -265,18 +265,19 @@ void IndirectReferenceTable::Trim() {
   auto* release_start = AlignUp(reinterpret_cast<uint8_t*>(&table_[top_index]), kPageSize);
 #ifndef MOE
   uint8_t* release_end = table_mem_map_->End();
-  madvise(release_start, release_end - release_start, MADV_DONTNEED);
 #else
   // On iOS arm64 - without AlignUp - 'release_end' could be less than 'release_start'
   // causing the memset size to be huge. This is due to kPageSize being 16K on iOS/arm64.
   // In other cases release_end seems to always be a multiple of 4K, thus skipping AlignUp
   // did not cause issues.
   uint8_t* release_end = AlignUp(table_mem_map_->End(), kPageSize);
-  CHECK(release_start <= release_end);
+  // Make sure we zero
   if (!kMadviseZeroes) {
-    SafeZeroAndReleaseSpace(release_start, release_end - release_start);
+    moeRemapSpace(release_start, release_end - release_start, PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_ANONYMOUS);
   }
 #endif
+  madvise(release_start, release_end - release_start, MADV_DONTNEED);
 }
 
 void IndirectReferenceTable::VisitRoots(RootVisitor* visitor, const RootInfo& root_info) {

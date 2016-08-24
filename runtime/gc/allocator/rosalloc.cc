@@ -1412,12 +1412,10 @@ bool RosAlloc::Trim() {
 #ifndef MOE
         memset(madvise_begin, 0, madvise_size);
 #else
-        SafeZeroAndReleaseSpace(madvise_begin, madvise_size);
+        moeRemapSpace(madvise_begin, madvise_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS);
 #endif
       }
-#ifndef MOE
       CHECK_EQ(madvise(madvise_begin, madvise_size, MADV_DONTNEED), 0);
-#endif
     }
     if (madvise_begin - zero_begin) {
       memset(zero_begin, 0, madvise_begin - zero_begin);
@@ -2087,12 +2085,10 @@ size_t RosAlloc::ReleasePageRange(uint8_t* start, uint8_t* end) {
 #ifndef MOE
     memset(start, 0, end - start);
 #else
-    SafeZeroAndReleaseSpace(start, end - start);
+    moeRemapSpace(start, end - start, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS);
 #endif
   }
-#ifndef MOE
   CHECK_EQ(madvise(start, end - start, MADV_DONTNEED), 0);
-#endif
   size_t pm_idx = ToPageMapIndex(start);
   size_t reclaimed_bytes = 0;
   // Calculate reclaimed bytes and upate page map.

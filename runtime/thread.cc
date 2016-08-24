@@ -559,6 +559,11 @@ void Thread::InstallImplicitProtection() {
   // Tell the kernel that we won't be needing these pages any more.
   // NB. madvise will probably write zeroes into the memory (on linux it does).
   uint32_t unwanted_size = stack_top - pregion - kPageSize;
+#ifdef MOE
+  if (!kMadviseZeroes) {
+    moeRemapSpace(pregion, unwanted_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS);
+  }
+#endif
   madvise(pregion, unwanted_size, MADV_DONTNEED);
 }
 

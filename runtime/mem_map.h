@@ -30,6 +30,11 @@
 #include "base/allocator.h"
 #include "globals.h"
 
+#ifdef MOE
+#include "base/bit_utils.h"
+#include <mach/vm_statistics.h>
+#endif
+
 namespace art {
 
 #if defined(__LP64__) && (!defined(__x86_64__) || defined(__APPLE__))
@@ -45,24 +50,23 @@ static constexpr bool kMadviseZeroes = false;
 #endif
 
 #ifdef MOE
-inline void SafeZeroAndReleaseSpace(void* addr, size_t size) {
-  constexpr size_t big_step = kPageSize * 256;
-  size_t i = 0;
-  for (; i + big_step < size; i += big_step) {
-    uint8_t* slot = (uint8_t*)addr + i;
-    memset(slot, 0, big_step);
-    madvise(slot, big_step, MADV_FREE);
+inline void moeRemapSpace(void* addr, size_t size, int prot, int flags) {
+  if (size == 0) {
+    return;
   }
-    
-  if (i < size) {
-    uint8_t* slot = (uint8_t*)addr + i;
-    size_t ssize = size - i;
-    memset(slot, 0, ssize);
-    madvise(slot, ssize, MADV_FREE);
+  CHECK_ALIGNED(addr, kPageSize);
+  CHECK_ALIGNED(size, kPageSize);
+  const int tag = VM_MAKE_TAG(VM_MEMORY_APPLICATION_SPECIFIC_1);
+  if (mmap(addr, size, prot, flags|MAP_FIXED, tag, 0) != addr) {
+    // Fallback to memset if mmap fails
+    memset(addr, 0, size);
   }
 }
+inline int moeFdOrVMTag(int fd) {
+  return fd == -1 ? VM_MAKE_TAG(VM_MEMORY_APPLICATION_SPECIFIC_1) : fd;
+}
 #endif
-    
+
 // Used to keep track of mmap segments.
 //
 // On 64b systems not supporting MAP_32BIT, the implementation of MemMap will do a linear scan
@@ -204,6 +208,7 @@ class MemMap {
 
 #ifdef MOE
   bool alias_;
+  bool anon_;
 #endif
 
   // When reuse_ is true, this is just a view of an existing mapping

@@ -40,6 +40,10 @@
 #include "thread.h"
 #include "well_known_classes.h"
 
+#ifdef MOE
+#include <mach/vm_statistics.h>
+#endif
+
 namespace art {
 
 /*
@@ -1470,7 +1474,12 @@ class GuardedCopy {
   }
 
   static uint8_t* DebugAlloc(size_t len) {
+#ifndef MOE
     void* result = mmap(nullptr, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0);
+#else
+    const int tag = VM_MAKE_TAG(VM_MEMORY_APPLICATION_SPECIFIC_1);
+    void* result = mmap(nullptr, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, tag, 0);
+#endif
     if (result == MAP_FAILED) {
       PLOG(FATAL) << "GuardedCopy::create mmap(" << len << ") failed";
     }

@@ -370,11 +370,10 @@ void RosAllocSpace::Clear() {
   size_t footprint_limit = GetFootprintLimit();
 #ifdef MOE
   if (!kMadviseZeroes) {
-    SafeZeroAndReleaseSpace(GetMemMap()->Begin(), GetFootprint());
+    moeRemapSpace(GetMemMap()->Begin(), GetFootprint(), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS);
   }
-#else
-  madvise(GetMemMap()->Begin(), GetMemMap()->Size(), MADV_DONTNEED);
 #endif
+  madvise(GetMemMap()->Begin(), GetMemMap()->Size(), MADV_DONTNEED);
   live_bitmap_->Clear();
   mark_bitmap_->Clear();
   SetEnd(begin_ + starting_size_);

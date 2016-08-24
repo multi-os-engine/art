@@ -50,6 +50,7 @@
 #include <mach/vm_map.h>
 #include <mach/mach_init.h>
 #include "moe_entry.h"
+#include <mach/vm_statistics.h>
 #endif
 
 #ifndef MAP_ANONYMOUS
@@ -314,7 +315,13 @@ MemMap* MemMap::MapAnonymous(const char* name, uint8_t* expected_ptr, size_t byt
   UNUSED(low_4gb);
 #endif
   if (byte_count == 0) {
+#ifndef MOE
     return new MemMap(name, nullptr, 0, nullptr, 0, prot, false);
+#else
+    MemMap* memmap = new MemMap(name, nullptr, 0, nullptr, 0, prot, false);
+    memmap->anon_ = true;
+    return memmap;
+#endif
   }
   size_t page_aligned_byte_count = RoundUp(byte_count, kPageSize);
 
@@ -328,7 +335,11 @@ MemMap* MemMap::MapAnonymous(const char* name, uint8_t* expected_ptr, size_t byt
     flags |= MAP_FIXED;
   }
 
+#ifndef MOE
   ScopedFd fd(-1);
+#else
+  const ScopedFd fd(-1);
+#endif
 
 #ifdef USE_ASHMEM
 #ifdef __ANDROID__
@@ -464,7 +475,11 @@ MemMap* MemMap::MapAnonymous(const char* name, uint8_t* expected_ptr, size_t byt
 
       if (safe == true) {
         actual = TryMemMapLow4GB(reinterpret_cast<void*>(ptr), page_aligned_byte_count, prot, flags,
+#ifndef MOE
                                  fd.get());
+#else
+                                 moeFdOrVMTag(fd.get()));
+#endif
         if (actual != MAP_FAILED) {
             break;
         }
@@ -479,7 +494,11 @@ MemMap* MemMap::MapAnonymous(const char* name, uint8_t* expected_ptr, size_t byt
       saved_errno = ENOMEM;
     }
   } else {
+#ifndef MOE
     actual = mmap(expected_ptr, page_aligned_byte_count, prot, flags, fd.get(), 0);
+#else
+    actual = mmap(expected_ptr, page_aligned_byte_count, prot, flags, moeFdOrVMTag(fd.get()), 0);
+#endif
     saved_errno = errno;
   }
 
@@ -490,7 +509,11 @@ MemMap* MemMap::MapAnonymous(const char* name, uint8_t* expected_ptr, size_t byt
   }
 #endif
 
+#ifndef MOE
   void* actual = mmap(expected_ptr, page_aligned_byte_count, prot, flags, fd.get(), 0);
+#else
+  void* actual = mmap(expected_ptr, page_aligned_byte_count, prot, flags, moeFdOrVMTag(fd.get()), 0);
+#endif
   saved_errno = errno;
 #endif
 
@@ -511,13 +534,15 @@ MemMap* MemMap::MapAnonymous(const char* name, uint8_t* expected_ptr, size_t byt
   if (!CheckMapRequest(expected_ptr, actual, page_aligned_byte_count, error_msg)) {
     return nullptr;
   }
-#ifdef MOE
-  if (fd.get() == -1) {
-    SafeZeroAndReleaseSpace(actual, page_aligned_byte_count);
-  }
-#endif
+#ifndef MOE
   return new MemMap(name, reinterpret_cast<uint8_t*>(actual), byte_count, actual,
                     page_aligned_byte_count, prot, reuse);
+#else
+  MemMap* memmap = new MemMap(name, reinterpret_cast<uint8_t*>(actual), byte_count, actual,
+                              page_aligned_byte_count, prot, reuse);
+  memmap->anon_ = true;
+  return memmap;
+#endif
 }
 
 MemMap* MemMap::MapDummy(const char* name, uint8_t* addr, size_t byte_count) {
@@ -718,7 +743,11 @@ MemMap* MemMap::RemapAtEnd(uint8_t* new_end, const char* tail_name, int tail_pro
     return nullptr;
   }
 #else
+#ifndef MOE
   ScopedFd fd(-1);
+#else
+  const ScopedFd fd(-1);
+#endif
   int flags = MAP_PRIVATE | MAP_ANONYMOUS;
 #endif
 
@@ -737,7 +766,11 @@ MemMap* MemMap::RemapAtEnd(uint8_t* new_end, const char* tail_name, int tail_pro
   // region. Note this isn't perfect as there's no way to prevent
   // other threads to try to take this memory region here.
   uint8_t* actual = reinterpret_cast<uint8_t*>(mmap(tail_base_begin, tail_base_size, tail_prot,
+#ifndef MOE
                                               flags, fd.get(), 0));
+#else
+                                              flags, moeFdOrVMTag(fd.get()), 0));
+#endif
   if (actual == MAP_FAILED) {
     PrintFileToLog("/proc/self/maps", LogSeverity::WARNING);
     *error_msg = StringPrintf("anonymous mmap(%p, %zd, 0x%x, 0x%x, %d, 0) failed. See process "
@@ -745,11 +778,6 @@ MemMap* MemMap::RemapAtEnd(uint8_t* new_end, const char* tail_name, int tail_pro
                               fd.get());
     return nullptr;
   }
-#ifdef MOE
-  if (fd.get() == -1) {
-    SafeZeroAndReleaseSpace(actual, tail_base_size);
-  }
-#endif
   return new MemMap(tail_name, actual, tail_size, actual, tail_base_size, tail_prot, false);
 }
 
@@ -759,7 +787,11 @@ void MemMap::MadviseDontNeedAndZero() {
 #ifndef MOE
       memset(base_begin_, 0, base_size_);
 #else
-      SafeZeroAndReleaseSpace(base_begin_, base_size_);
+      if (anon_) {
+        moeRemapSpace(base_begin_, base_size_, GetProtect(), MAP_PRIVATE | MAP_ANONYMOUS);
+      } else {
+        memset(base_begin_, 0, base_size_);
+      }
 #endif
     }
 #ifndef MOE

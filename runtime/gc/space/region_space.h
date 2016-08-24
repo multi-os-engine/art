@@ -267,12 +267,11 @@ class RegionSpace FINAL : public ContinuousMemMapAllocSpace {
 #ifndef MOE
         memset(begin_, 0, end_ - begin_);
 #else
-        SafeZeroAndReleaseSpace(begin_, end_ - begin_);
+        // TODO: MOE - unchecked flags
+        moeRemapSpace(begin_, end_ - begin_, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS);
 #endif
       }
-#ifndef MOE
       madvise(begin_, end_ - begin_, MADV_DONTNEED);
-#endif
       is_newly_allocated_ = false;
       is_a_tlab_ = false;
       thread_ = nullptr;

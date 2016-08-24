@@ -2432,6 +2432,7 @@ void Heap::PreZygoteFork() {
     zygote_collector.SetSwapSemiSpaces(false);
     zygote_collector.Run(kGcCauseCollectorTransition, false);
     if (reset_main_space) {
+      // TODO: MOE - is moeRemapSpace needed here?
       main_space_->GetMemMap()->Protect(PROT_READ | PROT_WRITE);
       madvise(main_space_->Begin(), main_space_->Capacity(), MADV_DONTNEED);
       MemMap* mem_map = main_space_->ReleaseMemMap();

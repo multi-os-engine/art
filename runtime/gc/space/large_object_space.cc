@@ -469,11 +469,10 @@ size_t FreeListSpace::Free(Thread* self, mirror::Object* obj) {
   num_bytes_allocated_ -= allocation_size;
 #ifdef MOE
   if (!kMadviseZeroes) {
-    SafeZeroAndReleaseSpace(obj, allocation_size);
+    moeRemapSpace(obj, allocation_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS);
   }
-#else
-  madvise(obj, allocation_size, MADV_DONTNEED);
 #endif
+  madvise(obj, allocation_size, MADV_DONTNEED);
   if (kIsDebugBuild) {
     // Can't disallow reads since we use them to find next chunks during coalescing.
     mprotect(obj, allocation_size, PROT_READ);
