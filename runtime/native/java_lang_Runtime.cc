@@ -62,7 +62,9 @@ static void SetLdLibraryPath(JNIEnv* env, jstring javaLdLibraryPathJstr) {
   }
 
 #else
+#ifndef MOE
   LOG(WARNING) << "android_update_LD_LIBRARY_PATH not found; .so dependencies will not work!";
+#endif
   UNUSED(javaLdLibraryPathJstr, env);
 #endif
 }
