@@ -2027,6 +2027,12 @@ class ResolveTypeVisitor : public CompilationVisitor {
       soa.Self()->AssertPendingException();
       mirror::Throwable* exception = soa.Self()->GetException();
       VLOG(compiler) << "Exception during type resolution: " << exception->Dump();
+#ifdef MOE
+      if (exception->GetClass()->DescriptorEquals("Ljava/lang/NoClassDefFoundError;")) {
+        // There's little point continuing compilation if the heap is exhausted.
+        LOG(WARNING) << "Failed to resolve class " << exception->GetDetailMessage()->ToModifiedUtf8();
+      } else
+#endif
       if (exception->GetClass()->DescriptorEquals("Ljava/lang/OutOfMemoryError;")) {
         // There's little point continuing compilation if the heap is exhausted.
         LOG(FATAL) << "Out of memory during type resolution for compilation";

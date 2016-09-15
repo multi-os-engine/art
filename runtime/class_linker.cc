@@ -139,11 +139,13 @@ void ClassLinker::ThrowEarlierClassFailure(mirror::Class* c) {
 
   CHECK(c->IsErroneous()) << PrettyClass(c) << " " << c->GetStatus();
   Thread* self = Thread::Current();
+#ifndef MOE
   if (runtime->IsAotCompiler()) {
     // At compile time, accurate errors and NCDFE are disabled to speed compilation.
     mirror::Throwable* pre_allocated = runtime->GetPreAllocatedNoClassDefFoundError();
     self->SetException(pre_allocated);
   } else {
+#endif
     if (c->GetVerifyErrorClass() != nullptr) {
       // TODO: change the verifier to store an _instance_, with a useful detail message?
       // It's possible the exception doesn't have a <init>(String).
@@ -159,7 +161,9 @@ void ClassLinker::ThrowEarlierClassFailure(mirror::Class* c) {
       self->ThrowNewException("Ljava/lang/NoClassDefFoundError;",
                               PrettyDescriptor(c).c_str());
     }
+#ifndef MOE
   }
+#endif
 }
 
 static void VlogClassInitializationFailure(Handle<mirror::Class> klass)
@@ -1489,8 +1493,12 @@ mirror::Class* ClassLinker::FindClass(Thread* self,
       // The boot class loader is searched ahead of the application class loader, failures are
       // expected and will be wrapped in a ClassNotFoundException. Use the pre-allocated error to
       // trigger the chaining with a proper stack trace.
+#ifndef MOE
       mirror::Throwable* pre_allocated = Runtime::Current()->GetPreAllocatedNoClassDefFoundError();
       self->SetException(pre_allocated);
+#else
+      self->ThrowNewException("Ljava/lang/NoClassDefFoundError;", descriptor);
+#endif
       return nullptr;
     }
   } else {
@@ -1511,8 +1519,12 @@ mirror::Class* ClassLinker::FindClass(Thread* self,
 
     if (Runtime::Current()->IsAotCompiler()) {
       // Oops, compile-time, can't run actual class-loader code.
+#ifndef MOE
       mirror::Throwable* pre_allocated = Runtime::Current()->GetPreAllocatedNoClassDefFoundError();
       self->SetException(pre_allocated);
+#else
+      self->ThrowNewException("Ljava/lang/NoClassDefFoundError;", descriptor);
+#endif
       return nullptr;
     }
 

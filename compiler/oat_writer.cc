@@ -642,8 +642,13 @@ class OatWriter::InitImageMethodVisitor : public OatDexMethodVisitor {
         *dex_file_, it.GetMemberIndex(), dex_cache, NullHandle<mirror::ClassLoader>(), nullptr,
         invoke_type);
     if (method == nullptr) {
+#ifndef MOE
       LOG(INTERNAL_FATAL) << "Unexpected failure to resolve a method: "
                           << PrettyMethod(it.GetMemberIndex(), *dex_file_, true);
+#else
+      LOG(INTERNAL_FATAL) << "Unexpected failure to resolve a method: "
+                          << PrettyMethod(it.GetMemberIndex(), *dex_file_, true) << "\n";
+#endif
       soa.Self()->AssertPendingException();
       mirror::Throwable* exc = soa.Self()->GetException();
       std::string dump = exc->Dump();
