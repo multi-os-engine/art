@@ -143,6 +143,7 @@
 #include <mach-o/getsect.h>
 #include <mach-o/dyld.h>
 #include <TargetConditionals.h>
+#include <execinfo.h>
 
 extern __attribute((visibility("default"))) const char* __moe_art_oat_framework = "ArtOat";
 
@@ -440,6 +441,19 @@ void Runtime::Abort() {
   // Ensure that we don't have multiple threads trying to abort at once,
   // which would result in significantly worse diagnostics.
   MutexLock mu(Thread::Current(), *Locks::abort_lock_);
+
+#ifdef MOE
+  // Print the native stacktrace
+  void* callstack[512];
+  int i, frames = backtrace(callstack, 512);
+  char** strs = backtrace_symbols(callstack, frames);
+  printf("NATIVE BACKTRACE:\n");
+  for (i = 0; i < frames; ++i) {
+    printf("%s\n", strs[i]);
+  }
+  printf("\n");
+  free(strs);
+#endif
 
   // Get any pending output out of the way.
   fflush(nullptr);
