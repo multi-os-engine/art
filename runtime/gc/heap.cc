@@ -311,16 +311,31 @@ Heap::Heap(size_t initial_size,
         }
       }
 
-      std::string error_msg;
-      MemMap* base_map = MemMap::MapAnonymous("base map", nullptr, base_size,
-          PROT_READ | PROT_WRITE, true, false, &error_msg);
-      CHECK(base_map != nullptr) << "Could not create base map. Error was: " << error_msg;
+      // mmap contiguous region
+      const int prot = PROT_READ | PROT_WRITE;
+      const int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+      uint8_t* base = (uint8_t*)mmap(nullptr, base_size, prot, flags, moeFdOrVMTag(-1), 0);
+      CHECK(base != MAP_FAILED) << "Could not create base map. Error was: " << strerror(errno);
 
-      image_header->RelocateImage(base_map->Begin() - image_header->GetImageBegin());
+      // Relocate
+      image_header->RelocateImage(base - image_header->GetImageBegin());
+      requested_alloc_space_begin = base + requested_alloc_space_offset;
 
-      requested_alloc_space_begin = base_map->Begin() + requested_alloc_space_offset;
+      // Remap art
+      uint8_t* art_base = base;
+      const size_t art_base_size = image_header->GetOatFileBegin() - image_header->GetImageBegin();
+      CHECK(IsAligned<kPageSize>(art_base)) << "Art base is not aligned.";
+      CHECK(IsAligned<kPageSize>(art_base_size)) << "Art base size is not aligned.";
+      art_base = (uint8_t*)mmap(art_base, art_base_size, prot, flags | MAP_FIXED, moeFdOrVMTag(-1, 1), 0);
+      CHECK(art_base != MAP_FAILED) << "Could not create art base map. Error was: " << strerror(errno);
 
-      delete base_map;
+      // Remap oat
+      uint8_t* oat_base = art_base + art_base_size;
+      const size_t oat_base_size = base_size - art_base_size;
+      CHECK(IsAligned<kPageSize>(oat_base)) << "Oat base is not aligned.";
+      CHECK(IsAligned<kPageSize>(oat_base_size)) << "Oat base size is not aligned.";
+      oat_base = (uint8_t*)mmap(oat_base, oat_base_size, prot, flags | MAP_FIXED, moeFdOrVMTag(-1, 2), 0);
+      CHECK(oat_base != MAP_FAILED) << "Could not create oat base map. Error was: " << strerror(errno);
     }
 #endif
 

@@ -122,6 +122,14 @@ bool ImageHeader::IsValid() const {
   if (!IsAligned<kPageSize>(patch_delta_)) {
     return false;
   }
+#ifdef MOE
+  if (!IsAligned<kPageSize>(image_begin_)) {
+    return false;
+  }
+  if (!IsAligned<kPageSize>(oat_data_begin_)) {
+    return false;
+  }
+#endif
   return true;
 }
 

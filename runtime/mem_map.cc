@@ -266,7 +266,7 @@ static bool CheckMapRequest(uint8_t* expected_ptr, void* actual_ptr, size_t byte
 }
 
 #ifdef MOE
-MemMap* MemMap::MapAlias(const char* name, uint8_t* expected_ptr, uint8_t* addr, size_t byte_count, int prot, std::string* error_msg) {
+MemMap* MemMap::MapAlias(const char* name, uint8_t* expected_ptr, uint8_t* addr, size_t byte_count, int prot, std::string* error_msg, bool overwrite) {
   if (expected_ptr == addr) {
     return new MemMap(name, expected_ptr, byte_count, expected_ptr, byte_count, prot, true);
   }
@@ -277,10 +277,9 @@ MemMap* MemMap::MapAlias(const char* name, uint8_t* expected_ptr, uint8_t* addr,
   vm_size_t vm_size = (vm_size_t)byte_count;
   size_t aligned_byte_count = RoundUp(byte_count, kPageSize);
 
-  kern_return_t error = vm_remap(mach_task_self(), &vm_addr, vm_size, 0x0, FALSE, mach_task_self(), (vm_address_t)addr, FALSE, &cur_prot, &max_prot, VM_INHERIT_SHARE);
-  if (error != KERN_SUCCESS) {
-    assert(!"Could not map the requested address!");
-  }
+  int flags = overwrite ? VM_FLAGS_OVERWRITE : 0;
+  kern_return_t error = vm_remap(mach_task_self(), &vm_addr, vm_size, 0x0, flags, mach_task_self(), (vm_address_t)addr, FALSE, &cur_prot, &max_prot, VM_INHERIT_SHARE);
+  CHECK(error == KERN_SUCCESS) << "Could not map the requested address. Return code: " << error;
 
   MemMap* map = new MemMap(name, expected_ptr, byte_count, expected_ptr, aligned_byte_count, prot, true);
   map->alias_ = true;
@@ -642,6 +641,7 @@ MemMap::~MemMap() {
 
     kern_return_t error;
 
+    MEMORY_TOOL_MAKE_UNDEFINED(vm_addr, vm_size);
     error = vm_deallocate(mach_task_self(), vm_addr, vm_size);
     if (error != KERN_SUCCESS) {
       assert(!"Could not unmap the requested address!");

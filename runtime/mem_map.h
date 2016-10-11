@@ -62,8 +62,8 @@ inline void moeRemapSpace(void* addr, size_t size, int prot, int flags) {
     memset(addr, 0, size);
   }
 }
-inline int moeFdOrVMTag(int fd) {
-  return fd == -1 ? VM_MAKE_TAG(VM_MEMORY_APPLICATION_SPECIFIC_1) : fd;
+inline int moeFdOrVMTag(int fd, int offs = 0) {
+  return fd == -1 ? VM_MAKE_TAG(VM_MEMORY_APPLICATION_SPECIFIC_1 + offs) : fd;
 }
 #endif
 
@@ -95,7 +95,7 @@ class MemMap {
 
 #ifdef MOE
   static MemMap* MapAlias(const char* name, uint8_t* expected, uint8_t* addr, size_t byte_count,
-                          int prot, std::string* error_msg);
+                          int prot, std::string* error_msg, bool overwrite = false);
 #endif
 
   // Create placeholder for a region allocated by direct call to mmap.

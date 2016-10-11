@@ -278,7 +278,7 @@ static inline MemMap* get_oat_data_map(uint8_t* addr,  std::string* error_msg) {
     return nullptr;
   }
 
-  return MemMap::MapAlias("__oatdata_alias", addr, reinterpret_cast<uint8_t*>(slided), size, PROT_READ | PROT_EXEC, error_msg);
+  return MemMap::MapAlias("__oatdata_alias", addr, reinterpret_cast<uint8_t*>(slided), size, PROT_READ | PROT_EXEC, error_msg, true);
 }
 
 bool OatFile::ThisDlopen(uint8_t* requested_base, std::string* error_msg) {

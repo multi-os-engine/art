@@ -750,7 +750,7 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
 #else
   std::unique_ptr<MemMap> map(MemMap::MapAlias("map_image_space_data_alias",
       image_header.GetImageBegin(), reinterpret_cast<uint8_t *>(image_data),
-      image_header.GetImageSize(), PROT_READ | PROT_WRITE, error_msg));
+      image_header.GetImageSize(), PROT_READ | PROT_WRITE, error_msg, true));
 #endif
 
   if (map.get() == nullptr) {
