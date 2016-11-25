@@ -191,12 +191,17 @@ void Arm64Mir2Lir::GenSelect(BasicBlock* bb ATTRIBUTE_UNUSED, MIR* mir) {
   RegLocation rl_src = mir_graph_->GetSrc(mir, 0);
   rl_src = LoadValue(rl_src, rl_src.ref ? kRefReg : kCoreReg);
   // rl_src may be aliased with rl_result/rl_dest, so do compare early.
+#ifndef MOE
   OpRegImm(kOpCmp, rl_src.reg, 0);
+#endif
 
   RegLocation rl_dest = mir_graph_->GetDest(mir);
 
   // The kMirOpSelect has two variants, one for constants and one for moves.
   if (mir->ssa_rep->num_uses == 1) {
+#ifdef MOE
+    OpRegImm(kOpCmp, rl_src.reg, 0);
+#endif
     RegLocation rl_result = EvalLoc(rl_dest, rl_dest.ref ? kRefReg : kCoreReg, true);
     GenSelect(mir->dalvikInsn.vB, mir->dalvikInsn.vC, mir->meta.ccode, rl_result.reg,
               rl_dest.ref ? kRefReg : kCoreReg);
@@ -208,6 +213,11 @@ void Arm64Mir2Lir::GenSelect(BasicBlock* bb ATTRIBUTE_UNUSED, MIR* mir) {
     RegisterClass result_reg_class = rl_dest.ref ? kRefReg : kCoreReg;
     rl_true = LoadValue(rl_true, result_reg_class);
     rl_false = LoadValue(rl_false, result_reg_class);
+#ifdef MOE
+    // MOE: Loading reference from a register may clobber comparison flags,
+    // thus we have to do the actual comparison after loading.
+    OpRegImm(kOpCmp, rl_src.reg, 0);
+#endif
     RegLocation rl_result = EvalLoc(rl_dest, result_reg_class, true);
 
     bool is_wide = rl_dest.ref || rl_dest.wide;
