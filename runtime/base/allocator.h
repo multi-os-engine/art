@@ -157,7 +157,7 @@ class TrackingAllocator : public TypeStaticIf<kEnableTrackingAllocator,
 
 template<class Key, class T, AllocatorTag kTag, class Compare = std::less<Key>>
 class AllocationTrackingMultiMap : public std::multimap<
-    Key, T, Compare, TrackingAllocator<std::pair<Key, T>, kTag>> {
+    Key, T, Compare, TrackingAllocator<std::pair<const Key, T>, kTag>> {
 };
 
 template<class Key, AllocatorTag kTag, class Compare = std::less<Key>>
