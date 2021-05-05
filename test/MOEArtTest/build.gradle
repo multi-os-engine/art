@@ -6,7 +6,6 @@ buildscript {
 	// Add central and local Maven repos
 	repositories {
 		mavenCentral()
-		jcenter()
 
 		maven {
 			url uri(System.getenv("MOE_HOME") + "/gradle")

@@ -736,14 +736,16 @@ Thread* Thread::Attach(const char* thread_name, bool as_daemon, jobject thread_g
                        bool create_peer) {
   Runtime* runtime = Runtime::Current();
   if (runtime == nullptr) {
-    LOG(ERROR) << "Thread attaching to non-existent runtime: " << thread_name;
+    LOG(ERROR) << "Thread attaching to non-existent runtime: " <<
+        ((thread_name != nullptr) ? thread_name : "(Unnamed)");
     return nullptr;
   }
   Thread* self;
   {
     MutexLock mu(nullptr, *Locks::runtime_shutdown_lock_);
     if (runtime->IsShuttingDownLocked()) {
-      LOG(ERROR) << "Thread attaching while runtime is shutting down: " << thread_name;
+      LOG(WARNING) << "Thread attaching while runtime is shutting down: " <<
+          ((thread_name != nullptr) ? thread_name : "(Unnamed)");
       return nullptr;
     } else {
       Runtime::Current()->StartThreadBirth();

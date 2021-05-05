@@ -27,7 +27,7 @@
 #ifdef MOE
 #include <math.h>
 #include "arm_eaabi_forward.cc"
-#include "thread.h"
+#include "thread-current-inl.h"
 #endif
 
 namespace art {

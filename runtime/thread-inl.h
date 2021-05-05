@@ -19,16 +19,11 @@
 
 #include "thread.h"
 
-#ifdef __ANDROID__
-#include <bionic_tls.h>  // Access to our own TLS slot.
-#endif
-
-#include <pthread.h>
-
 #include "base/casts.h"
 #include "base/mutex-inl.h"
 #include "gc/heap.h"
 #include "jni_env_ext.h"
+#include "thread-current-inl.h"
 #include "thread_pool.h"
 
 namespace art {
@@ -37,21 +32,6 @@ namespace art {
 static inline Thread* ThreadForEnv(JNIEnv* env) {
   JNIEnvExt* full_env(down_cast<JNIEnvExt*>(env));
   return full_env->self;
-}
-
-inline Thread* Thread::Current() {
-  // We rely on Thread::Current returning null for a detached thread, so it's not obvious
-  // that we can replace this with a direct %fs access on x86.
-  if (!is_started_) {
-    return nullptr;
-  } else {
-#ifdef __ANDROID__
-    void* thread = __get_tls()[TLS_SLOT_ART_THREAD_SELF];
-#else
-    void* thread = pthread_getspecific(Thread::pthread_key_self_);
-#endif
-    return reinterpret_cast<Thread*>(thread);
-  }
 }
 
 inline void Thread::AllowThreadSuspension() {
