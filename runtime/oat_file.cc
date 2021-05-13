@@ -793,7 +793,7 @@ OatFile::OatDexFile::OatDexFile(const OatFile* oat_file,
       oat_class_offsets_pointer_(oat_class_offsets_pointer),
       dex_cache_arrays_(dex_cache_arrays) {}
 
-OatFile::OatDexFile::~OatDexFile() {}
+art::OatDexFile::~OatDexFile() {}
 
 size_t OatFile::OatDexFile::FileSize() const {
   return reinterpret_cast<const DexFile::Header*>(dex_file_pointer_)->file_size_;
