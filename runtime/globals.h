@@ -42,6 +42,13 @@ static constexpr size_t kStackAlignment = 16;
 #if !defined(MOE) || !defined(__arm64__)
 static constexpr int kPageSize = 4096;
 #else
+/**
+ * TODO: This causes issue in runtime/image.cc ImageHeader:
+ * > CHECK_EQ(image_begin, RoundUp(image_begin, kPageSize));
+ * > CHECK_EQ(oat_file_begin, RoundUp(oat_file_begin, kPageSize));
+ * > CHECK_EQ(oat_data_begin, RoundUp(oat_data_begin, kPageSize));
+ * When this is running on apple silicon while instrcution-set != arm64
+ */
 static constexpr int kPageSize = 4096 * 4;
 #endif
 
