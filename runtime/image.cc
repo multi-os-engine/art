@@ -21,6 +21,9 @@
 #include "mirror/object_array.h"
 #include "mirror/object_array-inl.h"
 #include "mirror/object-inl.h"
+#ifdef MOE
+#include <TargetConditionals.h>
+#endif
 
 namespace art {
 
@@ -64,9 +67,15 @@ ImageHeader::ImageHeader(uint64_t image_begin,
     image_roots_(image_roots),
     pointer_size_(pointer_size),
     compile_pic_(compile_pic) {
-  CHECK_EQ(image_begin, RoundUp(image_begin, kPageSize));
-  CHECK_EQ(oat_file_begin, RoundUp(oat_file_begin, kPageSize));
-  CHECK_EQ(oat_data_begin, RoundUp(oat_data_begin, kPageSize));
+
+#if defined(MOE) && TARGET_OS_OSX
+  size_t pageSize = 4096;
+#else
+  size_t pageSize = kPageSize;
+#endif
+  CHECK_EQ(image_begin, RoundUp(image_begin, pageSize));
+  CHECK_EQ(oat_file_begin, RoundUp(oat_file_begin, pageSize));
+  CHECK_EQ(oat_data_begin, RoundUp(oat_data_begin, pageSize));
   CHECK_LT(image_begin, image_roots);
   CHECK_LT(image_roots, oat_file_begin);
   CHECK_LE(oat_file_begin, oat_data_begin);
