@@ -89,6 +89,10 @@
 #include "verifier/method_verifier.h"
 #include "well_known_classes.h"
 
+#ifdef MOE
+#include <TargetConditionals.h>
+#endif
+
 namespace art {
 
 static constexpr bool kSanityCheckObjects = kIsDebugBuild;
@@ -309,6 +313,12 @@ void ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
 
   // Use the pointer size from the runtime since we are probably creating the image.
   image_pointer_size_ = InstructionSetPointerSize(runtime->GetInstructionSet());
+
+#ifdef MOE
+#if TARGET_OS_OSX && defined(__aarch64__)
+  CHECK(image_pointer_size_ != 4) << "Unsupported instruction set " << runtime->GetInstructionSet() << " when running on aarch64 system";
+#endif
+#endif
 
   // java_lang_Class comes first, it's needed for AllocClass
   // The GC can't handle an object with a null class since we can't get the size of this object.
