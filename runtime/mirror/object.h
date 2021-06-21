@@ -22,6 +22,10 @@
 #include "offsets.h"
 #include "verify_object.h"
 
+#ifdef MOE
+#include "moe_entry.h"
+#endif
+
 namespace art {
 
 class ArtField;
@@ -446,6 +450,9 @@ class MANAGED LOCKABLE Object {
     DCHECK(pointer_size == 4 || pointer_size == 8) << pointer_size;
     if (pointer_size == 4) {
       intptr_t ptr  = reinterpret_cast<intptr_t>(new_value);
+#ifdef MOE
+      ptr = (intptr_t)MOE_PTR_COMPRESS(static_cast<uintptr_t>(ptr));
+#endif
       DCHECK_EQ(static_cast<int32_t>(ptr), ptr);  // Check that we dont lose any non 0 bits.
       SetField32<kTransactionActive, kCheckTransaction, kVerifyFlags>(
           field_offset, static_cast<int32_t>(ptr));
@@ -482,7 +489,11 @@ class MANAGED LOCKABLE Object {
       SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK(pointer_size == 4 || pointer_size == 8) << pointer_size;
     if (pointer_size == 4) {
+#ifndef MOE
       return reinterpret_cast<T>(GetField32<kVerifyFlags, kIsVolatile>(field_offset));
+#else
+      return reinterpret_cast<T>(MOE_PTR_UNCOMPRESS((GetField32<kVerifyFlags, kIsVolatile>(field_offset))));
+#endif
     } else {
       int64_t v = GetField64<kVerifyFlags, kIsVolatile>(field_offset);
       // Check that we dont lose any non 0 bits.

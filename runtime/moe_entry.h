@@ -21,16 +21,56 @@
 #include <assert.h>
 #include <list>
 #include <errno.h>
+#include <TargetConditionals.h>
 
 #define MOE_TLS_THREAD_KEY 340
 #define MOE_TLS_SCRATCH_KEY (MOE_TLS_THREAD_KEY + 1)
 
+//#if TARGET_OS_OSX
+
+// When running on host, i.e., dex2oat
+//#define MOE_MAP_BEGIN 0x000000000
+//#define MOE_MAP_END 0x100000000
+
+// #else
+
+// When running on target, i.e., moe application
 #ifdef __aarch64__
 #define MOE_MAP_BEGIN 0x100000000
 #define MOE_MAP_END 0x200000000
 #else
 #define MOE_MAP_BEGIN 0x000000000
 #define MOE_MAP_END 0x100000000
+#endif
+
+// #endif
+
+#if TARGET_OS_OSX
+
+#include "base/logging.h"
+
+static inline uintptr_t MOE_PTR_COMPRESS(uintptr_t ptr) {
+  if (LIKELY(ptr != 0)) {
+    CHECK_GE(ptr, MOE_MAP_BEGIN);
+    CHECK_LT(ptr, MOE_MAP_END);
+
+    ptr -= MOE_MAP_BEGIN;
+  }
+
+  return ptr;
+}
+
+static inline uintptr_t MOE_PTR_UNCOMPRESS(uintptr_t ptr) {
+    if (ptr != 0) {
+        ptr |= MOE_MAP_BEGIN;
+    }
+
+    return ptr;
+}
+
+#else
+#define MOE_PTR_COMPRESS(x) (x)
+#define MOE_PTR_UNCOMPRESS(x) (x)
 #endif
 
 static inline void reserve_tls_key() {

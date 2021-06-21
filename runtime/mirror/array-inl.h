@@ -27,6 +27,10 @@
 #include "gc/heap-inl.h"
 #include "thread.h"
 
+#ifdef MOE
+#include "moe_entry.h"
+#endif
+
 namespace art {
 namespace mirror {
 
@@ -378,11 +382,20 @@ inline T PointerArray::GetElementPtrSize(uint32_t idx, size_t ptr_size) {
     return (T)static_cast<uintptr_t>(AsLongArray()->GetWithoutChecks(idx));
   }
   DCHECK_EQ(ptr_size, 4u);
+#ifndef MOE
   return (T)static_cast<uintptr_t>(AsIntArray()->GetWithoutChecks(idx));
+#else
+  return (T)MOE_PTR_UNCOMPRESS((static_cast<uintptr_t>(AsIntArray()->GetWithoutChecks(idx))));
+#endif
 }
 
 template<bool kTransactionActive, bool kUnchecked, typename T>
 inline void PointerArray::SetElementPtrSize(uint32_t idx, T element, size_t ptr_size) {
+
+#ifdef MOE
+  element = (T)MOE_PTR_COMPRESS((uintptr_t)element);
+#endif
+
   if (ptr_size == 8) {
     (kUnchecked ? down_cast<LongArray*>(static_cast<Object*>(this)) : AsLongArray())->
         SetWithoutChecks<kTransactionActive>(idx, (uint64_t)(element));

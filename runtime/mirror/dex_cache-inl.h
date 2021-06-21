@@ -26,6 +26,10 @@
 #include "mirror/class.h"
 #include "runtime.h"
 
+#ifdef MOE
+#include "moe_entry.h"
+#endif
+
 namespace art {
 namespace mirror {
 
@@ -99,11 +103,18 @@ template <typename PtrType>
 inline PtrType DexCache::GetElementPtrSize(PtrType* ptr_array, size_t idx, size_t ptr_size) {
   if (ptr_size == 8u) {
     uint64_t element = reinterpret_cast<const uint64_t*>(ptr_array)[idx];
+#ifdef MOE
+    element = (uint64_t)MOE_PTR_UNCOMPRESS((static_cast<uintptr_t>(element)));
+#endif
     return reinterpret_cast<PtrType>(dchecked_integral_cast<uintptr_t>(element));
   } else {
     DCHECK_EQ(ptr_size, 4u);
     uint32_t element = reinterpret_cast<const uint32_t*>(ptr_array)[idx];
+#ifndef MOE
     return reinterpret_cast<PtrType>(dchecked_integral_cast<uintptr_t>(element));
+#else
+    return reinterpret_cast<PtrType>(dchecked_integral_cast<uintptr_t>(MOE_PTR_UNCOMPRESS(element)));
+#endif
   }
 }
 
@@ -118,7 +129,11 @@ inline void DexCache::SetElementPtrSize(PtrType* ptr_array,
   } else {
     DCHECK_EQ(ptr_size, 4u);
     reinterpret_cast<uint32_t*>(ptr_array)[idx] =
+#ifndef MOE
         dchecked_integral_cast<uint32_t>(reinterpret_cast<uintptr_t>(ptr));
+#else
+        dchecked_integral_cast<uint32_t>(MOE_PTR_COMPRESS(reinterpret_cast<uintptr_t>(ptr)));
+#endif
   }
 }
 
