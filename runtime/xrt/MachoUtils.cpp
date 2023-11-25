@@ -17,7 +17,7 @@ void* GetARTData(unsigned long* bytesCount)
 
 void* GetOATData(unsigned long* bytesCount)
 {
-  return GetSectionData("__OATDATA", "__oatdata", bytesCount);
+  return GetSectionData("__TEXT", "__oatdata", bytesCount);
 }
 
 void* GetSectionData(const char *segmentName, const char *sectionName, unsigned long *bytesCount)
