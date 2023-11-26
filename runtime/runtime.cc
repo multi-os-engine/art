@@ -186,7 +186,7 @@ uint8_t* get_oat_data(size_t* size) {
     void* data;
     size_t size;
     Loader() {
-      data = get_slided_section_data("__TEXT", "__oatdata", &size);
+      data = get_slided_section_data("__OATDATA", "__oatdata", &size);
     }
   } loader;
 
