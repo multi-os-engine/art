@@ -28,7 +28,7 @@ namespace art {
 // Equivalent to std::map, but without operator[] and its bug-prone semantics (in particular,
 // the implicit insertion of a default-constructed value on failed lookups).
 template <typename K, typename V, typename Comparator = std::less<K>,
-          typename Allocator = TrackingAllocator<std::pair<const K, V>, kAllocatorTagSafeMap>>
+          typename Allocator = std::allocator<std::pair<const K, V>>>
 class SafeMap {
  private:
   typedef SafeMap<K, V, Comparator, Allocator> Self;

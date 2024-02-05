@@ -153,6 +153,11 @@ template<class T, AllocatorTag kTag>
 class TrackingAllocator : public TypeStaticIf<kEnableTrackingAllocator,
                                               TrackingAllocatorImpl<T, kTag>,
                                               std::allocator<T>>::type {
+    public:
+        template <class U>
+        struct rebind {
+          typedef TrackingAllocator<U, kTag> other;
+        };
 };
 
 template<class Key, class T, AllocatorTag kTag, class Compare = std::less<Key>>
