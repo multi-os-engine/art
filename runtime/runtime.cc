@@ -186,7 +186,11 @@ uint8_t* get_oat_data(size_t* size) {
     void* data;
     size_t size;
     Loader() {
+#ifdef __x86_64__
+      data = get_slided_section_data("__OATDATA", "__oatdata", &size);
+#else
       data = get_slided_section_data("__TEXT", "__oatdata", &size);
+#endif
     }
   } loader;
 
